@@ -103,3 +103,4 @@ Two GitHub Actions workflows, each scoped to its own `working-directory`, run on
   "Done" plus a concise summary of exactly which files changed and what each change
   affects, then stop — merging and checking CI results is Oliver's call, not something to
   wait around for.
+- CLAUDE.md-only changes can be pushed directly to `main`, no issue/branch/PR needed.
