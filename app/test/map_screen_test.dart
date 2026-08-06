@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:cro_app/models/friend_waypoint.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
+import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
 
@@ -31,12 +34,24 @@ class _FakeWaypointService implements WaypointService {
   }
 }
 
+class _FakeFriendsService implements FriendsService {
+  List<FriendWaypoint> friendWaypointsToReturn = [];
+
+  @override
+  Future<List<FriendWaypoint>> getFriendsWaypoints(String token) async => friendWaypointsToReturn;
+
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
+}
+
 void main() {
   testWidgets('shows loading indicator before waypoint loads', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService();
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
-      home: MapScreen(authState: authState, waypointService: fakeService),
+      home: MapScreen(
+          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
     ));
 
     expect(find.byKey(const Key('mapLoadingIndicator')), findsOneWidget);
@@ -47,7 +62,8 @@ void main() {
       ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
-      home: MapScreen(authState: authState, waypointService: fakeService),
+      home: MapScreen(
+          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
     ));
     await tester.pumpAndSettle();
 
@@ -58,7 +74,8 @@ void main() {
     final fakeService = _FakeWaypointService()..errorToThrow = WaypointException('Could not reach the server');
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
-      home: MapScreen(authState: authState, waypointService: fakeService),
+      home: MapScreen(
+          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
     ));
     await tester.pumpAndSettle();
 
@@ -70,7 +87,8 @@ void main() {
     final fakeService = _FakeWaypointService();
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
-      home: MapScreen(authState: authState, waypointService: fakeService),
+      home: MapScreen(
+          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
     ));
     await tester.pumpAndSettle();
 
@@ -87,5 +105,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fakeService.savedWaypoint?.name, 'Front Porch');
+  });
+
+  testWidgets('renders one marker per friend waypoint plus the own waypoint marker',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+    // Kept close to the own waypoint (1.0, 2.0) so they land inside the initial
+    // zoom-13 viewport - flutter_map culls markers whose projected position falls
+    // outside the visible pixel bounds, so an out-of-view marker never mounts a widget.
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.001, longitude: 2.001),
+        FriendWaypoint(userId: 'f2', username: 'bob', color: '#1E88E5', latitude: 1.002, longitude: 2.002),
+      ];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState, waypointService: fakeWaypointService, friendsService: fakeFriendsService),
+    ));
+    await tester.pumpAndSettle();
+
+    final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
+    expect(markerLayer.markers, hasLength(3));
+    expect(find.byKey(const Key('friendMarker_f1')), findsOneWidget);
+    expect(find.byKey(const Key('friendMarker_f2')), findsOneWidget);
+  });
+
+  testWidgets('tapping a friend marker shows their username in a SnackBar', (WidgetTester tester) async {
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.001, longitude: 2.001),
+      ];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: _FakeWaypointService(),
+          friendsService: fakeFriendsService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('friendMarker_f1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('alice'), findsOneWidget);
   });
 }

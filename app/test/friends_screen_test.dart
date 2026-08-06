@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_request.dart';
+import 'package:cro_app/models/friend_waypoint.dart';
 import 'package:cro_app/screens/friends_screen.dart';
 import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/state/auth_state.dart';
@@ -57,6 +58,9 @@ class _FakeFriendsService implements FriendsService {
     friendsToReturn = friendsToReturn.where((f) => f.userId != userId).toList();
     incomingToReturn = incomingToReturn.where((r) => r.userId != userId).toList();
   }
+
+  @override
+  Future<List<FriendWaypoint>> getFriendsWaypoints(String token) async => [];
 
   @override
   Future<void> setFriendColor(String token, String friendId, String color) async {
