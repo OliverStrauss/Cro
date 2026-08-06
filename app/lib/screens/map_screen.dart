@@ -71,6 +71,33 @@ class MapScreenState extends State<MapScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(username)));
   }
 
+  // Placeholder details view - Waypoint only carries name/lat/lng today, so "city" etc.
+  // isn't real data yet. Structured as its own dialog so more fields can be dropped in
+  // here later without touching the marker/tap-handling code above.
+  void _showWaypointDetails(Waypoint waypoint) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('waypointDetailsDialog'),
+        title: Text(waypoint.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Latitude: ${waypoint.latitude}'),
+            Text('Longitude: ${waypoint.longitude}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @visibleForTesting
   Future<void> handleMapTap(LatLng point) async {
     final name = await showDialog<String>(
@@ -154,9 +181,12 @@ class MapScreenState extends State<MapScreen> {
                     Marker(
                       key: const Key('ownWaypointMarker'),
                       point: LatLng(waypoint.latitude, waypoint.longitude),
-                      // A distinct icon from the generic location_pin used for friends'
-                      // markers, so the user's own delivery spot stands out at a glance.
-                      child: const Icon(Icons.home, color: Colors.red),
+                      child: GestureDetector(
+                        onTap: () => _showWaypointDetails(waypoint),
+                        // A distinct icon from the generic location_pin used for friends'
+                        // markers, so the user's own delivery spot stands out at a glance.
+                        child: const Icon(Icons.home, color: Colors.red),
+                      ),
                     ),
                   for (final friendWaypoint in _friendWaypoints)
                     Marker(

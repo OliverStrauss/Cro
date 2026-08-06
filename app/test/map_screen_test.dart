@@ -151,4 +151,24 @@ void main() {
 
     expect(find.text('alice'), findsOneWidget);
   });
+
+  testWidgets('tapping the own waypoint marker shows its details in a dialog', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService()),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownWaypointMarker')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('waypointDetailsDialog')), findsOneWidget);
+    expect(find.text('Latitude: 1.0'), findsOneWidget);
+    expect(find.text('Longitude: 2.0'), findsOneWidget);
+  });
 }
