@@ -13,9 +13,10 @@ This is a monorepo with two independently-buildable halves:
 
 - `/app` — Flutter frontend (package name `cro_app`). Configured platforms: Android, Linux,
   Windows, Web (no iOS/macOS scaffolding has been generated).
-- `/api` — .NET 10 ASP.NET Core Web API (`CroApp.Api`). Intended to be backed by Azure Cosmos
-  DB (chosen for native geospatial query support — relevant for the map/delivery feature) —
-  not yet integrated into the API project.
+- `/api` — .NET 10 ASP.NET Core Web API (`CroApp.Api`), backed by Azure Cosmos DB via the
+  `Microsoft.Azure.Cosmos` SDK directly (not EF Core's Cosmos provider — chosen for full
+  control over partition keys and future geospatial queries for the map/delivery feature).
+  `api/CroApp.Api.Tests` holds the xunit integration test project.
 - `/.github/workflows` — CI, split into one workflow per half (see below).
 
 ## Commands
@@ -30,12 +31,46 @@ This is a monorepo with two independently-buildable halves:
 
 ### Backend (.NET API) — run from `/api`
 
-- `dotnet restore` — install dependencies
-- `dotnet build` — build
-- `dotnet run` — run the API locally
-- `dotnet list package --include-transitive` — check for vulnerable transitive packages;
-  the default `dotnet new webapi` template pulled in a vulnerable `Microsoft.OpenApi`
+- `dotnet restore CroApp.Api.Tests/CroApp.Api.Tests.csproj` — installs dependencies for both
+  the API and the test project (via its `ProjectReference`). There's no `.sln`, so a bare
+  `dotnet restore`/`build`/`test` in `/api` only picks up `CroApp.Api.csproj` and silently
+  skips the nested test project — always target the test project's path explicitly.
+- `dotnet build CroApp.Api.Tests/CroApp.Api.Tests.csproj --no-restore` — build both projects
+- `dotnet test CroApp.Api.Tests/CroApp.Api.Tests.csproj --no-build` — run all tests (requires
+  the Cosmos emulator running locally, see below)
+- `dotnet run` — run the API locally (also requires the emulator running)
+- `dotnet list package --vulnerable --include-transitive` — check for vulnerable transitive
+  packages; the default `dotnet new webapi` template pulled in a vulnerable `Microsoft.OpenApi`
   transitive dependency, which had to be pinned explicitly to a patched version
+
+### Local Cosmos DB Emulator (required for running or testing the API)
+
+The API and its tests connect to a Cosmos DB Emulator, not a live Azure account (none is
+provisioned yet — see below). On this Apple Silicon/macOS machine, run the ARM64-native
+`vnext-preview` Docker image (the classic Windows-only emulator and the older Linux image
+don't work reliably here):
+
+```
+docker run -p 8081:8081 mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
+```
+
+Startup can take 30-90 seconds — poll `https://localhost:8081/_explorer/emulator.pem` rather
+than using a fixed sleep. One-time local secret setup (never commit the connection string):
+
+```
+cd api
+dotnet user-secrets init
+dotnet user-secrets set "CosmosDb:ConnectionString" "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+```
+
+That's the emulator's fixed, publicly-documented well-known key — identical on every install.
+`appsettings.Development.json` sets `CosmosDb:UseEmulator: true`, which makes the API bypass
+the emulator's self-signed TLS cert — this flag must never be true against a real endpoint.
+
+No real Azure Cosmos DB account is provisioned yet. Creating one (`az cosmosdb create` /
+`sql database create` / `sql container create --partition-key-path /id`) is a manual step
+outside this repo, needed before any prod deployment — not required for local dev or CI,
+both of which run entirely against the emulator.
 
 ## CI
 
@@ -43,7 +78,9 @@ Two GitHub Actions workflows, each scoped to its own `working-directory`, run on
 `main` and on every pull request:
 
 - `flutter-ci.yml` — `flutter pub get` → `flutter analyze` → `flutter test`, in `/app`
-- `dotnet-ci.yml` — `dotnet restore` → `dotnet build`, in `/api`
+- `dotnet-ci.yml` — runs a Cosmos emulator service container (the standard x64 image, not the
+  ARM64 `vnext-preview` local dev needs), waits for it to be ready, then
+  `dotnet restore`/`build`/`test` against `CroApp.Api.Tests`, in `/api`
 
 ## Workflow conventions
 
