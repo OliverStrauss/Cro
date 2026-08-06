@@ -2,16 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../models/friend_waypoint.dart';
 import '../models/waypoint.dart';
+import '../services/friends_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
+import '../utils/color_utils.dart';
 
 class MapScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService waypointService;
+  final FriendsService friendsService;
 
-  MapScreen({super.key, required this.authState, WaypointService? waypointService})
-      : waypointService = waypointService ?? WaypointService();
+  MapScreen({
+    super.key,
+    required this.authState,
+    WaypointService? waypointService,
+    FriendsService? friendsService,
+  })  : waypointService = waypointService ?? WaypointService(),
+        friendsService = friendsService ?? FriendsService();
 
   @override
   State<MapScreen> createState() => MapScreenState();
@@ -23,25 +32,31 @@ class MapScreen extends StatefulWidget {
 // layer while still exercising the real dialog/save flow that follows.
 class MapScreenState extends State<MapScreen> {
   Waypoint? _waypoint;
+  List<FriendWaypoint> _friendWaypoints = [];
   bool _isLoading = true;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadWaypoint();
+    _loadData();
   }
 
-  Future<void> _loadWaypoint() async {
+  Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final waypoint = await widget.waypointService.getWaypoint(widget.authState.token!);
+      final token = widget.authState.token!;
+      final results = await Future.wait<dynamic>([
+        widget.waypointService.getWaypoint(token),
+        widget.friendsService.getFriendsWaypoints(token),
+      ]);
       setState(() {
-        _waypoint = waypoint;
+        _waypoint = results[0] as Waypoint?;
+        _friendWaypoints = results[1] as List<FriendWaypoint>;
         _isLoading = false;
       });
     } catch (e) {
@@ -50,6 +65,10 @@ class MapScreenState extends State<MapScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _showFriendUsername(String username) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(username)));
   }
 
   @visibleForTesting
@@ -98,7 +117,7 @@ class MapScreenState extends State<MapScreen> {
           children: [
             Text(_errorMessage!),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _loadWaypoint, child: const Text('Retry')),
+            ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
           ],
         ),
       );
@@ -129,12 +148,22 @@ class MapScreenState extends State<MapScreen> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.cro_app',
               ),
-              if (waypoint != null)
+              if (waypoint != null || _friendWaypoints.isNotEmpty)
                 MarkerLayer(markers: [
-                  Marker(
-                    point: LatLng(waypoint.latitude, waypoint.longitude),
-                    child: const Icon(Icons.location_pin, color: Colors.red),
-                  ),
+                  if (waypoint != null)
+                    Marker(
+                      point: LatLng(waypoint.latitude, waypoint.longitude),
+                      child: const Icon(Icons.location_pin, color: Colors.red),
+                    ),
+                  for (final friendWaypoint in _friendWaypoints)
+                    Marker(
+                      key: Key('friendMarker_${friendWaypoint.userId}'),
+                      point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
+                      child: GestureDetector(
+                        onTap: () => _showFriendUsername(friendWaypoint.username),
+                        child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color)),
+                      ),
+                    ),
                 ]),
               RichAttributionWidget(
                 attributions: [

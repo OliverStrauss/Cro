@@ -3,9 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_request.dart';
+import 'package:cro_app/models/friend_waypoint.dart';
 import 'package:cro_app/screens/friends_screen.dart';
 import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/state/auth_state.dart';
+import 'package:cro_app/utils/color_utils.dart';
 
 class _FakeFriendsService implements FriendsService {
   List<Friend> friendsToReturn = [];
@@ -17,6 +19,8 @@ class _FakeFriendsService implements FriendsService {
   String? lastSentUsername;
   String? lastAcceptedRequesterId;
   String? lastRemovedUserId;
+  String? lastColoredFriendId;
+  String? lastSetColor;
 
   @override
   Future<List<Friend>> getFriends(String token) async {
@@ -53,6 +57,18 @@ class _FakeFriendsService implements FriendsService {
     lastRemovedUserId = userId;
     friendsToReturn = friendsToReturn.where((f) => f.userId != userId).toList();
     incomingToReturn = incomingToReturn.where((r) => r.userId != userId).toList();
+  }
+
+  @override
+  Future<List<FriendWaypoint>> getFriendsWaypoints(String token) async => [];
+
+  @override
+  Future<void> setFriendColor(String token, String friendId, String color) async {
+    lastColoredFriendId = friendId;
+    lastSetColor = color;
+    friendsToReturn = friendsToReturn
+        .map((f) => f.userId == friendId ? Friend(userId: f.userId, username: f.username, color: color) : f)
+        .toList();
   }
 }
 
@@ -181,5 +197,25 @@ void main() {
 
     expect(fakeService.lastRemovedUserId, 'u1');
     expect(find.byKey(const Key('noFriendsMessage')), findsOneWidget);
+  });
+
+  testWidgets('picking a color for a friend calls the service and refreshes the list',
+      (WidgetTester tester) async {
+    final fakeService = _FakeFriendsService()
+      ..friendsToReturn = [Friend(userId: 'u1', username: 'alice', color: friendColorPalette[0])];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(authState: authState, friendsService: fakeService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('colorSwatch_u1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(Key('colorOption_${friendColorPalette[1]}')));
+    await tester.pumpAndSettle();
+
+    expect(fakeService.lastColoredFriendId, 'u1');
+    expect(fakeService.lastSetColor, friendColorPalette[1]);
   });
 }

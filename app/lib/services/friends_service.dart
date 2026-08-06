@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models/friend.dart';
 import '../models/friend_request.dart';
+import '../models/friend_waypoint.dart';
 
 class FriendsException implements Exception {
   final String message;
@@ -84,6 +85,31 @@ class FriendsService {
 
     if (response.statusCode != 204) {
       throw FriendsException(_errorMessage(response, 'Could not remove friend'));
+    }
+  }
+
+  Future<List<FriendWaypoint>> getFriendsWaypoints(String token) async {
+    final response =
+        await _get('/friends/waypoints', token, "Could not load friends' waypoints");
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => FriendWaypoint.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> setFriendColor(String token, String friendId, String color) async {
+    final http.Response response;
+    try {
+      response = await http.put(
+        Uri.parse('$apiBaseUrl/friends/$friendId/color'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'color': color}),
+      );
+    } catch (_) {
+      throw FriendsException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw FriendsException(_errorMessage(response, 'Could not update color'));
     }
   }
 
