@@ -34,4 +34,25 @@ public class CosmosUserRepository : IUserRepository
             return null;
         }
     }
+
+    public async Task<User?> GetByUsernameAsync(string username)
+    {
+        // Cross-partition query: partition key is /id, not /username. Fine at current tiny
+        // user counts; a dedicated username lookup would be a future perf item if needed.
+        var query = _container.GetItemQueryIterator<User>(
+            new QueryDefinition("SELECT * FROM c WHERE c.username = @username")
+                .WithParameter("@username", username));
+
+        while (query.HasMoreResults)
+        {
+            var page = await query.ReadNextAsync();
+            var match = page.FirstOrDefault();
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
 }

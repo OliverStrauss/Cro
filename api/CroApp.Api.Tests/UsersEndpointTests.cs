@@ -27,7 +27,10 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
                     ["CosmosDb:UseEmulator"] = "true",
                     ["CosmosDb:ConnectionString"] = connectionString,
                     ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["CosmosDb:UsersContainerName"] = "Users"
+                    ["CosmosDb:UsersContainerName"] = "Users",
+                    ["Jwt:SigningKey"] = TestJwtSigningKey,
+                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
+                    ["Jwt:Audience"] = "CroApp.Api.Tests"
                 });
             });
         });
@@ -35,10 +38,15 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         _client = configuredFactory.CreateClient();
     }
 
+    // Fixed, non-secret test-only signing key - Program.cs wires up JWT bearer auth
+    // unconditionally at startup, so every test host needs a valid key even if the
+    // test itself never calls /login. Never use this constant outside tests.
+    internal const string TestJwtSigningKey = "test-only-signing-key-not-used-in-any-real-environment-32bytes+";
+
     [Fact]
     public async Task CreateThenGetUser_RoundTripsSuccessfully()
     {
-        var createRequest = new { Username = $"test-user-{Guid.NewGuid():N}", Email = "test@example.com" };
+        var createRequest = new { Username = $"test-user-{Guid.NewGuid():N}", Email = "test@example.com", Password = "correct-horse-battery-staple" };
 
         var createResponse = await _client.PostAsJsonAsync("/users", createRequest);
         createResponse.EnsureSuccessStatusCode();
