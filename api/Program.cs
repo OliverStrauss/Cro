@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using CroApp.Api.Data;
 using CroApp.Api.Models;
@@ -63,12 +65,17 @@ builder.Services.AddSingleton(sp =>
 });
 
 builder.Services.AddScoped<IUserRepository, CosmosUserRepository>();
+builder.Services.AddScoped<IWaypointRepository, CosmosWaypointRepository>();
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Without this, "sub"/"unique_name" claims JwtTokenService issues get silently
+        // remapped to legacy ClaimTypes.NameIdentifier/Name URIs, so reading them back via
+        // JwtRegisteredClaimNames.Sub would return null instead of the actual user id.
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -93,6 +100,7 @@ if (app.Environment.IsDevelopment())
     var opts = scope.ServiceProvider.GetRequiredService<IOptions<CosmosDbOptions>>().Value;
     var database = await client.CreateDatabaseIfNotExistsAsync(opts.DatabaseName);
     await database.Database.CreateContainerIfNotExistsAsync(opts.UsersContainerName, "/id");
+    await database.Database.CreateContainerIfNotExistsAsync(opts.WaypointsContainerName, "/id");
 }
 
 // Configure the HTTP request pipeline.
@@ -145,6 +153,35 @@ app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<Jw
 })
 .WithName("Login");
 
+app.MapGet("/waypoint", async (ClaimsPrincipal user, IWaypointRepository repo) =>
+{
+    var userId = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var waypoint = await repo.GetByUserIdAsync(userId);
+    return waypoint is not null ? Results.Ok(waypoint) : Results.NotFound();
+})
+.RequireAuthorization()
+.WithName("GetWaypoint");
+
+app.MapPut("/waypoint", async (SetWaypointRequest req, ClaimsPrincipal user, IWaypointRepository repo) =>
+{
+    var userId = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var waypoint = new Waypoint(userId, req.Name, req.Latitude, req.Longitude, DateTimeOffset.UtcNow);
+    var saved = await repo.UpsertAsync(waypoint);
+    return Results.Ok(saved);
+})
+.RequireAuthorization()
+.WithName("SetWaypoint");
+
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
@@ -174,5 +211,6 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 record CreateUserRequest(string Username, string Email, string Password);
 record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
+record SetWaypointRequest(string Name, double Latitude, double Longitude);
 
 public partial class Program { }
