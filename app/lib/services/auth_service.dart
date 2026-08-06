@@ -32,4 +32,23 @@ class AuthService {
 
     throw AuthException('Invalid username or password');
   }
+
+  Future<String> signUp(String username, String email, String password) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/users'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'email': email, 'password': password}),
+      );
+    } catch (_) {
+      throw AuthException('Could not reach the server');
+    }
+
+    if (response.statusCode != 201) {
+      throw AuthException('Could not create account');
+    }
+
+    return login(username, password);
+  }
 }
