@@ -10,11 +10,29 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using User = CroApp.Api.Models.User;
 
+const string DevCorsPolicy = "DevCorsPolicy";
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Flutter web's dev server runs on a randomly-assigned localhost port each run, so a
+// fixed-origin allow-list isn't practical here. Development-only, same pattern as the
+// emulator TLS bypass and container auto-provisioning below - production needs a real
+// allow-list of the deployed web app's actual origin, not yet relevant since there's no
+// prod deployment.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(DevCorsPolicy, policy =>
+        {
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        });
+    });
+}
 
 builder.Services.Configure<CosmosDbOptions>(builder.Configuration.GetSection("CosmosDb"));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
@@ -84,6 +102,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors(DevCorsPolicy);
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
