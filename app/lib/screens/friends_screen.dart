@@ -21,6 +21,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   List<FriendRequest> _incomingRequests = [];
+  List<FriendRequest> _outgoingRequests = [];
   List<Friend> _friends = [];
 
   final _usernameController = TextEditingController();
@@ -47,9 +48,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
     try {
       final token = widget.authState.token!;
       final incoming = await widget.friendsService.getIncomingRequests(token);
+      final outgoing = await widget.friendsService.getOutgoingRequests(token);
       final friends = await widget.friendsService.getFriends(token);
       setState(() {
         _incomingRequests = incoming;
+        _outgoingRequests = outgoing;
         _friends = friends;
         _isLoading = false;
       });
@@ -95,6 +98,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Future<void> _declineRequest(String requesterId) async {
     try {
       await widget.friendsService.removeFriend(widget.authState.token!, requesterId);
+      await _loadAll();
+    } catch (e) {
+      _showToast(e.toString(), isError: true);
+    }
+  }
+
+  Future<void> _cancelRequest(String targetId) async {
+    try {
+      await widget.friendsService.removeFriend(widget.authState.token!, targetId);
       await _loadAll();
     } catch (e) {
       _showToast(e.toString(), isError: true);
@@ -189,6 +201,30 @@ class _FriendsScreenState extends State<FriendsScreen> {
                             onPressed: () => _declineRequest(request.userId),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (_outgoingRequests.isNotEmpty)
+          Padding(
+            key: const Key('outgoingRequestsSection'),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Pending', style: Theme.of(context).textTheme.titleMedium),
+                for (final request in _outgoingRequests)
+                  Card(
+                    key: Key('outgoingRequest_${request.userId}'),
+                    child: ListTile(
+                      title: Text(request.username),
+                      subtitle: const Text('Waiting for them to accept'),
+                      trailing: IconButton(
+                        key: Key('cancelRequestButton_${request.userId}'),
+                        icon: const Icon(Icons.close),
+                        onPressed: () => _cancelRequest(request.userId),
                       ),
                     ),
                   ),

@@ -57,6 +57,7 @@ class _FakeFriendsService implements FriendsService {
     lastRemovedUserId = userId;
     friendsToReturn = friendsToReturn.where((f) => f.userId != userId).toList();
     incomingToReturn = incomingToReturn.where((r) => r.userId != userId).toList();
+    outgoingToReturn = outgoingToReturn.where((r) => r.userId != userId).toList();
   }
 
   @override
@@ -130,6 +131,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('incomingRequestsSection')), findsOneWidget);
     expect(find.text('bob'), findsOneWidget);
+  });
+
+  testWidgets('pending requests section only shows when there are outgoing requests',
+      (WidgetTester tester) async {
+    final authState = AuthState()..login('test-token');
+
+    final noRequestsService = _FakeFriendsService();
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(
+          key: const Key('withoutPending'), authState: authState, friendsService: noRequestsService),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('outgoingRequestsSection')), findsNothing);
+
+    final withPendingService = _FakeFriendsService()
+      ..outgoingToReturn = [FriendRequest(userId: 'u3', username: 'dave')];
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(
+          key: const Key('withPending'), authState: authState, friendsService: withPendingService),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('outgoingRequestsSection')), findsOneWidget);
+    expect(find.text('dave'), findsOneWidget);
+  });
+
+  testWidgets('canceling a pending request calls removeFriend and refreshes', (WidgetTester tester) async {
+    final fakeService = _FakeFriendsService()
+      ..outgoingToReturn = [FriendRequest(userId: 'u3', username: 'dave')];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(authState: authState, friendsService: fakeService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cancelRequestButton_u3')));
+    await tester.pumpAndSettle();
+
+    expect(fakeService.lastRemovedUserId, 'u3');
+    expect(find.byKey(const Key('outgoingRequestsSection')), findsNothing);
   });
 
   testWidgets('sending a friend request succeeds, clears the field, and shows a success toast',
