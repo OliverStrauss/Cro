@@ -105,7 +105,7 @@ app.MapGet("/users/{id}", async (string id, IUserRepository repo) =>
 app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<JwtOptions> jwtOpts) =>
 {
     var user = await repo.GetByUsernameAsync(req.Username);
-    if (user is null)
+    if (user is null || string.IsNullOrEmpty(user.PasswordHash))
     {
         return Results.Unauthorized();
     }
