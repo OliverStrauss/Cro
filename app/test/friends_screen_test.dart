@@ -249,7 +249,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('colorSwatch_u1')));
+    await tester.tap(find.byKey(const Key('friendTile_u1')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(Key('colorOption_${friendColorPalette[1]}')));
