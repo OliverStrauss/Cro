@@ -1,17 +1,33 @@
-# cro_app
+# Cro
 
-A new Flutter project.
+Cro is a messaging app where users send "cro's" to other people. Each cro travels across
+a map in real time, taking physical days to arrive, instead of being delivered instantly.
 
-## Getting Started
+## Repository layout
 
-This project is a starting point for a Flutter application.
+This is a monorepo with two halves:
 
-A few resources to get you started if this is your first Flutter project:
+- **[`/app`](app/)** — Flutter frontend (iOS, Android, web, desktop)
+- **[`/api`](api/)** — .NET (C#) API backend, backed by Azure Cosmos DB
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Getting started
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### Frontend (Flutter)
+
+```bash
+cd app
+flutter pub get
+flutter run
+```
+
+### Backend (.NET API)
+
+```bash
+cd api
+dotnet restore
+dotnet run
+```
+
+## CI
+
+GitHub Actions builds and tests each half independently — see `.github/workflows/`.
