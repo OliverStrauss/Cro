@@ -20,9 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final tabs = [
+      ProfileScreen(authState: widget.authState),
       MapScreen(authState: widget.authState),
       FriendsScreen(authState: widget.authState),
-      ProfileScreen(authState: widget.authState),
     ];
 
     return Scaffold(
@@ -32,6 +32,12 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
         destinations: const [
+          NavigationDestination(
+            key: Key('navProfile'),
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
           NavigationDestination(
             key: Key('navMap'),
             icon: Icon(Icons.map_outlined),
@@ -43,12 +49,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.people_outline),
             selectedIcon: Icon(Icons.people),
             label: 'Friends',
-          ),
-          NavigationDestination(
-            key: Key('navProfile'),
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
           ),
         ],
       ),

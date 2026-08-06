@@ -5,7 +5,7 @@ import 'package:cro_app/screens/home_screen.dart';
 import 'package:cro_app/state/auth_state.dart';
 
 void main() {
-  testWidgets('defaults to the Map tab', (WidgetTester tester) async {
+  testWidgets('defaults to the Profile tab', (WidgetTester tester) async {
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(home: HomeScreen(authState: authState)));
 
@@ -21,7 +21,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final navBar = tester.widget<NavigationBar>(find.byKey(const Key('homeNavBar')));
-    expect(navBar.selectedIndex, 1);
+    expect(navBar.selectedIndex, 2);
   });
 
   testWidgets('logging out from Profile actually logs out', (WidgetTester tester) async {
