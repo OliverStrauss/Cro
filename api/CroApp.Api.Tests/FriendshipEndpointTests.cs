@@ -1,0 +1,281 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+
+namespace CroApp.Api.Tests;
+
+public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private const string DefaultEmulatorConnectionString =
+        "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+
+    private readonly HttpClient _client;
+
+    public FriendshipEndpointTests(WebApplicationFactory<Program> factory)
+    {
+        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
+            ?? DefaultEmulatorConnectionString;
+
+        var configuredFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["CosmosDb:UseEmulator"] = "true",
+                    ["CosmosDb:ConnectionString"] = connectionString,
+                    ["CosmosDb:DatabaseName"] = "CroApp",
+                    ["CosmosDb:UsersContainerName"] = "Users",
+                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
+                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
+                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
+                    ["Jwt:Audience"] = "CroApp.Api.Tests"
+                });
+            });
+        });
+
+        _client = configuredFactory.CreateClient();
+    }
+
+    private async Task<(string UserId, string Token)> RegisterAndLoginAsync(string username, string password)
+    {
+        var createResponse = await _client.PostAsJsonAsync("/users",
+            new { Username = username, Email = $"{username}@example.com", Password = password });
+        createResponse.EnsureSuccessStatusCode();
+        var created = await createResponse.Content.ReadFromJsonAsync<UserResponseDto>();
+
+        var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = password });
+        loginResponse.EnsureSuccessStatusCode();
+        var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
+        return (created!.Id, body!.Token);
+    }
+
+    private static HttpRequestMessage AuthedRequest(HttpMethod method, string uri, string? token, object? body = null)
+    {
+        var request = new HttpRequestMessage(method, uri);
+        if (token is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+        }
+        return request;
+    }
+
+    private async Task SendRequestAsync(string token, string targetUsername)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", token,
+            new { Username = targetUsername }));
+        response.EnsureSuccessStatusCode();
+    }
+
+    private async Task<List<FriendDto>> GetFriendsAsync(string token)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends", token));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<List<FriendDto>>())!;
+    }
+
+    [Fact]
+    public async Task SendRequest_MakesItVisibleAsIncomingAndOutgoing()
+    {
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync($"friend-user-a-{Guid.NewGuid():N}", "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+
+        var outgoingResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/requests/outgoing", tokenA));
+        outgoingResponse.EnsureSuccessStatusCode();
+        var outgoing = await outgoingResponse.Content.ReadFromJsonAsync<List<FriendRequestDto>>();
+        Assert.Contains(outgoing!, r => r.Id == idB);
+
+        var incomingResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/requests/incoming", tokenB));
+        incomingResponse.EnsureSuccessStatusCode();
+        var incoming = await incomingResponse.Content.ReadFromJsonAsync<List<FriendRequestDto>>();
+        Assert.Contains(incoming!, r => r.Id == idA);
+    }
+
+    [Fact]
+    public async Task Accept_MakesBothSidesFriendsWithIndependentColors()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+
+        var acceptResponse = await _client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+        acceptResponse.EnsureSuccessStatusCode();
+
+        var friendsOfA = await GetFriendsAsync(tokenA);
+        var friendsOfB = await GetFriendsAsync(tokenB);
+
+        var bAsSeenByA = Assert.Single(friendsOfA, f => f.Id == idB);
+        var aAsSeenByB = Assert.Single(friendsOfB, f => f.Id == idA);
+
+        Assert.NotNull(bAsSeenByA.Color);
+        Assert.NotNull(aAsSeenByB.Color);
+    }
+
+    [Fact]
+    public async Task SendRequest_Duplicate_ReturnsConflict()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (_, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA,
+            new { Username = usernameB }));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SendRequest_ToSelf_ReturnsBadRequest()
+    {
+        var username = $"friend-user-{Guid.NewGuid():N}";
+        var (_, token) = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", token,
+            new { Username = username }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SendRequest_ToUnknownUsername_ReturnsNotFound()
+    {
+        var username = $"friend-user-{Guid.NewGuid():N}";
+        var (_, token) = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", token,
+            new { Username = $"no-such-user-{Guid.NewGuid():N}" }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Accept_WithNoPendingRequest_ReturnsBadRequest()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, _) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        var response = await _client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task FriendEndpoints_WithoutToken_ReturnUnauthorized()
+    {
+        var getFriends = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends", token: null));
+        var sendRequest = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", token: null,
+            new { Username = "someone" }));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, getFriends.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, sendRequest.StatusCode);
+    }
+
+    [Fact]
+    public async Task FriendsWaypoints_ReturnsOnlyAcceptedFriendsWithAWaypointSet()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}"; // accepted, has a waypoint
+        var usernameC = $"friend-user-c-{Guid.NewGuid():N}"; // accepted, no waypoint
+        var usernameD = $"friend-user-d-{Guid.NewGuid():N}"; // pending only
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+        var (_, tokenC) = await RegisterAndLoginAsync(usernameC, "correct-horse-battery-staple");
+        await RegisterAndLoginAsync(usernameD, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        await SendRequestAsync(tokenA, usernameC);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenC));
+
+        await SendRequestAsync(tokenA, usernameD);
+
+        await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", tokenB,
+            new { Name = "B's Spot", Latitude = 10.0, Longitude = 20.0 }));
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/waypoints", tokenA));
+        response.EnsureSuccessStatusCode();
+        var waypoints = await response.Content.ReadFromJsonAsync<List<FriendWaypointDto>>();
+
+        Assert.Single(waypoints!);
+        Assert.Equal(idB, waypoints!.Single().Id);
+    }
+
+    [Fact]
+    public async Task Remove_ClearsFriendshipFromBothSides()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var removeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/friends/{idB}", tokenA));
+        removeResponse.EnsureSuccessStatusCode();
+
+        var friendsOfA = await GetFriendsAsync(tokenA);
+        var friendsOfB = await GetFriendsAsync(tokenB);
+
+        Assert.DoesNotContain(friendsOfA, f => f.Id == idB);
+        Assert.DoesNotContain(friendsOfB, f => f.Id == idA);
+    }
+
+    [Fact]
+    public async Task SetColor_WithInvalidColor_ReturnsBadRequest()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Put, $"/friends/{idB}/color", tokenA,
+            new { Color = "#NOTACOLOR" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SetColor_ForNonFriend_ReturnsNotFound()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (_, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, _) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Put, $"/friends/{idB}/color", tokenA,
+            new { Color = "#E53935" }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
+    private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
+    private record FriendDto(string Id, string Username, string? Color);
+    private record FriendRequestDto(string Id, string Username);
+    private record FriendWaypointDto(string Id, string Username, string? Color, double Latitude, double Longitude);
+}
