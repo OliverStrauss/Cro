@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 
 namespace CroApp.Api.Tests;
@@ -12,10 +13,11 @@ public class LoginEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
     private readonly HttpClient _client;
+    private readonly string _connectionString;
 
     public LoginEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
+        _connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
             ?? DefaultEmulatorConnectionString;
 
         var configuredFactory = factory.WithWebHostBuilder(builder =>
@@ -26,7 +28,7 @@ public class LoginEndpointTests : IClassFixture<WebApplicationFactory<Program>>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["CosmosDb:UseEmulator"] = "true",
-                    ["CosmosDb:ConnectionString"] = connectionString,
+                    ["CosmosDb:ConnectionString"] = _connectionString,
                     ["CosmosDb:DatabaseName"] = "CroApp",
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
@@ -37,6 +39,30 @@ public class LoginEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         });
 
         _client = configuredFactory.CreateClient();
+    }
+
+    // Seeds a raw Cosmos document with no passwordHash field at all - reproduces legacy
+    // documents created before the Password field existed (see issue #16).
+    private async Task SeedPasswordlessUserAsync(string username)
+    {
+        var clientOptions = new CosmosClientOptions
+        {
+            HttpClientFactory = () => new HttpClient(new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            }),
+            ConnectionMode = ConnectionMode.Gateway
+        };
+        using var cosmosClient = new CosmosClient(_connectionString, clientOptions);
+        var container = cosmosClient.GetContainer("CroApp", "Users");
+
+        await container.CreateItemAsync(new
+        {
+            id = Guid.NewGuid().ToString(),
+            username,
+            email = $"{username}@example.com",
+            createdAt = DateTimeOffset.UtcNow
+        });
     }
 
     private async Task<string> RegisterUserAsync(string username, string password)
@@ -79,6 +105,17 @@ public class LoginEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var loginResponse = await _client.PostAsJsonAsync("/login",
             new { Username = $"nobody-{Guid.NewGuid():N}", Password = "whatever" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, loginResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_WithNoPasswordHashOnRecord_ReturnsUnauthorizedNotServerError()
+    {
+        var username = $"legacy-user-{Guid.NewGuid():N}";
+        await SeedPasswordlessUserAsync(username);
+
+        var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = "whatever" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, loginResponse.StatusCode);
     }
