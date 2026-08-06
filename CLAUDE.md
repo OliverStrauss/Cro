@@ -56,3 +56,9 @@ Two GitHub Actions workflows, each scoped to its own `working-directory`, run on
   `main` after the parent PR merges — this must be done manually (re-target the PR, or
   merge/PR the child branch into `main` separately) or the child's changes can end up
   merged into the now-orphaned parent branch instead of `main`.
+- Major logic changes must include tests.
+- Issues/stories not written by Oliver directly (i.e. authored by Claude Code) end with:
+
+  ```
+  -Co Authored By Olivers Robot companion (claude code)
+  ```
