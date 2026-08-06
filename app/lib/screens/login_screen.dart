@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../state/auth_state.dart';
+import 'sign_up_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final AuthState authState;
@@ -90,6 +91,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Text('Log in'),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  key: const Key('goToSignUpButton'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SignUpScreen(authState: widget.authState),
+                      ),
+                    );
+                  },
+                  child: const Text("Don't have an account? Sign up"),
                 ),
               ],
             ),

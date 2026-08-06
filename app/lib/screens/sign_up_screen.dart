@@ -100,6 +100,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         )
                       : const Text('Sign up'),
                 ),
+                const SizedBox(height: 12),
+                TextButton(
+                  key: const Key('goToLoginButton'),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Already have an account? Log in'),
+                ),
               ],
             ),
           ),
