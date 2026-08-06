@@ -87,6 +87,23 @@ class FriendsService {
     }
   }
 
+  Future<void> setFriendColor(String token, String friendId, String color) async {
+    final http.Response response;
+    try {
+      response = await http.put(
+        Uri.parse('$apiBaseUrl/friends/$friendId/color'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'color': color}),
+      );
+    } catch (_) {
+      throw FriendsException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw FriendsException(_errorMessage(response, 'Could not update color'));
+    }
+  }
+
   Future<http.Response> _get(String path, String token, String errorFallback) async {
     final http.Response response;
     try {

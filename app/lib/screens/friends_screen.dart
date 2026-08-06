@@ -113,6 +113,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
   }
 
+  Future<void> _setFriendColor(String friendId, String color) async {
+    try {
+      await widget.friendsService.setFriendColor(widget.authState.token!, friendId, color);
+      await _loadAll();
+    } catch (e) {
+      _showError(e);
+    }
+  }
+
   void _showError(Object e) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -233,7 +242,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     final friend = _friends[index];
                     return Row(
                       children: [
-                        Expanded(child: FriendListTile(friend: friend)),
+                        Expanded(
+                          child: FriendListTile(
+                            friend: friend,
+                            onColorSelected: (color) => _setFriendColor(friend.userId, color),
+                          ),
+                        ),
                         IconButton(
                           key: Key('removeFriendButton_${friend.userId}'),
                           icon: const Icon(Icons.person_remove_outlined),
