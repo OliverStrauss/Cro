@@ -152,8 +152,11 @@ class MapScreenState extends State<MapScreen> {
                 MarkerLayer(markers: [
                   if (waypoint != null)
                     Marker(
+                      key: const Key('ownWaypointMarker'),
                       point: LatLng(waypoint.latitude, waypoint.longitude),
-                      child: const Icon(Icons.location_pin, color: Colors.red),
+                      // A distinct icon from the generic location_pin used for friends'
+                      // markers, so the user's own delivery spot stands out at a glance.
+                      child: const Icon(Icons.home, color: Colors.red),
                     ),
                   for (final friendWaypoint in _friendWaypoints)
                     Marker(
