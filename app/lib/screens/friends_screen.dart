@@ -25,7 +25,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   final _usernameController = TextEditingController();
   bool _isSendingRequest = false;
-  String? _addFriendError;
 
   @override
   void initState() {
@@ -68,17 +67,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
       return;
     }
 
-    setState(() {
-      _isSendingRequest = true;
-      _addFriendError = null;
-    });
+    setState(() => _isSendingRequest = true);
 
     try {
       await widget.friendsService.sendFriendRequest(widget.authState.token!, username);
       _usernameController.clear();
+      _showToast('Friend request sent to $username');
       await _loadAll();
     } catch (e) {
-      setState(() => _addFriendError = e.toString());
+      _showToast(e.toString(), isError: true);
     } finally {
       if (mounted) {
         setState(() => _isSendingRequest = false);
@@ -91,7 +88,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       await widget.friendsService.acceptFriendRequest(widget.authState.token!, requesterId);
       await _loadAll();
     } catch (e) {
-      _showError(e);
+      _showToast(e.toString(), isError: true);
     }
   }
 
@@ -100,7 +97,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       await widget.friendsService.removeFriend(widget.authState.token!, requesterId);
       await _loadAll();
     } catch (e) {
-      _showError(e);
+      _showToast(e.toString(), isError: true);
     }
   }
 
@@ -109,7 +106,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       await widget.friendsService.removeFriend(widget.authState.token!, friendId);
       await _loadAll();
     } catch (e) {
-      _showError(e);
+      _showToast(e.toString(), isError: true);
     }
   }
 
@@ -118,14 +115,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
       await widget.friendsService.setFriendColor(widget.authState.token!, friendId, color);
       await _loadAll();
     } catch (e) {
-      _showError(e);
+      _showToast(e.toString(), isError: true);
     }
   }
 
-  void _showError(Object e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+  // "Toast" here is a SnackBar - Flutter has no separate toast widget, and SnackBar is
+  // the platform-idiomatic equivalent (brief, dismissible, doesn't block interaction).
+  void _showToast(String message, {bool isError = false}) {
+    if (!mounted) {
+      return;
     }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
+    );
   }
 
   @override
@@ -220,15 +225,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   ),
                 ],
               ),
-              if (_addFriendError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    _addFriendError!,
-                    key: const Key('addFriendError'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                ),
             ],
           ),
         ),

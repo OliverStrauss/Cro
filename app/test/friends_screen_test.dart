@@ -132,7 +132,8 @@ void main() {
     expect(find.text('bob'), findsOneWidget);
   });
 
-  testWidgets('sending a friend request succeeds and clears the field', (WidgetTester tester) async {
+  testWidgets('sending a friend request succeeds, clears the field, and shows a success toast',
+      (WidgetTester tester) async {
     final fakeService = _FakeFriendsService();
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
@@ -145,12 +146,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fakeService.lastSentUsername, 'carol');
-    expect(find.byKey(const Key('addFriendError')), findsNothing);
+    expect(find.text('Friend request sent to carol'), findsOneWidget);
     final textField = tester.widget<TextField>(find.byKey(const Key('addFriendUsernameField')));
     expect(textField.controller!.text, isEmpty);
   });
 
-  testWidgets('shows an error when sending a friend request fails', (WidgetTester tester) async {
+  testWidgets('shows an error toast when sending a friend request fails', (WidgetTester tester) async {
     final fakeService = _FakeFriendsService()
       ..sendErrorToThrow = FriendsException('No user with that username.');
     final authState = AuthState()..login('test-token');
@@ -163,7 +164,6 @@ void main() {
     await tester.tap(find.byKey(const Key('sendFriendRequestButton')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('addFriendError')), findsOneWidget);
     expect(find.text('No user with that username.'), findsOneWidget);
   });
 
