@@ -27,6 +27,7 @@ public class CorsTests : IClassFixture<WebApplicationFactory<Program>>
                     ["CosmosDb:ConnectionString"] = connectionString,
                     ["CosmosDb:DatabaseName"] = "CroApp",
                     ["CosmosDb:UsersContainerName"] = "Users",
+                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
                     ["Jwt:Audience"] = "CroApp.Api.Tests"
@@ -46,6 +47,22 @@ public class CorsTests : IClassFixture<WebApplicationFactory<Program>>
         request.Headers.Add("Origin", "http://localhost:53629");
         request.Headers.Add("Access-Control-Request-Method", "POST");
         request.Headers.Add("Access-Control-Request-Headers", "Content-Type");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task PreflightRequest_WithAuthorizationHeader_IsAllowed()
+    {
+        // Mirrors what a browser sends before an authenticated PUT/GET /waypoint request -
+        // Authorization isn't a CORS "simple" header, so it shows up in
+        // Access-Control-Request-Headers and must pass the preflight check.
+        var request = new HttpRequestMessage(HttpMethod.Options, "/waypoint");
+        request.Headers.Add("Origin", "http://localhost:53629");
+        request.Headers.Add("Access-Control-Request-Method", "GET");
+        request.Headers.Add("Access-Control-Request-Headers", "authorization");
 
         var response = await _client.SendAsync(request);
 
