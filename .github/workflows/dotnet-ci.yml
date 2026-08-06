@@ -8,6 +8,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # GitHub-hosted runners are x64, so the standard emulator image works here even
+    # though local Apple Silicon dev needs the vnext-preview ARM64 image instead.
+    services:
+      cosmosdb-emulator:
+        image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+        ports:
+          - 8081:8081
+          - 10251:10251
+          - 10252:10252
+          - 10253:10253
+          - 10254:10254
+        env:
+          AZURE_COSMOS_EMULATOR_PARTITION_COUNT: "10"
+          AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "false"
     defaults:
       run:
         working-directory: api
@@ -16,5 +30,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - run: dotnet restore
-      - run: dotnet build --no-restore
+      - name: Wait for Cosmos emulator to be ready
+        run: |
+          for i in $(seq 1 60); do
+            curl -sk https://localhost:8081/_explorer/emulator.pem -o /dev/null && break
+            sleep 2
+          done
+      # Targeting the test project explicitly (rather than a bare `dotnet build`) also
+      # restores/builds CroApp.Api.csproj via its ProjectReference - no .sln needed.
+      - run: dotnet restore CroApp.Api.Tests/CroApp.Api.Tests.csproj
+      - run: dotnet build CroApp.Api.Tests/CroApp.Api.Tests.csproj --no-restore
+      - run: dotnet test CroApp.Api.Tests/CroApp.Api.Tests.csproj --no-build
+        env:
+          CosmosDb__ConnectionString: "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
