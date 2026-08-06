@@ -6,4 +6,5 @@ public record User(
     [property: JsonPropertyName("id")] string Id,
     string Username,
     string Email,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string PasswordHash);

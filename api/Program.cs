@@ -1,7 +1,13 @@
+using System.Text;
 using CroApp.Api.Data;
+using CroApp.Api.Models;
 using CroApp.Api.Repositories;
+using CroApp.Api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using User = CroApp.Api.Models.User;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 builder.Services.Configure<CosmosDbOptions>(builder.Configuration.GetSection("CosmosDb"));
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 
 builder.Services.AddSingleton(sp =>
 {
@@ -39,6 +46,24 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddScoped<IUserRepository, CosmosUserRepository>();
 
+var jwtSection = builder.Configuration.GetSection("Jwt");
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSection["Issuer"],
+            ValidAudience = jwtSection["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["SigningKey"] ?? string.Empty))
+        };
+    });
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Provision the Users container on startup for local/emulator convenience only.
@@ -60,17 +85,42 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapPost("/users", async (CreateUserRequest req, IUserRepository repo) =>
 {
-    var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow);
-    var created = await repo.CreateAsync(user);
-    return Results.Created($"/users/{created.Id}", created);
+    var hasher = new PasswordHasher<User>();
+    var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow, PasswordHash: "");
+    var hashedUser = user with { PasswordHash = hasher.HashPassword(user, req.Password) };
+    var created = await repo.CreateAsync(hashedUser);
+    return Results.Created($"/users/{created.Id}", created.ToResponse());
 })
 .WithName("CreateUser");
 
 app.MapGet("/users/{id}", async (string id, IUserRepository repo) =>
-    await repo.GetByIdAsync(id) is { } user ? Results.Ok(user) : Results.NotFound())
+    await repo.GetByIdAsync(id) is { } user ? Results.Ok(user.ToResponse()) : Results.NotFound())
 .WithName("GetUserById");
+
+app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<JwtOptions> jwtOpts) =>
+{
+    var user = await repo.GetByUsernameAsync(req.Username);
+    if (user is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var hasher = new PasswordHasher<User>();
+    var result = hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
+    if (result == PasswordVerificationResult.Failed)
+    {
+        return Results.Unauthorized();
+    }
+
+    var (token, expiresAt) = JwtTokenService.GenerateToken(user, jwtOpts.Value);
+    return Results.Ok(new LoginResponse(token, expiresAt));
+})
+.WithName("Login");
 
 var summaries = new[]
 {
@@ -98,6 +148,8 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
 
-record CreateUserRequest(string Username, string Email);
+record CreateUserRequest(string Username, string Email, string Password);
+record LoginRequest(string Username, string Password);
+record LoginResponse(string Token, DateTimeOffset ExpiresAt);
 
 public partial class Program { }
