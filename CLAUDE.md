@@ -99,3 +99,7 @@ Two GitHub Actions workflows, each scoped to its own `working-directory`, run on
   ```
   -Co Authored By Olivers Robot companion (claude code)
   ```
+- After pushing a branch and opening a PR, do not sit and poll/watch CI status. Report
+  "Done" plus a concise summary of exactly which files changed and what each change
+  affects, then stop — merging and checking CI results is Oliver's call, not something to
+  wait around for.
