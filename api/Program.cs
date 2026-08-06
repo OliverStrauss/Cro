@@ -66,6 +66,7 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddScoped<IUserRepository, CosmosUserRepository>();
 builder.Services.AddScoped<IWaypointRepository, CosmosWaypointRepository>();
+builder.Services.AddScoped<IFriendService, FriendService>();
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
@@ -122,7 +123,7 @@ app.UseAuthorization();
 app.MapPost("/users", async (CreateUserRequest req, IUserRepository repo) =>
 {
     var hasher = new PasswordHasher<User>();
-    var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow, PasswordHash: "");
+    var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow, PasswordHash: "", Friends: []);
     var hashedUser = user with { PasswordHash = hasher.HashPassword(user, req.Password) };
     var created = await repo.CreateAsync(hashedUser);
     return Results.Created($"/users/{created.Id}", created.ToResponse());
@@ -182,6 +183,182 @@ app.MapPut("/waypoint", async (SetWaypointRequest req, ClaimsPrincipal user, IWa
 .RequireAuthorization()
 .WithName("SetWaypoint");
 
+app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await friendService.SendRequestAsync(userId, req.Username);
+        return Results.NoContent();
+    }
+    catch (FriendServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("SendFriendRequest");
+
+app.MapGet("/friends/requests/incoming", async (ClaimsPrincipal principal, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userRepo.GetByIdAsync(userId);
+    if (user is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var incoming = (user.Friends ?? [])
+        .Where(f => f.Status == FriendStatus.PendingIncoming)
+        .Select(f => new { f.Id, f.Username });
+    return Results.Ok(incoming);
+})
+.RequireAuthorization()
+.WithName("GetIncomingFriendRequests");
+
+app.MapGet("/friends/requests/outgoing", async (ClaimsPrincipal principal, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userRepo.GetByIdAsync(userId);
+    if (user is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var outgoing = (user.Friends ?? [])
+        .Where(f => f.Status == FriendStatus.PendingOutgoing)
+        .Select(f => new { f.Id, f.Username });
+    return Results.Ok(outgoing);
+})
+.RequireAuthorization()
+.WithName("GetOutgoingFriendRequests");
+
+app.MapPost("/friends/requests/{requesterId}/accept", async (string requesterId, ClaimsPrincipal principal, IFriendService friendService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await friendService.AcceptAsync(userId, requesterId);
+        return Results.NoContent();
+    }
+    catch (FriendServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("AcceptFriendRequest");
+
+app.MapDelete("/friends/{userId}", async (string userId, ClaimsPrincipal principal, IFriendService friendService) =>
+{
+    var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (callerId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    await friendService.RemoveAsync(callerId, userId);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("RemoveFriend");
+
+app.MapGet("/friends", async (ClaimsPrincipal principal, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userRepo.GetByIdAsync(userId);
+    if (user is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var friends = (user.Friends ?? [])
+        .Where(f => f.Status == FriendStatus.Accepted)
+        .Select(f => new { f.Id, f.Username, f.Color });
+    return Results.Ok(friends);
+})
+.RequireAuthorization()
+.WithName("GetFriends");
+
+app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserRepository userRepo, IWaypointRepository waypointRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userRepo.GetByIdAsync(userId);
+    if (user is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var acceptedFriends = (user.Friends ?? []).Where(f => f.Status == FriendStatus.Accepted);
+
+    // N+1 lookup - same accepted tradeoff as GetByUsernameAsync's cross-partition query,
+    // fine at expected friend-list sizes.
+    var results = new List<object>();
+    foreach (var friend in acceptedFriends)
+    {
+        var waypoint = await waypointRepo.GetByUserIdAsync(friend.Id);
+        if (waypoint is not null)
+        {
+            results.Add(new { friend.Id, friend.Username, friend.Color, waypoint.Latitude, waypoint.Longitude });
+        }
+    }
+
+    return Results.Ok(results);
+})
+.RequireAuthorization()
+.WithName("GetFriendsWaypoints");
+
+app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
+{
+    var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (callerId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await friendService.SetColorAsync(callerId, userId, req.Color);
+        return Results.NoContent();
+    }
+    catch (FriendServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("SetFriendColor");
+
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
@@ -212,5 +389,7 @@ record CreateUserRequest(string Username, string Email, string Password);
 record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
 record SetWaypointRequest(string Name, double Latitude, double Longitude);
+record SendFriendRequestRequest(string Username);
+record SetFriendColorRequest(string Color);
 
 public partial class Program { }

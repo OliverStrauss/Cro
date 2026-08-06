@@ -55,4 +55,10 @@ public class CosmosUserRepository : IUserRepository
 
         return null;
     }
+
+    public async Task<User> UpdateAsync(User user)
+    {
+        var response = await _container.UpsertItemAsync(user, new PartitionKey(user.Id));
+        return response.Resource;
+    }
 }
