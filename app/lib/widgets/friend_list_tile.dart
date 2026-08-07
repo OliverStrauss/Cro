@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/friend.dart';
 import '../utils/color_utils.dart';
+import 'avatar_with_fallback.dart';
 
 class FriendListTile extends StatefulWidget {
   final Friend friend;
@@ -14,8 +15,6 @@ class FriendListTile extends StatefulWidget {
 }
 
 class _FriendListTileState extends State<FriendListTile> {
-  bool _pictureFailedToLoad = false;
-
   Friend get _friend => widget.friend;
 
   Color get _backgroundColor => _friend.color != null ? hexToColor(_friend.color!) : Colors.grey;
@@ -23,11 +22,6 @@ class _FriendListTileState extends State<FriendListTile> {
   // Palette colors span light and dark, so pick readable text per-tile rather than a
   // single fixed color.
   Color get _textColor => _backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
-
-  String get _initials {
-    final trimmed = _friend.username.trim();
-    return trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
-  }
 
   Future<void> _pickColor(BuildContext context) async {
     final selected = await showDialog<String>(
@@ -73,23 +67,11 @@ class _FriendListTileState extends State<FriendListTile> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             child: Row(
               children: [
-                CircleAvatar(
-                  key: Key('friendAvatar_${_friend.userId}'),
+                AvatarWithFallback(
+                  avatarKey: Key('friendAvatar_${_friend.userId}'),
+                  imageUrl: _friend.profilePictureUrl,
+                  initialsSource: _friend.username,
                   radius: 16,
-                  backgroundImage: (_friend.profilePictureUrl != null && !_pictureFailedToLoad)
-                      ? NetworkImage(_friend.profilePictureUrl!)
-                      : null,
-                  // CircleAvatar asserts backgroundImage != null || onBackgroundImageError == null,
-                  // so this must be gated on the exact same condition as backgroundImage above -
-                  // once _pictureFailedToLoad flips, both need to go null together.
-                  onBackgroundImageError: (_friend.profilePictureUrl != null && !_pictureFailedToLoad)
-                      ? (exception, stackTrace) {
-                          if (mounted) setState(() => _pictureFailedToLoad = true);
-                        }
-                      : null,
-                  child: (_friend.profilePictureUrl == null || _pictureFailedToLoad)
-                      ? Text(_initials)
-                      : null,
                 ),
                 const SizedBox(width: 12),
                 Text(

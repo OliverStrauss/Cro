@@ -4,6 +4,7 @@ class FriendWaypoint {
   final String color;
   final double latitude;
   final double longitude;
+  final String? profilePictureUrl;
 
   FriendWaypoint({
     required this.userId,
@@ -11,6 +12,7 @@ class FriendWaypoint {
     required this.color,
     required this.latitude,
     required this.longitude,
+    this.profilePictureUrl,
   });
 
   factory FriendWaypoint.fromJson(Map<String, dynamic> json) => FriendWaypoint(
@@ -19,5 +21,6 @@ class FriendWaypoint {
         color: json['color'] as String,
         latitude: (json['latitude'] as num).toDouble(),
         longitude: (json['longitude'] as num).toDouble(),
+        profilePictureUrl: json['profilePictureUrl'] as String?,
       );
 }

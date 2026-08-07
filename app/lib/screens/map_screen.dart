@@ -3,24 +3,31 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/friend_waypoint.dart';
+import '../models/user_profile.dart';
 import '../models/waypoint.dart';
 import '../services/friends_service.dart';
+import '../services/profile_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
 import '../utils/color_utils.dart';
+import '../utils/jwt_utils.dart';
+import '../widgets/nest_details_dialog.dart';
 
 class MapScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService waypointService;
   final FriendsService friendsService;
+  final ProfileService profileService;
 
   MapScreen({
     super.key,
     required this.authState,
     WaypointService? waypointService,
     FriendsService? friendsService,
+    ProfileService? profileService,
   })  : waypointService = waypointService ?? WaypointService(),
-        friendsService = friendsService ?? FriendsService();
+        friendsService = friendsService ?? FriendsService(),
+        profileService = profileService ?? ProfileService();
 
   @override
   State<MapScreen> createState() => MapScreenState();
@@ -33,6 +40,7 @@ class MapScreen extends StatefulWidget {
 class MapScreenState extends State<MapScreen> {
   Waypoint? _waypoint;
   List<FriendWaypoint> _friendWaypoints = [];
+  UserProfile? _ownProfile;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -56,13 +64,16 @@ class MapScreenState extends State<MapScreen> {
 
     try {
       final token = widget.authState.token!;
+      final userId = jwtSubject(token);
       final results = await Future.wait<dynamic>([
         widget.waypointService.getWaypoint(token),
         widget.friendsService.getFriendsWaypoints(token),
+        if (userId != null) widget.profileService.getUser(userId),
       ]);
       setState(() {
         _waypoint = results[0] as Waypoint?;
         _friendWaypoints = results[1] as List<FriendWaypoint>;
+        _ownProfile = userId != null ? results[2] as UserProfile : null;
         _isLoading = false;
       });
     } catch (e) {
@@ -73,34 +84,26 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showFriendUsername(String username) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(username)));
+  void _showOwnNestDetails(Waypoint waypoint) {
+    NestDetailsDialog.show(
+      context,
+      // Falls back to the waypoint's own name only if the own-profile fetch itself
+      // failed - an edge case, not the common path (the fetch is otherwise part of
+      // the same all-or-nothing _loadData load as the waypoint itself).
+      username: _ownProfile?.username ?? waypoint.name,
+      profilePictureUrl: _ownProfile?.profilePictureUrl,
+      latitude: waypoint.latitude,
+      longitude: waypoint.longitude,
+    );
   }
 
-  // Placeholder details view - Waypoint only carries name/lat/lng today, so "city" etc.
-  // isn't real data yet. Structured as its own dialog so more fields can be dropped in
-  // here later without touching the marker/tap-handling code above.
-  void _showWaypointDetails(Waypoint waypoint) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        key: const Key('waypointDetailsDialog'),
-        title: Text(waypoint.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Latitude: ${waypoint.latitude}'),
-            Text('Longitude: ${waypoint.longitude}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+  void _showFriendNestDetails(FriendWaypoint friendWaypoint) {
+    NestDetailsDialog.show(
+      context,
+      username: friendWaypoint.username,
+      profilePictureUrl: friendWaypoint.profilePictureUrl,
+      latitude: friendWaypoint.latitude,
+      longitude: friendWaypoint.longitude,
     );
   }
 
@@ -196,10 +199,10 @@ class MapScreenState extends State<MapScreen> {
                       key: const Key('ownWaypointMarker'),
                       point: LatLng(waypoint.latitude, waypoint.longitude),
                       child: GestureDetector(
-                        onTap: () => _showWaypointDetails(waypoint),
-                        // A distinct icon from the generic location_pin used for friends'
-                        // markers, so the user's own delivery spot stands out at a glance.
-                        child: const Icon(Icons.home, color: Colors.red),
+                        onTap: () => _showOwnNestDetails(waypoint),
+                        // Same pin shape friends use, so both read as "the same kind of
+                        // thing" - still red so the user's own nest stands out at a glance.
+                        child: const Icon(Icons.location_pin, color: Colors.red),
                       ),
                     ),
                   for (final friendWaypoint in _friendWaypoints)
@@ -207,7 +210,7 @@ class MapScreenState extends State<MapScreen> {
                       key: Key('friendMarker_${friendWaypoint.userId}'),
                       point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
                       child: GestureDetector(
-                        onTap: () => _showFriendUsername(friendWaypoint.username),
+                        onTap: () => _showFriendNestDetails(friendWaypoint),
                         child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color)),
                       ),
                     ),
