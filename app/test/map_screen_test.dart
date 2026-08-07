@@ -71,6 +71,35 @@ void main() {
     expect(find.text('Delivery spot: Backyard'), findsOneWidget);
   });
 
+  testWidgets('map has a minimum zoom floor and a latitude camera constraint', (WidgetTester tester) async {
+    final fakeService = _FakeWaypointService()
+      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
+    ));
+    await tester.pumpAndSettle();
+
+    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+    expect(map.options.minZoom, 3);
+    expect(map.options.cameraConstraint, isA<ContainCameraLatitude>());
+  });
+
+  testWidgets('no-waypoint default zoom is not below the configured minZoom', (WidgetTester tester) async {
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: _FakeWaypointService(),
+          friendsService: _FakeFriendsService()),
+    ));
+    await tester.pumpAndSettle();
+
+    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+    expect(map.options.initialZoom, greaterThanOrEqualTo(map.options.minZoom!));
+  });
+
   testWidgets('shows an error and retry button on failure', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()..errorToThrow = WaypointException('Could not reach the server');
     final authState = AuthState()..login('test-token');

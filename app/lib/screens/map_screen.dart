@@ -173,7 +173,15 @@ class MapScreenState extends State<MapScreen> {
               initialCenter: waypoint != null
                   ? LatLng(waypoint.latitude, waypoint.longitude)
                   : const LatLng(0, 0),
-              initialZoom: waypoint != null ? 13 : 2,
+              // Floor of 3 keeps a whole-country/continent view available while stopping
+              // short of the near-zoom-0 world-repeat view that caused "weird behavior"
+              // when zoomed all the way out. initialZoom isn't clamped against minZoom on
+              // first build (only post-init camera moves are), so the no-waypoint default
+              // needs to match the floor directly rather than relying on clamping.
+              initialZoom: waypoint != null ? 13 : 3,
+              minZoom: 3,
+              // Prevents panning past the poles into the background-color void.
+              cameraConstraint: const CameraConstraint.containLatitude(),
               onTap: (tapPosition, point) => handleMapTap(point),
             ),
             children: [
