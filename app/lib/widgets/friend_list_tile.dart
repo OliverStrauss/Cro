@@ -4,6 +4,8 @@ import '../models/friend.dart';
 import '../utils/color_utils.dart';
 import 'avatar_with_fallback.dart';
 
+// A fixed-width vertical card - not a "tile" anymore, but kept the name to avoid
+// churning every import across the social screen and its tests.
 class FriendListTile extends StatefulWidget {
   final Friend friend;
   final ValueChanged<String>? onColorSelected;
@@ -54,32 +56,34 @@ class _FriendListTileState extends State<FriendListTile> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Material(
-        color: _backgroundColor,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          key: Key('friendTile_${_friend.userId}'),
-          borderRadius: BorderRadius.circular(8),
-          onTap: widget.onColorSelected == null ? null : () => _pickColor(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              children: [
-                AvatarWithFallback(
-                  avatarKey: Key('friendAvatar_${_friend.userId}'),
-                  imageUrl: _friend.profilePictureUrl,
-                  initialsSource: _friend.username,
-                  radius: 16,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  _friend.username,
-                  style: TextStyle(color: _textColor, fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ],
-            ),
+    return Material(
+      color: _backgroundColor,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: Key('friendTile_${_friend.userId}'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: widget.onColorSelected == null ? null : () => _pickColor(context),
+        child: Container(
+          width: 84,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AvatarWithFallback(
+                avatarKey: Key('friendAvatar_${_friend.userId}'),
+                imageUrl: _friend.profilePictureUrl,
+                initialsSource: _friend.username,
+                radius: 24,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _friend.username,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _textColor, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
         ),
       ),
