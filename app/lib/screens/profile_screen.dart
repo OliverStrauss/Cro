@@ -21,6 +21,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isUploading = false;
+  bool _pictureFailedToLoad = false;
 
   @override
   void initState() {
@@ -43,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _profile = profile;
         _isLoading = false;
+        _pictureFailedToLoad = false;
       });
     } catch (e) {
       setState(() {
@@ -151,9 +153,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 CircleAvatar(
                   radius: 48,
-                  backgroundImage:
-                      profile.profilePictureUrl != null ? NetworkImage(profile.profilePictureUrl!) : null,
-                  child: profile.profilePictureUrl == null
+                  backgroundImage: (profile.profilePictureUrl != null && !_pictureFailedToLoad)
+                      ? NetworkImage(profile.profilePictureUrl!)
+                      : null,
+                  // CircleAvatar asserts backgroundImage != null || onBackgroundImageError == null,
+                  // so this must be gated on the exact same condition as backgroundImage above -
+                  // once _pictureFailedToLoad flips, both need to go null together.
+                  onBackgroundImageError: (profile.profilePictureUrl != null && !_pictureFailedToLoad)
+                      ? (exception, stackTrace) {
+                          if (mounted) setState(() => _pictureFailedToLoad = true);
+                        }
+                      : null,
+                  child: (profile.profilePictureUrl == null || _pictureFailedToLoad)
                       ? Text(
                           profile.username.isNotEmpty ? profile.username[0].toUpperCase() : '?',
                           style: const TextStyle(fontSize: 32),

@@ -97,11 +97,25 @@ void main() {
     expect(find.byKey(const Key('noFriendsMessage')), findsNothing);
   });
 
-  testWidgets('shows initials when a friend has no profile picture, otherwise the picture',
+  testWidgets('shows initials when a friend has no profile picture set', (WidgetTester tester) async {
+    final fakeService = _FakeFriendsService()
+      ..friendsToReturn = [Friend(userId: 'u1', username: 'alice', color: '#E53935')];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(authState: authState, friendsService: fakeService),
+    ));
+    await tester.pumpAndSettle();
+
+    final aliceAvatar = tester.widget<CircleAvatar>(find.byKey(const Key('friendAvatar_u1')));
+    expect(aliceAvatar.backgroundImage, isNull);
+    expect(find.descendant(of: find.byKey(const Key('friendAvatar_u1')), matching: find.text('A')),
+        findsOneWidget);
+  });
+
+  testWidgets('falls back to initials when a friend\'s profile picture fails to load',
       (WidgetTester tester) async {
     final fakeService = _FakeFriendsService()
       ..friendsToReturn = [
-        Friend(userId: 'u1', username: 'alice', color: '#E53935'),
         Friend(
             userId: 'u2',
             username: 'bob',
@@ -113,19 +127,14 @@ void main() {
       home: FriendsScreen(authState: authState, friendsService: fakeService),
     ));
     await tester.pumpAndSettle();
-    // CircleAvatar eagerly resolves backgroundImage, so bob's NetworkImage triggers a
-    // real (test-stubbed, always-400) HTTP fetch that throws asynchronously - consume it
-    // so it doesn't fail the test; we only care that the widget is wired to the right URL.
-    tester.takeException();
-
-    final aliceAvatar = tester.widget<CircleAvatar>(find.byKey(const Key('friendAvatar_u1')));
-    expect(aliceAvatar.backgroundImage, isNull);
-    expect(find.descendant(of: find.byKey(const Key('friendAvatar_u1')), matching: find.text('A')),
-        findsOneWidget);
+    // Every network image fetch in this test harness returns a stubbed 400, so bob's
+    // picture is expected to fail here - this is exercising the fallback path itself,
+    // not a real successful load (which flutter test cannot produce for NetworkImage).
 
     final bobAvatar = tester.widget<CircleAvatar>(find.byKey(const Key('friendAvatar_u2')));
-    expect(bobAvatar.backgroundImage, isA<NetworkImage>());
-    expect((bobAvatar.backgroundImage as NetworkImage).url, 'https://example.com/bob.png');
+    expect(bobAvatar.backgroundImage, isNull);
+    expect(find.descendant(of: find.byKey(const Key('friendAvatar_u2')), matching: find.text('B')),
+        findsOneWidget);
   });
 
   testWidgets('shows a message when the friends list is empty', (WidgetTester tester) async {

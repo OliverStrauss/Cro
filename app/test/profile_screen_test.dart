@@ -77,6 +77,24 @@ void main() {
     expect(find.text('alice'), findsOneWidget);
   });
 
+  testWidgets('falls back to initials when the profile picture fails to load', (WidgetTester tester) async {
+    final fakeService = _FakeProfileService()
+      ..profileToReturn = UserProfile(
+          id: 'u1', username: 'alice', email: 'alice@example.com', profilePictureUrl: 'https://example.com/pic.png');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: ProfileScreen(authState: authState, profileService: fakeService),
+    ));
+    await tester.pumpAndSettle();
+    // Every network image fetch in this test harness returns a stubbed 400, so the
+    // picture is expected to fail here - this exercises the fallback path itself, not a
+    // real successful load (which flutter test cannot produce for NetworkImage).
+
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    expect(avatar.backgroundImage, isNull);
+    expect(find.text('A'), findsOneWidget);
+  });
+
   testWidgets('shows an error and retry button on failure', (WidgetTester tester) async {
     final fakeService = _FakeProfileService()..loadErrorToThrow = ProfileException('Could not load profile');
     final authState = AuthState()..login(_fakeJwtFor('u1'));
