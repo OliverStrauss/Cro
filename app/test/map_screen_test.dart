@@ -210,8 +210,7 @@ void main() {
     expect(find.byKey(const Key('friendMarker_f2')), findsOneWidget);
   });
 
-  testWidgets('own waypoint marker uses the same pin shape as friend markers, still red',
-      (WidgetTester tester) async {
+  testWidgets('own waypoint marker uses a house icon, still red', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
     final authState = AuthState()..login(_fakeJwtFor('u1'));
@@ -227,7 +226,7 @@ void main() {
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final ownMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('ownWaypointMarker'));
     final icon = (ownMarker.child as GestureDetector).child as Icon;
-    expect(icon.icon, Icons.location_pin);
+    expect(icon.icon, Icons.house);
     expect(icon.color, Colors.red);
   });
 
