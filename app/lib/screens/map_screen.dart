@@ -42,6 +42,12 @@ class MapScreenState extends State<MapScreen> {
     _loadData();
   }
 
+  // HomeScreen keeps every tab alive in an IndexedStack rather than rebuilding them on
+  // switch, so initState only ever runs once - without an explicit refresh hook, this
+  // screen would keep showing whatever waypoint/friend data it first loaded with, even
+  // after a friend's color or waypoint changes elsewhere in the app.
+  Future<void> refresh() => _loadData();
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -69,6 +75,33 @@ class MapScreenState extends State<MapScreen> {
 
   void _showFriendUsername(String username) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(username)));
+  }
+
+  // Placeholder details view - Waypoint only carries name/lat/lng today, so "city" etc.
+  // isn't real data yet. Structured as its own dialog so more fields can be dropped in
+  // here later without touching the marker/tap-handling code above.
+  void _showWaypointDetails(Waypoint waypoint) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('waypointDetailsDialog'),
+        title: Text(waypoint.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Latitude: ${waypoint.latitude}'),
+            Text('Longitude: ${waypoint.longitude}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @visibleForTesting
@@ -152,8 +185,14 @@ class MapScreenState extends State<MapScreen> {
                 MarkerLayer(markers: [
                   if (waypoint != null)
                     Marker(
+                      key: const Key('ownWaypointMarker'),
                       point: LatLng(waypoint.latitude, waypoint.longitude),
-                      child: const Icon(Icons.location_pin, color: Colors.red),
+                      child: GestureDetector(
+                        onTap: () => _showWaypointDetails(waypoint),
+                        // A distinct icon from the generic location_pin used for friends'
+                        // markers, so the user's own delivery spot stands out at a glance.
+                        child: const Icon(Icons.home, color: Colors.red),
+                      ),
                     ),
                   for (final friendWaypoint in _friendWaypoints)
                     Marker(

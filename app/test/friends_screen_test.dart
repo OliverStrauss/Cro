@@ -57,6 +57,7 @@ class _FakeFriendsService implements FriendsService {
     lastRemovedUserId = userId;
     friendsToReturn = friendsToReturn.where((f) => f.userId != userId).toList();
     incomingToReturn = incomingToReturn.where((r) => r.userId != userId).toList();
+    outgoingToReturn = outgoingToReturn.where((r) => r.userId != userId).toList();
   }
 
   @override
@@ -132,7 +133,47 @@ void main() {
     expect(find.text('bob'), findsOneWidget);
   });
 
-  testWidgets('sending a friend request succeeds and clears the field', (WidgetTester tester) async {
+  testWidgets('pending requests section only shows when there are outgoing requests',
+      (WidgetTester tester) async {
+    final authState = AuthState()..login('test-token');
+
+    final noRequestsService = _FakeFriendsService();
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(
+          key: const Key('withoutPending'), authState: authState, friendsService: noRequestsService),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('outgoingRequestsSection')), findsNothing);
+
+    final withPendingService = _FakeFriendsService()
+      ..outgoingToReturn = [FriendRequest(userId: 'u3', username: 'dave')];
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(
+          key: const Key('withPending'), authState: authState, friendsService: withPendingService),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('outgoingRequestsSection')), findsOneWidget);
+    expect(find.text('dave'), findsOneWidget);
+  });
+
+  testWidgets('canceling a pending request calls removeFriend and refreshes', (WidgetTester tester) async {
+    final fakeService = _FakeFriendsService()
+      ..outgoingToReturn = [FriendRequest(userId: 'u3', username: 'dave')];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: FriendsScreen(authState: authState, friendsService: fakeService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cancelRequestButton_u3')));
+    await tester.pumpAndSettle();
+
+    expect(fakeService.lastRemovedUserId, 'u3');
+    expect(find.byKey(const Key('outgoingRequestsSection')), findsNothing);
+  });
+
+  testWidgets('sending a friend request succeeds, clears the field, and shows a success toast',
+      (WidgetTester tester) async {
     final fakeService = _FakeFriendsService();
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
@@ -145,12 +186,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fakeService.lastSentUsername, 'carol');
-    expect(find.byKey(const Key('addFriendError')), findsNothing);
+    expect(find.text('Friend request sent to carol'), findsOneWidget);
     final textField = tester.widget<TextField>(find.byKey(const Key('addFriendUsernameField')));
     expect(textField.controller!.text, isEmpty);
   });
 
-  testWidgets('shows an error when sending a friend request fails', (WidgetTester tester) async {
+  testWidgets('shows an error toast when sending a friend request fails', (WidgetTester tester) async {
     final fakeService = _FakeFriendsService()
       ..sendErrorToThrow = FriendsException('No user with that username.');
     final authState = AuthState()..login('test-token');
@@ -163,7 +204,6 @@ void main() {
     await tester.tap(find.byKey(const Key('sendFriendRequestButton')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('addFriendError')), findsOneWidget);
     expect(find.text('No user with that username.'), findsOneWidget);
   });
 
@@ -209,7 +249,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('colorSwatch_u1')));
+    await tester.tap(find.byKey(const Key('friendTile_u1')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(Key('colorOption_${friendColorPalette[1]}')));

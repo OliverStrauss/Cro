@@ -9,10 +9,11 @@ class FriendListTile extends StatelessWidget {
 
   const FriendListTile({super.key, required this.friend, this.onColorSelected});
 
-  String get _initials {
-    final trimmed = friend.username.trim();
-    return trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
-  }
+  Color get _backgroundColor => friend.color != null ? hexToColor(friend.color!) : Colors.grey;
+
+  // Palette colors span light and dark, so pick readable text per-tile rather than a
+  // single fixed color.
+  Color get _textColor => _backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
 
   Future<void> _pickColor(BuildContext context) async {
     final selected = await showDialog<String>(
@@ -45,20 +46,24 @@ class FriendListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      key: Key('friendTile_${friend.userId}'),
-      leading: CircleAvatar(child: Text(_initials)),
-      title: Text(friend.username),
-      trailing: onColorSelected == null
-          ? null
-          : GestureDetector(
-              key: Key('colorSwatch_${friend.userId}'),
-              onTap: () => _pickColor(context),
-              child: CircleAvatar(
-                backgroundColor: friend.color != null ? hexToColor(friend.color!) : Colors.grey,
-                radius: 14,
-              ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Material(
+        color: _backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          key: Key('friendTile_${friend.userId}'),
+          borderRadius: BorderRadius.circular(8),
+          onTap: onColorSelected == null ? null : () => _pickColor(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Text(
+              friend.username,
+              style: TextStyle(color: _textColor, fontWeight: FontWeight.bold, fontSize: 16),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
