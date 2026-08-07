@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using CroApp.Api.Data;
 using CroApp.Api.Models;
 using CroApp.Api.Repositories;
@@ -38,6 +40,7 @@ if (builder.Environment.IsDevelopment())
 
 builder.Services.Configure<CosmosDbOptions>(builder.Configuration.GetSection("CosmosDb"));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<BlobStorageOptions>(builder.Configuration.GetSection("BlobStorage"));
 
 builder.Services.AddSingleton(sp =>
 {
@@ -64,9 +67,16 @@ builder.Services.AddSingleton(sp =>
     return new CosmosClient(opts.ConnectionString, clientOptions);
 });
 
+builder.Services.AddSingleton(sp =>
+{
+    var opts = sp.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
+    return new BlobServiceClient(opts.ConnectionString);
+});
+
 builder.Services.AddScoped<IUserRepository, CosmosUserRepository>();
 builder.Services.AddScoped<IWaypointRepository, CosmosWaypointRepository>();
 builder.Services.AddScoped<IFriendService, FriendService>();
+builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
@@ -102,6 +112,14 @@ if (app.Environment.IsDevelopment())
     var database = await client.CreateDatabaseIfNotExistsAsync(opts.DatabaseName);
     await database.Database.CreateContainerIfNotExistsAsync(opts.UsersContainerName, "/id");
     await database.Database.CreateContainerIfNotExistsAsync(opts.WaypointsContainerName, "/id");
+
+    var blobClient = scope.ServiceProvider.GetRequiredService<BlobServiceClient>();
+    var blobOpts = scope.ServiceProvider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
+    // PublicAccessType.Blob (public read for blobs, no container listing) keeps uploaded
+    // pictures fetchable via a plain URL without SAS tokens - fine for local/dev, but a
+    // real deployment needs real access control here before this container goes live.
+    await blobClient.GetBlobContainerClient(blobOpts.ProfilePicturesContainerName)
+        .CreateIfNotExistsAsync(PublicAccessType.Blob);
 }
 
 // Configure the HTTP request pipeline.
@@ -297,9 +315,17 @@ app.MapGet("/friends", async (ClaimsPrincipal principal, IUserRepository userRep
         return Results.Unauthorized();
     }
 
-    var friends = (user.Friends ?? [])
-        .Where(f => f.Status == FriendStatus.Accepted)
-        .Select(f => new { f.Id, f.Username, f.Color });
+    var acceptedFriends = (user.Friends ?? []).Where(f => f.Status == FriendStatus.Accepted);
+
+    // N+1 lookup to pick up each friend's current ProfilePictureUrl - same accepted
+    // tradeoff category as /friends/waypoints below, fine at expected friend-list sizes.
+    var friends = new List<object>();
+    foreach (var friend in acceptedFriends)
+    {
+        var friendUser = await userRepo.GetByIdAsync(friend.Id);
+        friends.Add(new { friend.Id, friend.Username, friend.Color, friendUser?.ProfilePictureUrl });
+    }
+
     return Results.Ok(friends);
 })
 .RequireAuthorization()
@@ -358,6 +384,29 @@ app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorReques
 })
 .RequireAuthorization()
 .WithName("SetFriendColor");
+
+app.MapPut("/profile/picture", async (IFormFile file, ClaimsPrincipal principal, IProfilePictureService pictureService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await using var stream = file.OpenReadStream();
+        var url = await pictureService.UploadAsync(userId, stream, file.ContentType, file.Length);
+        return Results.Ok(new { ProfilePictureUrl = url });
+    }
+    catch (ProfilePictureServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.DisableAntiforgery()
+.WithName("UploadProfilePicture");
 
 var summaries = new[]
 {
