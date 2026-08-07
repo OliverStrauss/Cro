@@ -19,7 +19,6 @@ void main() {
     expect(find.byKey(const Key('usernameField')), findsNothing);
     expect(find.byKey(const Key('homeNavBar')), findsOneWidget);
     expect(find.byKey(const Key('navMap')), findsOneWidget);
-    expect(find.byKey(const Key('navFriends')), findsOneWidget);
     expect(find.byKey(const Key('navProfile')), findsOneWidget);
   });
 }

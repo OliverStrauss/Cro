@@ -262,9 +262,16 @@ app.MapGet("/friends/requests/incoming", async (ClaimsPrincipal principal, IUser
         return Results.Unauthorized();
     }
 
-    var incoming = (user.Friends ?? [])
-        .Where(f => f.Status == FriendStatus.PendingIncoming)
-        .Select(f => new { f.Id, f.Username });
+    var incomingRequests = (user.Friends ?? []).Where(f => f.Status == FriendStatus.PendingIncoming);
+
+    // N+1 lookup to pick up each requester's current ProfilePictureUrl - same accepted
+    // tradeoff category as GET /friends, so invite cards can show an avatar.
+    var incoming = new List<object>();
+    foreach (var request in incomingRequests)
+    {
+        var requesterUser = await userRepo.GetByIdAsync(request.Id);
+        incoming.Add(new { request.Id, request.Username, requesterUser?.ProfilePictureUrl });
+    }
     return Results.Ok(incoming);
 })
 .RequireAuthorization()
@@ -284,9 +291,15 @@ app.MapGet("/friends/requests/outgoing", async (ClaimsPrincipal principal, IUser
         return Results.Unauthorized();
     }
 
-    var outgoing = (user.Friends ?? [])
-        .Where(f => f.Status == FriendStatus.PendingOutgoing)
-        .Select(f => new { f.Id, f.Username });
+    var outgoingRequests = (user.Friends ?? []).Where(f => f.Status == FriendStatus.PendingOutgoing);
+
+    // Same N+1 lookup as incoming requests above, for the same reason.
+    var outgoing = new List<object>();
+    foreach (var request in outgoingRequests)
+    {
+        var targetUser = await userRepo.GetByIdAsync(request.Id);
+        outgoing.Add(new { request.Id, request.Username, targetUser?.ProfilePictureUrl });
+    }
     return Results.Ok(outgoing);
 })
 .RequireAuthorization()
