@@ -181,8 +181,48 @@ public class ProfilePictureEndpointTests : IClassFixture<WebApplicationFactory<P
         Assert.Equal(uploadBody!.ProfilePictureUrl, bAsSeenByA.ProfilePictureUrl);
     }
 
+    [Fact]
+    public async Task GetFriendsWaypoints_IncludesProfilePictureUrl()
+    {
+        var usernameA = $"pfp-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"pfp-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        var uploadResponse = await _client.SendAsync(UploadRequest(tokenB, [1, 2, 3], "image/png"));
+        var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<UploadResponseDto>();
+
+        var sendRequest = new HttpRequestMessage(HttpMethod.Post, "/friends/requests")
+        {
+            Content = JsonContent.Create(new { Username = usernameB })
+        };
+        sendRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenA);
+        await _client.SendAsync(sendRequest);
+
+        var acceptRequest = new HttpRequestMessage(HttpMethod.Post, $"/friends/requests/{idA}/accept");
+        acceptRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
+        await _client.SendAsync(acceptRequest);
+
+        var setWaypointRequest = new HttpRequestMessage(HttpMethod.Put, "/waypoint")
+        {
+            Content = JsonContent.Create(new { Name = "B's Spot", Latitude = 10.0, Longitude = 20.0 })
+        };
+        setWaypointRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
+        await _client.SendAsync(setWaypointRequest);
+
+        var getWaypointsRequest = new HttpRequestMessage(HttpMethod.Get, "/friends/waypoints");
+        getWaypointsRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenA);
+        var getWaypointsResponse = await _client.SendAsync(getWaypointsRequest);
+        getWaypointsResponse.EnsureSuccessStatusCode();
+        var waypoints = await getWaypointsResponse.Content.ReadFromJsonAsync<List<FriendWaypointDto>>();
+
+        var bAsSeenByA = Assert.Single(waypoints!, w => w.Id == idB);
+        Assert.Equal(uploadBody!.ProfilePictureUrl, bAsSeenByA.ProfilePictureUrl);
+    }
+
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt, string? ProfilePictureUrl);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record UploadResponseDto(string ProfilePictureUrl);
     private record FriendDto(string Id, string Username, string? Color, string? ProfilePictureUrl);
+    private record FriendWaypointDto(string Id, string Username, string? Color, double Latitude, double Longitude, string? ProfilePictureUrl);
 }

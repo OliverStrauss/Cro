@@ -1,12 +1,16 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:cro_app/models/friend_waypoint.dart';
+import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
 import 'package:cro_app/services/friends_service.dart';
+import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
 import 'package:cro_app/utils/color_utils.dart';
@@ -46,13 +50,42 @@ class _FakeFriendsService implements FriendsService {
       throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
 }
 
+class _FakeProfileService implements ProfileService {
+  UserProfile? profileToReturn = UserProfile(id: 'u1', username: 'me', email: 'me@example.com');
+
+  @override
+  Future<UserProfile> getUser(String userId) async {
+    if (profileToReturn == null) throw ProfileException('not found');
+    return profileToReturn!;
+  }
+
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
+}
+
+// A syntactically valid (unsigned) JWT with the given subject - MapScreen decodes this
+// client-side to know which user id to fetch its own profile for.
+String _fakeJwtFor(String userId) {
+  String segment(Map<String, dynamic> data) =>
+      base64Url.encode(utf8.encode(jsonEncode(data))).replaceAll('=', '');
+  return '${segment({
+        'alg': 'HS256'
+      })}.${segment({
+        'sub': userId
+      })}.sig';
+}
+
 void main() {
   testWidgets('shows loading indicator before waypoint loads', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService();
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
-          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
+          authState: authState,
+          waypointService: fakeService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
     ));
 
     expect(find.byKey(const Key('mapLoadingIndicator')), findsOneWidget);
@@ -61,10 +94,13 @@ void main() {
   testWidgets('shows the waypoint name once loaded', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()
       ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
-          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
+          authState: authState,
+          waypointService: fakeService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
@@ -74,10 +110,13 @@ void main() {
   testWidgets('map has a minimum zoom floor and a latitude camera constraint', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()
       ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
-          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
+          authState: authState,
+          waypointService: fakeService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
@@ -87,12 +126,13 @@ void main() {
   });
 
   testWidgets('no-waypoint default zoom is not below the configured minZoom', (WidgetTester tester) async {
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
           authState: authState,
           waypointService: _FakeWaypointService(),
-          friendsService: _FakeFriendsService()),
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
@@ -102,10 +142,13 @@ void main() {
 
   testWidgets('shows an error and retry button on failure', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()..errorToThrow = WaypointException('Could not reach the server');
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
-          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
+          authState: authState,
+          waypointService: fakeService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
@@ -115,10 +158,13 @@ void main() {
 
   testWidgets('tapping the map prompts for a name and saves it', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService();
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
-          authState: authState, waypointService: fakeService, friendsService: _FakeFriendsService()),
+          authState: authState,
+          waypointService: fakeService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
@@ -149,10 +195,13 @@ void main() {
         FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.001, longitude: 2.001),
         FriendWaypoint(userId: 'f2', username: 'bob', color: '#1E88E5', latitude: 1.002, longitude: 2.002),
       ];
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
-          authState: authState, waypointService: fakeWaypointService, friendsService: fakeFriendsService),
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
@@ -162,44 +211,79 @@ void main() {
     expect(find.byKey(const Key('friendMarker_f2')), findsOneWidget);
   });
 
-  testWidgets('tapping a friend marker shows their username in a SnackBar', (WidgetTester tester) async {
+  testWidgets('own waypoint marker uses the same pin shape as friend markers, still red',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
+    ));
+    await tester.pumpAndSettle();
+
+    final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
+    final ownMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('ownWaypointMarker'));
+    final icon = (ownMarker.child as GestureDetector).child as Icon;
+    expect(icon.icon, Icons.location_pin);
+    expect(icon.color, Colors.red);
+  });
+
+  testWidgets('tapping a friend marker shows their nest details in a dialog', (WidgetTester tester) async {
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
-        FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.001, longitude: 2.001),
+        FriendWaypoint(
+            userId: 'f1',
+            username: 'alice',
+            color: '#E53935',
+            latitude: 1.001,
+            longitude: 2.001,
+            profilePictureUrl: 'https://example.com/alice.png'),
       ];
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
           authState: authState,
           waypointService: _FakeWaypointService(),
-          friendsService: fakeFriendsService),
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('friendMarker_f1')));
     await tester.pumpAndSettle();
 
-    expect(find.text('alice'), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
+    expect(find.text("alice's nest"), findsOneWidget);
+    expect(find.text('(1.0010, 2.0010)'), findsOneWidget);
+    // The picture fetch fails in the test harness (all HTTP is stubbed), so the avatar
+    // falls back to the initial - exercises the same fallback path used elsewhere.
+    expect(find.byKey(const Key('nestDetailsAvatar')), findsOneWidget);
+    expect(find.text('A'), findsOneWidget);
   });
 
-  testWidgets('tapping the own waypoint marker shows its details in a dialog', (WidgetTester tester) async {
+  testWidgets('tapping the own waypoint marker shows its nest details in a dialog', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
           authState: authState,
           waypointService: fakeWaypointService,
-          friendsService: _FakeFriendsService()),
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('ownWaypointMarker')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('waypointDetailsDialog')), findsOneWidget);
-    expect(find.text('Latitude: 1.0'), findsOneWidget);
-    expect(find.text('Longitude: 2.0'), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
+    expect(find.text("me's nest"), findsOneWidget);
+    expect(find.text('(1.0000, 2.0000)'), findsOneWidget);
   });
 
   testWidgets('refresh() reloads data - needed since IndexedStack never rebuilds this screen',
@@ -208,10 +292,13 @@ void main() {
       ..friendWaypointsToReturn = [
         FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.0, longitude: 2.0),
       ];
-    final authState = AuthState()..login('test-token');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
-          authState: authState, waypointService: _FakeWaypointService(), friendsService: fakeFriendsService),
+          authState: authState,
+          waypointService: _FakeWaypointService(),
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService()),
     ));
     await tester.pumpAndSettle();
 

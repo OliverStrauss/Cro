@@ -374,14 +374,26 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
     var acceptedFriends = (user.Friends ?? []).Where(f => f.Status == FriendStatus.Accepted);
 
     // N+1 lookup - same accepted tradeoff as GetByUsernameAsync's cross-partition query,
-    // fine at expected friend-list sizes.
+    // fine at expected friend-list sizes. Also picks up ProfilePictureUrl (only for
+    // friends who actually have a waypoint, to avoid a wasted read for the rest),
+    // mirroring the same lookup in GET /friends above, so the map screen doesn't need
+    // a per-marker-tap fetch to show a friend's picture.
     var results = new List<object>();
     foreach (var friend in acceptedFriends)
     {
         var waypoint = await waypointRepo.GetByUserIdAsync(friend.Id);
         if (waypoint is not null)
         {
-            results.Add(new { friend.Id, friend.Username, friend.Color, waypoint.Latitude, waypoint.Longitude });
+            var friendUser = await userRepo.GetByIdAsync(friend.Id);
+            results.Add(new
+            {
+                friend.Id,
+                friend.Username,
+                friend.Color,
+                waypoint.Latitude,
+                waypoint.Longitude,
+                friendUser?.ProfilePictureUrl
+            });
         }
     }
 
