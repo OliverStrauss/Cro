@@ -8,6 +8,7 @@ class AvatarWithFallback extends StatefulWidget {
   final String initialsSource;
   final double radius;
   final Key? avatarKey;
+  final bool hasBorder;
 
   const AvatarWithFallback({
     super.key,
@@ -15,6 +16,7 @@ class AvatarWithFallback extends StatefulWidget {
     required this.initialsSource,
     this.radius = 24,
     this.avatarKey,
+    this.hasBorder = false,
   });
 
   @override
@@ -43,7 +45,7 @@ class _AvatarWithFallbackState extends State<AvatarWithFallback> {
   Widget build(BuildContext context) {
     final url = widget.imageUrl;
     final showImage = url != null && !_pictureFailedToLoad;
-    return CircleAvatar(
+    final avatar = CircleAvatar(
       key: widget.avatarKey,
       radius: widget.radius,
       backgroundImage: showImage ? NetworkImage(url) : null,
@@ -56,6 +58,19 @@ class _AvatarWithFallbackState extends State<AvatarWithFallback> {
             }
           : null,
       child: showImage ? null : Text(_initials, style: TextStyle(fontSize: widget.radius * 0.6)),
+    );
+
+    if (!widget.hasBorder) {
+      return avatar;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Theme.of(context).colorScheme.primary, width: 3),
+      ),
+      child: avatar,
     );
   }
 }

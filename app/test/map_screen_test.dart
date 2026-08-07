@@ -241,7 +241,8 @@ void main() {
             color: '#E53935',
             latitude: 1.001,
             longitude: 2.001,
-            profilePictureUrl: 'https://example.com/alice.png'),
+            profilePictureUrl: 'https://example.com/alice.png',
+            waypointName: "Alice's Yard"),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -258,6 +259,7 @@ void main() {
 
     expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
     expect(find.text("alice's nest"), findsOneWidget);
+    expect(find.text("Alice's Yard"), findsOneWidget);
     expect(find.text('(1.0010, 2.0010)'), findsOneWidget);
     // The picture fetch fails in the test harness (all HTTP is stubbed), so the avatar
     // falls back to the initial - exercises the same fallback path used elsewhere.
@@ -265,7 +267,8 @@ void main() {
     expect(find.text('A'), findsOneWidget);
   });
 
-  testWidgets('tapping the own waypoint marker shows its nest details in a dialog', (WidgetTester tester) async {
+  testWidgets('tapping the own waypoint marker shows "Your nest" and the waypoint name in a dialog',
+      (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
     final authState = AuthState()..login(_fakeJwtFor('u1'));
@@ -282,7 +285,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
-    expect(find.text("me's nest"), findsOneWidget);
+    expect(find.text('Your nest'), findsOneWidget);
+    expect(find.text('Backyard'), findsOneWidget);
     expect(find.text('(1.0000, 2.0000)'), findsOneWidget);
   });
 
