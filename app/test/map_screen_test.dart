@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'package:cro_app/models/friend_waypoint.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
@@ -40,10 +39,10 @@ class _FakeWaypointService implements WaypointService {
 }
 
 class _FakeFriendsService implements FriendsService {
-  List<FriendWaypoint> friendWaypointsToReturn = [];
+  List<Waypoint> friendWaypointsToReturn = [];
 
   @override
-  Future<List<FriendWaypoint>> getFriendsWaypoints(String token) async => friendWaypointsToReturn;
+  Future<List<Waypoint>> getFriendsWaypoints(String token) async => friendWaypointsToReturn;
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -192,8 +191,8 @@ void main() {
     // outside the visible pixel bounds, so an out-of-view marker never mounts a widget.
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
-        FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.001, longitude: 2.001),
-        FriendWaypoint(userId: 'f2', username: 'bob', color: '#1E88E5', latitude: 1.002, longitude: 2.002),
+        Waypoint(name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.001, longitude: 2.001),
+        Waypoint(name: "Bob's Porch", userId: 'f2', username: 'bob', color: '#1E88E5', latitude: 1.002, longitude: 2.002),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -235,14 +234,14 @@ void main() {
   testWidgets('tapping a friend marker shows their nest details in a dialog', (WidgetTester tester) async {
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
-        FriendWaypoint(
+        Waypoint(
+            name: "Alice's Yard",
             userId: 'f1',
             username: 'alice',
             color: '#E53935',
             latitude: 1.001,
             longitude: 2.001,
-            profilePictureUrl: 'https://example.com/alice.png',
-            waypointName: "Alice's Yard"),
+            profilePictureUrl: 'https://example.com/alice.png'),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -294,7 +293,7 @@ void main() {
       (WidgetTester tester) async {
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
-        FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.0, longitude: 2.0),
+        Waypoint(name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.0, longitude: 2.0),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -309,7 +308,7 @@ void main() {
     // Simulate a color change that happened elsewhere in the app while this screen sat
     // alive but unbuilt in the IndexedStack.
     fakeFriendsService.friendWaypointsToReturn = [
-      FriendWaypoint(userId: 'f1', username: 'alice', color: '#1E88E5', latitude: 1.0, longitude: 2.0),
+      Waypoint(name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#1E88E5', latitude: 1.0, longitude: 2.0),
     ];
 
     await tester.state<MapScreenState>(find.byType(MapScreen)).refresh();

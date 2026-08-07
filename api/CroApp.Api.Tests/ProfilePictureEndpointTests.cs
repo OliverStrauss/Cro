@@ -218,12 +218,12 @@ public class ProfilePictureEndpointTests : IClassFixture<WebApplicationFactory<P
 
         var bAsSeenByA = Assert.Single(waypoints!, w => w.Id == idB);
         Assert.Equal(uploadBody!.ProfilePictureUrl, bAsSeenByA.ProfilePictureUrl);
-        Assert.Equal("B's Spot", bAsSeenByA.WaypointName);
+        Assert.Equal("B's Spot", bAsSeenByA.Name);
     }
 
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt, string? ProfilePictureUrl);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record UploadResponseDto(string ProfilePictureUrl);
     private record FriendDto(string Id, string Username, string? Color, string? ProfilePictureUrl);
-    private record FriendWaypointDto(string Id, string Username, string? Color, double Latitude, double Longitude, string? ProfilePictureUrl, string WaypointName);
+    private record FriendWaypointDto(string Id, string Username, string? Color, string Name, double Latitude, double Longitude, string? ProfilePictureUrl);
 }

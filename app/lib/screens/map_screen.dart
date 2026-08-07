@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../models/friend_waypoint.dart';
 import '../models/user_profile.dart';
 import '../models/waypoint.dart';
 import '../services/friends_service.dart';
@@ -39,7 +38,7 @@ class MapScreen extends StatefulWidget {
 // layer while still exercising the real dialog/save flow that follows.
 class MapScreenState extends State<MapScreen> {
   Waypoint? _waypoint;
-  List<FriendWaypoint> _friendWaypoints = [];
+  List<Waypoint> _friendWaypoints = [];
   UserProfile? _ownProfile;
   bool _isLoading = true;
   String? _errorMessage;
@@ -72,7 +71,7 @@ class MapScreenState extends State<MapScreen> {
       ]);
       setState(() {
         _waypoint = results[0] as Waypoint?;
-        _friendWaypoints = results[1] as List<FriendWaypoint>;
+        _friendWaypoints = results[1] as List<Waypoint>;
         _ownProfile = userId != null ? results[2] as UserProfile : null;
         _isLoading = false;
       });
@@ -99,13 +98,13 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _showFriendNestDetails(FriendWaypoint friendWaypoint) {
+  void _showFriendNestDetails(Waypoint friendWaypoint) {
     NestDetailsDialog.show(
       context,
-      username: friendWaypoint.username,
+      username: friendWaypoint.username!,
       isOwn: false,
       profilePictureUrl: friendWaypoint.profilePictureUrl,
-      waypointName: friendWaypoint.waypointName,
+      waypointName: friendWaypoint.name,
       latitude: friendWaypoint.latitude,
       longitude: friendWaypoint.longitude,
     );
@@ -215,7 +214,7 @@ class MapScreenState extends State<MapScreen> {
                       point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
                       child: GestureDetector(
                         onTap: () => _showFriendNestDetails(friendWaypoint),
-                        child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color)),
+                        child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color!)),
                       ),
                     ),
                 ]),

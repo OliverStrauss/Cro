@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models/friend.dart';
 import '../models/friend_request.dart';
-import '../models/friend_waypoint.dart';
+import '../models/waypoint.dart';
 
 class FriendsException implements Exception {
   final String message;
@@ -88,11 +88,11 @@ class FriendsService {
     }
   }
 
-  Future<List<FriendWaypoint>> getFriendsWaypoints(String token) async {
+  Future<List<Waypoint>> getFriendsWaypoints(String token) async {
     final response =
         await _get('/friends/waypoints', token, "Could not load friends' waypoints");
     return (jsonDecode(response.body) as List<dynamic>)
-        .map((e) => FriendWaypoint.fromJson(e as Map<String, dynamic>))
+        .map((e) => Waypoint.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

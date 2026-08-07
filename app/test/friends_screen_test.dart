@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_request.dart';
-import 'package:cro_app/models/friend_waypoint.dart';
+import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/friends_screen.dart';
 import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/state/auth_state.dart';
@@ -61,7 +61,7 @@ class _FakeFriendsService implements FriendsService {
   }
 
   @override
-  Future<List<FriendWaypoint>> getFriendsWaypoints(String token) async => [];
+  Future<List<Waypoint>> getFriendsWaypoints(String token) async => [];
 
   @override
   Future<void> setFriendColor(String token, String friendId, String color) async {

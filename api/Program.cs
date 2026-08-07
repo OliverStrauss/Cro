@@ -390,10 +390,10 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
                 friend.Id,
                 friend.Username,
                 friend.Color,
+                waypoint.Name,
                 waypoint.Latitude,
                 waypoint.Longitude,
-                friendUser?.ProfilePictureUrl,
-                WaypointName = waypoint.Name
+                friendUser?.ProfilePictureUrl
             });
         }
     }
