@@ -10,20 +10,22 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            key: const Key('logoutButton'),
-            icon: const Icon(Icons.logout),
-            tooltip: 'Log out',
-            onPressed: authState.logout,
-          ),
-        ],
-      ),
-      body: const Center(
-        key: Key('profileScreenPlaceholder'),
-        child: Text('Profile coming soon'),
+      appBar: AppBar(title: const Text('Profile')),
+      body: Center(
+        key: const Key('profileScreenPlaceholder'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Profile coming soon'),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              key: const Key('logoutButton'),
+              onPressed: authState.logout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Sign Out'),
+            ),
+          ],
+        ),
       ),
     );
   }
