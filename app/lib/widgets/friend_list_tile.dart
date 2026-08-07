@@ -15,6 +15,11 @@ class FriendListTile extends StatelessWidget {
   // single fixed color.
   Color get _textColor => _backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
 
+  String get _initials {
+    final trimmed = friend.username.trim();
+    return trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
+  }
+
   Future<void> _pickColor(BuildContext context) async {
     final selected = await showDialog<String>(
       context: context,
@@ -57,9 +62,22 @@ class FriendListTile extends StatelessWidget {
           onTap: onColorSelected == null ? null : () => _pickColor(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Text(
-              friend.username,
-              style: TextStyle(color: _textColor, fontWeight: FontWeight.bold, fontSize: 16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  key: Key('friendAvatar_${friend.userId}'),
+                  radius: 16,
+                  backgroundImage: friend.profilePictureUrl != null
+                      ? NetworkImage(friend.profilePictureUrl!)
+                      : null,
+                  child: friend.profilePictureUrl == null ? Text(_initials) : null,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  friend.username,
+                  style: TextStyle(color: _textColor, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
             ),
           ),
         ),
