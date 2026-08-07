@@ -91,7 +91,9 @@ class MapScreenState extends State<MapScreen> {
       // failed - an edge case, not the common path (the fetch is otherwise part of
       // the same all-or-nothing _loadData load as the waypoint itself).
       username: _ownProfile?.username ?? waypoint.name,
+      isOwn: true,
       profilePictureUrl: _ownProfile?.profilePictureUrl,
+      waypointName: waypoint.name,
       latitude: waypoint.latitude,
       longitude: waypoint.longitude,
     );
@@ -101,7 +103,9 @@ class MapScreenState extends State<MapScreen> {
     NestDetailsDialog.show(
       context,
       username: friendWaypoint.username,
+      isOwn: false,
       profilePictureUrl: friendWaypoint.profilePictureUrl,
+      waypointName: friendWaypoint.waypointName,
       latitude: friendWaypoint.latitude,
       longitude: friendWaypoint.longitude,
     );

@@ -392,7 +392,8 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
                 friend.Color,
                 waypoint.Latitude,
                 waypoint.Longitude,
-                friendUser?.ProfilePictureUrl
+                friendUser?.ProfilePictureUrl,
+                WaypointName = waypoint.Name
             });
         }
     }
