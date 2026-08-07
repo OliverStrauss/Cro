@@ -120,6 +120,32 @@ if (app.Environment.IsDevelopment())
     // real deployment needs real access control here before this container goes live.
     await blobClient.GetBlobContainerClient(blobOpts.ProfilePicturesContainerName)
         .CreateIfNotExistsAsync(PublicAccessType.Blob);
+
+    // Blob Storage CORS is entirely separate from ASP.NET Core's CORS middleware
+    // (DevCorsPolicy above only covers requests hitting this API, not the browser's
+    // direct fetch to Azurite/Blob Storage for profile picture images) - the browser's
+    // CORS-mode fetch for NetworkImage needs Access-Control-Allow-Origin on the blob
+    // response itself. Development-only, same pattern as DevCorsPolicy and the emulator
+    // TLS bypass - production needs its own real Azure Storage account CORS config,
+    // not yet relevant since there's no prod deployment.
+    //
+    // SetPropertiesAsync replaces the whole properties document, not just the fields you
+    // set - sending a fresh BlobServiceProperties with everything else null/default gets
+    // rejected outright (400), so this reads the existing properties first and only adds
+    // Cors to them.
+    var serviceProperties = (await blobClient.GetPropertiesAsync()).Value;
+    serviceProperties.Cors =
+    [
+        new BlobCorsRule
+        {
+            AllowedOrigins = "*",
+            AllowedMethods = "GET",
+            AllowedHeaders = "*",
+            ExposedHeaders = "*",
+            MaxAgeInSeconds = 3600
+        }
+    ];
+    await blobClient.SetPropertiesAsync(serviceProperties);
 }
 
 // Configure the HTTP request pipeline.
