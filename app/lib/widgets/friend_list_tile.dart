@@ -3,17 +3,31 @@ import 'package:flutter/material.dart';
 import '../models/friend.dart';
 import '../utils/color_utils.dart';
 
-class FriendListTile extends StatelessWidget {
+class FriendListTile extends StatefulWidget {
   final Friend friend;
   final ValueChanged<String>? onColorSelected;
 
   const FriendListTile({super.key, required this.friend, this.onColorSelected});
 
-  Color get _backgroundColor => friend.color != null ? hexToColor(friend.color!) : Colors.grey;
+  @override
+  State<FriendListTile> createState() => _FriendListTileState();
+}
+
+class _FriendListTileState extends State<FriendListTile> {
+  bool _pictureFailedToLoad = false;
+
+  Friend get _friend => widget.friend;
+
+  Color get _backgroundColor => _friend.color != null ? hexToColor(_friend.color!) : Colors.grey;
 
   // Palette colors span light and dark, so pick readable text per-tile rather than a
   // single fixed color.
   Color get _textColor => _backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
+  String get _initials {
+    final trimmed = _friend.username.trim();
+    return trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
+  }
 
   Future<void> _pickColor(BuildContext context) async {
     final selected = await showDialog<String>(
@@ -40,7 +54,7 @@ class FriendListTile extends StatelessWidget {
       ),
     );
     if (selected != null) {
-      onColorSelected?.call(selected);
+      widget.onColorSelected?.call(selected);
     }
   }
 
@@ -52,14 +66,37 @@ class FriendListTile extends StatelessWidget {
         color: _backgroundColor,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          key: Key('friendTile_${friend.userId}'),
+          key: Key('friendTile_${_friend.userId}'),
           borderRadius: BorderRadius.circular(8),
-          onTap: onColorSelected == null ? null : () => _pickColor(context),
+          onTap: widget.onColorSelected == null ? null : () => _pickColor(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Text(
-              friend.username,
-              style: TextStyle(color: _textColor, fontWeight: FontWeight.bold, fontSize: 16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  key: Key('friendAvatar_${_friend.userId}'),
+                  radius: 16,
+                  backgroundImage: (_friend.profilePictureUrl != null && !_pictureFailedToLoad)
+                      ? NetworkImage(_friend.profilePictureUrl!)
+                      : null,
+                  // CircleAvatar asserts backgroundImage != null || onBackgroundImageError == null,
+                  // so this must be gated on the exact same condition as backgroundImage above -
+                  // once _pictureFailedToLoad flips, both need to go null together.
+                  onBackgroundImageError: (_friend.profilePictureUrl != null && !_pictureFailedToLoad)
+                      ? (exception, stackTrace) {
+                          if (mounted) setState(() => _pictureFailedToLoad = true);
+                        }
+                      : null,
+                  child: (_friend.profilePictureUrl == null || _pictureFailedToLoad)
+                      ? Text(_initials)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  _friend.username,
+                  style: TextStyle(color: _textColor, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
             ),
           ),
         ),

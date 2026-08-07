@@ -38,6 +38,8 @@ dependencies:
   http: ^1.2.0
   flutter_map: ^8.3.1
   latlong2: ^0.10.1
+  image_picker: ^1.2.3
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:
