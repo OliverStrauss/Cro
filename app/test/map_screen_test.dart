@@ -9,6 +9,7 @@ import 'package:cro_app/screens/map_screen.dart';
 import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
+import 'package:cro_app/utils/color_utils.dart';
 
 class _FakeWaypointService implements WaypointService {
   Waypoint? waypointToReturn;
@@ -170,5 +171,33 @@ void main() {
     expect(find.byKey(const Key('waypointDetailsDialog')), findsOneWidget);
     expect(find.text('Latitude: 1.0'), findsOneWidget);
     expect(find.text('Longitude: 2.0'), findsOneWidget);
+  });
+
+  testWidgets('refresh() reloads data - needed since IndexedStack never rebuilds this screen',
+      (WidgetTester tester) async {
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        FriendWaypoint(userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.0, longitude: 2.0),
+      ];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState, waypointService: _FakeWaypointService(), friendsService: fakeFriendsService),
+    ));
+    await tester.pumpAndSettle();
+
+    // Simulate a color change that happened elsewhere in the app while this screen sat
+    // alive but unbuilt in the IndexedStack.
+    fakeFriendsService.friendWaypointsToReturn = [
+      FriendWaypoint(userId: 'f1', username: 'alice', color: '#1E88E5', latitude: 1.0, longitude: 2.0),
+    ];
+
+    await tester.state<MapScreenState>(find.byType(MapScreen)).refresh();
+    await tester.pumpAndSettle();
+
+    final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
+    final friendMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('friendMarker_f1'));
+    final icon = (friendMarker.child as GestureDetector).child as Icon;
+    expect(icon.color, hexToColor('#1E88E5'));
   });
 }

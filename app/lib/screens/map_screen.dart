@@ -42,6 +42,12 @@ class MapScreenState extends State<MapScreen> {
     _loadData();
   }
 
+  // HomeScreen keeps every tab alive in an IndexedStack rather than rebuilding them on
+  // switch, so initState only ever runs once - without an explicit refresh hook, this
+  // screen would keep showing whatever waypoint/friend data it first loaded with, even
+  // after a friend's color or waypoint changes elsewhere in the app.
+  Future<void> refresh() => _loadData();
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;

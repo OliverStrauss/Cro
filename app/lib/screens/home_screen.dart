@@ -15,13 +15,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const _mapTabIndex = 1;
+
   int _selectedIndex = 0;
+  final _mapKey = GlobalKey<MapScreenState>();
 
   @override
   Widget build(BuildContext context) {
     final tabs = [
       ProfileScreen(authState: widget.authState),
-      MapScreen(authState: widget.authState),
+      MapScreen(key: _mapKey, authState: widget.authState),
       FriendsScreen(authState: widget.authState),
     ];
 
@@ -30,7 +33,14 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: NavigationBar(
         key: const Key('homeNavBar'),
         selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+        onDestinationSelected: (i) {
+          setState(() => _selectedIndex = i);
+          // IndexedStack never rebuilds MapScreen on its own - force a refresh whenever
+          // the user actually switches to it, so stale colors/waypoints don't linger.
+          if (i == _mapTabIndex) {
+            _mapKey.currentState?.refresh();
+          }
+        },
         destinations: const [
           NavigationDestination(
             key: Key('navProfile'),
