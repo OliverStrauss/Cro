@@ -203,7 +203,7 @@ public class ProfilePictureEndpointTests : IClassFixture<WebApplicationFactory<P
         acceptRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
         await _client.SendAsync(acceptRequest);
 
-        var setWaypointRequest = new HttpRequestMessage(HttpMethod.Put, "/waypoint")
+        var setWaypointRequest = new HttpRequestMessage(HttpMethod.Post, "/waypoints")
         {
             Content = JsonContent.Create(new { Name = "B's Spot", Latitude = 10.0, Longitude = 20.0 })
         };
@@ -216,7 +216,7 @@ public class ProfilePictureEndpointTests : IClassFixture<WebApplicationFactory<P
         getWaypointsResponse.EnsureSuccessStatusCode();
         var waypoints = await getWaypointsResponse.Content.ReadFromJsonAsync<List<FriendWaypointDto>>();
 
-        var bAsSeenByA = Assert.Single(waypoints!, w => w.Id == idB);
+        var bAsSeenByA = Assert.Single(waypoints!, w => w.UserId == idB);
         Assert.Equal(uploadBody!.ProfilePictureUrl, bAsSeenByA.ProfilePictureUrl);
         Assert.Equal("B's Spot", bAsSeenByA.Name);
     }
@@ -225,5 +225,5 @@ public class ProfilePictureEndpointTests : IClassFixture<WebApplicationFactory<P
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record UploadResponseDto(string ProfilePictureUrl);
     private record FriendDto(string Id, string Username, string? Color, string? ProfilePictureUrl);
-    private record FriendWaypointDto(string Id, string Username, string? Color, string Name, double Latitude, double Longitude, string? ProfilePictureUrl);
+    private record FriendWaypointDto(string Id, string UserId, string Username, string? Color, string Name, double Latitude, double Longitude, string? ProfilePictureUrl);
 }

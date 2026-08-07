@@ -15,27 +15,42 @@ import 'package:cro_app/state/auth_state.dart';
 import 'package:cro_app/utils/color_utils.dart';
 
 class _FakeWaypointService implements WaypointService {
-  Waypoint? waypointToReturn;
+  List<Waypoint> waypointsToReturn = [];
   Object? errorToThrow;
-  Waypoint? savedWaypoint;
+  Waypoint? lastCreatedWaypoint;
+  int _nextId = 1;
 
   @override
-  Future<Waypoint?> getWaypoint(String token) async {
+  Future<List<Waypoint>> listWaypoints(String token) async {
     if (errorToThrow != null) throw errorToThrow!;
-    return waypointToReturn;
+    return waypointsToReturn;
   }
 
   @override
-  Future<Waypoint> saveWaypoint(
+  Future<Waypoint> createWaypoint(
     String token, {
     required String name,
     required double latitude,
     required double longitude,
   }) async {
-    final saved = Waypoint(name: name, latitude: latitude, longitude: longitude);
-    savedWaypoint = saved;
-    return saved;
+    final created =
+        Waypoint(id: 'new-${_nextId++}', userId: 'u1', name: name, latitude: latitude, longitude: longitude);
+    lastCreatedWaypoint = created;
+    return created;
   }
+
+  @override
+  Future<Waypoint> updateWaypoint(
+    String token,
+    String id, {
+    required String name,
+    required double latitude,
+    required double longitude,
+  }) async =>
+      Waypoint(id: id, userId: 'u1', name: name, latitude: latitude, longitude: longitude);
+
+  @override
+  Future<void> deleteWaypoint(String token, String id) async {}
 }
 
 class _FakeFriendsService implements FriendsService {
@@ -76,7 +91,7 @@ String _fakeJwtFor(String userId) {
 }
 
 void main() {
-  testWidgets('shows loading indicator before waypoint loads', (WidgetTester tester) async {
+  testWidgets('shows loading indicator before nests load', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService();
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -90,9 +105,9 @@ void main() {
     expect(find.byKey(const Key('mapLoadingIndicator')), findsOneWidget);
   });
 
-  testWidgets('shows the waypoint name once loaded', (WidgetTester tester) async {
+  testWidgets('shows the own nest marker once loaded', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()
-      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
@@ -103,12 +118,32 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Delivery spot: Backyard'), findsOneWidget);
+    expect(find.byKey(const Key('ownNestMarker_w1')), findsOneWidget);
+  });
+
+  testWidgets('renders a marker per own nest when there are several', (WidgetTester tester) async {
+    final fakeService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Work', latitude: 1.001, longitude: 2.001),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('ownNestMarker_w1')), findsOneWidget);
+    expect(find.byKey(const Key('ownNestMarker_w2')), findsOneWidget);
   });
 
   testWidgets('map has a minimum zoom floor and a latitude camera constraint', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()
-      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
@@ -124,7 +159,7 @@ void main() {
     expect(map.options.cameraConstraint, isA<ContainCameraLatitude>());
   });
 
-  testWidgets('no-waypoint default zoom is not below the configured minZoom', (WidgetTester tester) async {
+  testWidgets('no-nest default zoom is not below the configured minZoom', (WidgetTester tester) async {
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
@@ -155,7 +190,7 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
   });
 
-  testWidgets('tapping the map prompts for a name and saves it', (WidgetTester tester) async {
+  testWidgets('tapping the map prompts for a name and creates a nest', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService();
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -179,20 +214,59 @@ void main() {
     await tester.tap(find.byKey(const Key('saveWaypointButton')));
     await tester.pumpAndSettle();
 
-    expect(fakeService.savedWaypoint?.name, 'Front Porch');
+    expect(fakeService.lastCreatedWaypoint?.name, 'Front Porch');
   });
 
-  testWidgets('renders one marker per friend waypoint plus the own waypoint marker',
+  testWidgets('tapping the map to add a nest keeps existing own nests', (WidgetTester tester) async {
+    final fakeService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
+    ));
+    await tester.pumpAndSettle();
+
+    // Kept close to the existing own nest (1.0, 2.0) - flutter_map culls markers whose
+    // projected position falls outside the initial zoom-13 viewport.
+    tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1.003, 2.003));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('waypointNameField')), 'Work');
+    await tester.tap(find.byKey(const Key('saveWaypointButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('ownNestMarker_w1')), findsOneWidget);
+    expect(find.byKey(Key('ownNestMarker_${fakeService.lastCreatedWaypoint!.id}')), findsOneWidget);
+  });
+
+  testWidgets('renders one marker per friend waypoint plus the own nest marker',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
-      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
-    // Kept close to the own waypoint (1.0, 2.0) so they land inside the initial
-    // zoom-13 viewport - flutter_map culls markers whose projected position falls
-    // outside the visible pixel bounds, so an out-of-view marker never mounts a widget.
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+    // Kept close to the own nest (1.0, 2.0) so they land inside the initial zoom-13
+    // viewport - flutter_map culls markers whose projected position falls outside the
+    // visible pixel bounds, so an out-of-view marker never mounts a widget.
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
-        Waypoint(name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.001, longitude: 2.001),
-        Waypoint(name: "Bob's Porch", userId: 'f2', username: 'bob', color: '#1E88E5', latitude: 1.002, longitude: 2.002),
+        Waypoint(
+            id: 'fw1',
+            name: "Alice's Yard",
+            userId: 'f1',
+            username: 'alice',
+            color: '#E53935',
+            latitude: 1.001,
+            longitude: 2.001),
+        Waypoint(
+            id: 'fw2',
+            name: "Bob's Porch",
+            userId: 'f2',
+            username: 'bob',
+            color: '#1E88E5',
+            latitude: 1.002,
+            longitude: 2.002),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -206,14 +280,47 @@ void main() {
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     expect(markerLayer.markers, hasLength(3));
-    expect(find.byKey(const Key('friendMarker_f1')), findsOneWidget);
-    expect(find.byKey(const Key('friendMarker_f2')), findsOneWidget);
+    expect(find.byKey(const Key('friendMarker_fw1')), findsOneWidget);
+    expect(find.byKey(const Key('friendMarker_fw2')), findsOneWidget);
   });
 
-  testWidgets('own waypoint marker uses the same pin shape as friend markers, still red',
-      (WidgetTester tester) async {
+  testWidgets('renders a marker per nest when a friend has several nests', (WidgetTester tester) async {
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            name: "Alice's Home",
+            userId: 'f1',
+            username: 'alice',
+            color: '#E53935',
+            latitude: 1.001,
+            longitude: 2.001),
+        Waypoint(
+            id: 'fw2',
+            name: "Alice's Work",
+            userId: 'f1',
+            username: 'alice',
+            color: '#E53935',
+            latitude: 1.002,
+            longitude: 2.002),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: _FakeWaypointService(),
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService()),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('friendMarker_fw1')), findsOneWidget);
+    expect(find.byKey(const Key('friendMarker_fw2')), findsOneWidget);
+  });
+
+  testWidgets('own nest marker uses a house icon, still red', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
-      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
@@ -225,9 +332,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
-    final ownMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('ownWaypointMarker'));
+    final ownMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('ownNestMarker_w1'));
     final icon = (ownMarker.child as GestureDetector).child as Icon;
-    expect(icon.icon, Icons.location_pin);
+    expect(icon.icon, Icons.house);
     expect(icon.color, Colors.red);
   });
 
@@ -235,6 +342,7 @@ void main() {
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
         Waypoint(
+            id: 'fw1',
             name: "Alice's Yard",
             userId: 'f1',
             username: 'alice',
@@ -253,23 +361,25 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('friendMarker_f1')));
+    await tester.tap(find.byKey(const Key('friendMarker_fw1')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
     expect(find.text("alice's nest"), findsOneWidget);
     expect(find.text("Alice's Yard"), findsOneWidget);
     expect(find.text('(1.0010, 2.0010)'), findsOneWidget);
+    // No edit action for a friend's nest.
+    expect(find.byKey(const Key('editNestFromDialogButton')), findsNothing);
     // The picture fetch fails in the test harness (all HTTP is stubbed), so the avatar
     // falls back to the initial - exercises the same fallback path used elsewhere.
     expect(find.byKey(const Key('nestDetailsAvatar')), findsOneWidget);
     expect(find.text('A'), findsOneWidget);
   });
 
-  testWidgets('tapping the own waypoint marker shows "Your nest" and the waypoint name in a dialog',
+  testWidgets('tapping the own nest marker shows "Your nest", the nest name, and an edit action',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
-      ..waypointToReturn = Waypoint(name: 'Backyard', latitude: 1.0, longitude: 2.0);
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       home: MapScreen(
@@ -280,20 +390,72 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('ownWaypointMarker')));
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
     expect(find.text('Your nest'), findsOneWidget);
     expect(find.text('Backyard'), findsOneWidget);
     expect(find.text('(1.0000, 2.0000)'), findsOneWidget);
+    expect(find.byKey(const Key('editNestFromDialogButton')), findsOneWidget);
+  });
+
+  testWidgets('shows a My Nests button in the app bar by default', (WidgetTester tester) async {
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: _FakeWaypointService(),
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService()),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('myNestsButton')), findsOneWidget);
+  });
+
+  testWidgets('pick-location mode hides the My Nests button and pops the tapped point',
+      (WidgetTester tester) async {
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    LatLng? poppedPoint;
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => ElevatedButton(
+          onPressed: () async {
+            poppedPoint = await Navigator.of(context).push<LatLng>(
+              MaterialPageRoute(
+                builder: (_) => MapScreen(
+                  authState: authState,
+                  waypointService: _FakeWaypointService(),
+                  friendsService: _FakeFriendsService(),
+                  profileService: _FakeProfileService(),
+                  pickLocationMode: true,
+                ),
+              ),
+            );
+          },
+          child: const Text('push'),
+        ),
+      ),
+    ));
+
+    await tester.tap(find.text('push'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('myNestsButton')), findsNothing);
+
+    tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(5, 6));
+    await tester.pumpAndSettle();
+
+    expect(poppedPoint, const LatLng(5, 6));
+    expect(find.byKey(const Key('waypointNameField')), findsNothing);
   });
 
   testWidgets('refresh() reloads data - needed since IndexedStack never rebuilds this screen',
       (WidgetTester tester) async {
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
-        Waypoint(name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'fw1', name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#E53935', latitude: 1.0, longitude: 2.0),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -308,14 +470,14 @@ void main() {
     // Simulate a color change that happened elsewhere in the app while this screen sat
     // alive but unbuilt in the IndexedStack.
     fakeFriendsService.friendWaypointsToReturn = [
-      Waypoint(name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#1E88E5', latitude: 1.0, longitude: 2.0),
+      Waypoint(id: 'fw1', name: "Alice's Yard", userId: 'f1', username: 'alice', color: '#1E88E5', latitude: 1.0, longitude: 2.0),
     ];
 
     await tester.state<MapScreenState>(find.byType(MapScreen)).refresh();
     await tester.pumpAndSettle();
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
-    final friendMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('friendMarker_f1'));
+    final friendMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('friendMarker_fw1'));
     final icon = (friendMarker.child as GestureDetector).child as Icon;
     expect(icon.color, hexToColor('#1E88E5'));
   });
