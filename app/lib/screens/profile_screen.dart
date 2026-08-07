@@ -259,7 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 24),
           Text('Pending Friend Invites', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          _buildInvitesRow(),
+          _buildInvitesRow(), 
         ],
         if (_outgoingRequests.isNotEmpty) ...[
           const SizedBox(height: 24),

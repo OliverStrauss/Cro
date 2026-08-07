@@ -205,7 +205,7 @@ class MapScreenState extends State<MapScreen> {
                         onTap: () => _showOwnNestDetails(waypoint),
                         // Same pin shape friends use, so both read as "the same kind of
                         // thing" - still red so the user's own nest stands out at a glance.
-                        child: const Icon(Icons.location_pin, color: Colors.red),
+                        child: const Icon(Icons.house, color: Colors.red),
                       ),
                     ),
                   for (final friendWaypoint in _friendWaypoints)
