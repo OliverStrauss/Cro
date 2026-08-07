@@ -15,7 +15,8 @@ This is a monorepo with two independently-buildable halves:
   Windows, Web (no iOS/macOS scaffolding has been generated).
 - `/api` — .NET 10 ASP.NET Core Web API (`CroApp.Api`), backed by Azure Cosmos DB via the
   `Microsoft.Azure.Cosmos` SDK directly (not EF Core's Cosmos provider — chosen for full
-  control over partition keys and future geospatial queries for the map/delivery feature).
+  control over partition keys and future geospatial queries for the map/delivery feature),
+  plus Azure Blob Storage (via `Azure.Storage.Blobs`) for user-uploaded profile pictures.
   `api/CroApp.Api.Tests` holds the xunit integration test project.
 - `/.github/workflows` — CI, split into one workflow per half (see below).
 
@@ -37,8 +38,8 @@ This is a monorepo with two independently-buildable halves:
   skips the nested test project — always target the test project's path explicitly.
 - `dotnet build CroApp.Api.Tests/CroApp.Api.Tests.csproj --no-restore` — build both projects
 - `dotnet test CroApp.Api.Tests/CroApp.Api.Tests.csproj --no-build` — run all tests (requires
-  the Cosmos emulator running locally, see below)
-- `dotnet run` — run the API locally (also requires the emulator running)
+  the Cosmos emulator and Azurite running locally, see below)
+- `dotnet run` — run the API locally (also requires the emulator and Azurite running)
 - `dotnet list package --vulnerable --include-transitive` — check for vulnerable transitive
   packages; the default `dotnet new webapi` template pulled in a vulnerable `Microsoft.OpenApi`
   transitive dependency, which had to be pinned explicitly to a patched version
@@ -72,6 +73,38 @@ No real Azure Cosmos DB account is provisioned yet. Creating one (`az cosmosdb c
 outside this repo, needed before any prod deployment — not required for local dev or CI,
 both of which run entirely against the emulator.
 
+### Local Azurite Emulator (required for profile picture upload/tests)
+
+Profile pictures go through Azure Blob Storage via `Azurite`, its official local emulator —
+same story as Cosmos: no real Azure Storage account is provisioned yet, so local dev and CI
+run entirely against the emulator. Azurite's Docker image lags behind the Azure.Storage.Blobs
+SDK's request API version, so it needs `--skipApiVersionCheck` on startup (the error message
+from a version mismatch names this flag directly):
+
+```
+docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 \
+  mcr.microsoft.com/azure-storage/azurite:latest \
+  azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
+```
+
+One-time local secret setup:
+
+```
+cd api
+dotnet user-secrets set "BlobStorage:ConnectionString" "UseDevelopmentStorage=true"
+```
+
+`UseDevelopmentStorage=true` is Azurite's own well-known connection-string alias (not a
+secret, but kept in user-secrets anyway for consistency with `CosmosDb:ConnectionString` —
+same category of value that becomes a real, non-hardcodable endpoint once a real Azure
+Storage account exists). The `profile-pictures` container is provisioned on startup in
+Development with `PublicAccessType.Blob` (public read for blobs, no listing) so uploaded
+pictures are fetchable via a plain URL without SAS tokens — fine for local/dev, but real
+access control is needed before any prod deployment, same accepted-tradeoff category as the
+DevCorsPolicy and the Cosmos emulator's TLS bypass.
+
+No real Azure Storage account is provisioned yet, for the same reasons as Cosmos above.
+
 ## CI
 
 Two GitHub Actions workflows, each scoped to its own `working-directory`, run on push to
@@ -79,8 +112,10 @@ Two GitHub Actions workflows, each scoped to its own `working-directory`, run on
 
 - `flutter-ci.yml` — `flutter pub get` → `flutter analyze` → `flutter test`, in `/app`
 - `dotnet-ci.yml` — runs a Cosmos emulator service container (the standard x64 image, not the
-  ARM64 `vnext-preview` local dev needs), waits for it to be ready, then
-  `dotnet restore`/`build`/`test` against `CroApp.Api.Tests`, in `/api`
+  ARM64 `vnext-preview` local dev needs) via the declarative `services:` block, plus Azurite
+  started as a plain `docker run` step (the `services:` block can't pass `--skipApiVersionCheck`
+  through — it always runs an image's default command, no args), waits for both to be ready,
+  then `dotnet restore`/`build`/`test` against `CroApp.Api.Tests`, in `/api`
 
 ## Workflow conventions
 
