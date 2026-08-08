@@ -11,12 +11,17 @@ import '../state/auth_state.dart';
 import '../utils/color_utils.dart';
 import '../utils/jwt_utils.dart';
 import '../widgets/nest_details_dialog.dart';
+import '../widgets/waypoint_name_dialog.dart';
+import 'my_nests_screen.dart';
 
 class MapScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService waypointService;
   final FriendsService friendsService;
   final ProfileService profileService;
+  // When true, this screen is a location-picker pushed from My Nests: tapping the map pops
+  // the tapped LatLng back to the caller instead of opening the name-and-save flow itself.
+  final bool pickLocationMode;
 
   MapScreen({
     super.key,
@@ -24,6 +29,7 @@ class MapScreen extends StatefulWidget {
     WaypointService? waypointService,
     FriendsService? friendsService,
     ProfileService? profileService,
+    this.pickLocationMode = false,
   })  : waypointService = waypointService ?? WaypointService(),
         friendsService = friendsService ?? FriendsService(),
         profileService = profileService ?? ProfileService();
@@ -37,7 +43,7 @@ class MapScreen extends StatefulWidget {
 // tester.tap() in the widget test harness, so tests bypass just that gesture-detection
 // layer while still exercising the real dialog/save flow that follows.
 class MapScreenState extends State<MapScreen> {
-  Waypoint? _waypoint;
+  List<Waypoint> _ownNests = [];
   List<Waypoint> _friendWaypoints = [];
   UserProfile? _ownProfile;
   bool _isLoading = true;
@@ -51,8 +57,8 @@ class MapScreenState extends State<MapScreen> {
 
   // HomeScreen keeps every tab alive in an IndexedStack rather than rebuilding them on
   // switch, so initState only ever runs once - without an explicit refresh hook, this
-  // screen would keep showing whatever waypoint/friend data it first loaded with, even
-  // after a friend's color or waypoint changes elsewhere in the app.
+  // screen would keep showing whatever nest/friend data it first loaded with, even
+  // after a friend's color or nest changes elsewhere in the app.
   Future<void> refresh() => _loadData();
 
   Future<void> _loadData() async {
@@ -65,12 +71,12 @@ class MapScreenState extends State<MapScreen> {
       final token = widget.authState.token!;
       final userId = jwtSubject(token);
       final results = await Future.wait<dynamic>([
-        widget.waypointService.getWaypoint(token),
+        widget.waypointService.listWaypoints(token),
         widget.friendsService.getFriendsWaypoints(token),
         if (userId != null) widget.profileService.getUser(userId),
       ]);
       setState(() {
-        _waypoint = results[0] as Waypoint?;
+        _ownNests = results[0] as List<Waypoint>;
         _friendWaypoints = results[1] as List<Waypoint>;
         _ownProfile = userId != null ? results[2] as UserProfile : null;
         _isLoading = false;
@@ -83,18 +89,20 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showOwnNestDetails(Waypoint waypoint) {
+  void _showOwnNestDetails(Waypoint nest) {
     NestDetailsDialog.show(
       context,
-      // Falls back to the waypoint's own name only if the own-profile fetch itself
+      // Falls back to the nest's own name only if the own-profile fetch itself
       // failed - an edge case, not the common path (the fetch is otherwise part of
-      // the same all-or-nothing _loadData load as the waypoint itself).
-      username: _ownProfile?.username ?? waypoint.name,
+      // the same all-or-nothing _loadData load as the nest itself).
+      username: _ownProfile?.username ?? nest.name,
       isOwn: true,
       profilePictureUrl: _ownProfile?.profilePictureUrl,
-      waypointName: waypoint.name,
-      latitude: waypoint.latitude,
-      longitude: waypoint.longitude,
+      waypointId: nest.id,
+      waypointName: nest.name,
+      latitude: nest.latitude,
+      longitude: nest.longitude,
+      authState: widget.authState,
     );
   }
 
@@ -104,30 +112,37 @@ class MapScreenState extends State<MapScreen> {
       username: friendWaypoint.username!,
       isOwn: false,
       profilePictureUrl: friendWaypoint.profilePictureUrl,
+      waypointId: friendWaypoint.id,
       waypointName: friendWaypoint.name,
       latitude: friendWaypoint.latitude,
       longitude: friendWaypoint.longitude,
+      authState: widget.authState,
     );
   }
 
   @visibleForTesting
   Future<void> handleMapTap(LatLng point) async {
+    if (widget.pickLocationMode) {
+      Navigator.of(context).pop(point);
+      return;
+    }
+
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => _WaypointNameDialog(),
+      builder: (context) => const WaypointNameDialog(),
     );
     if (name == null || name.trim().isEmpty) {
       return;
     }
 
     try {
-      final saved = await widget.waypointService.saveWaypoint(
+      final saved = await widget.waypointService.createWaypoint(
         widget.authState.token!,
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
       );
-      setState(() => _waypoint = saved);
+      setState(() => _ownNests = [..._ownNests, saved]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -138,7 +153,21 @@ class MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Map')),
+      appBar: AppBar(
+        title: Text(widget.pickLocationMode ? 'Tap a spot for your new nest' : 'Map'),
+        actions: widget.pickLocationMode
+            ? null
+            : [
+                IconButton(
+                  key: const Key('myNestsButton'),
+                  icon: const Icon(Icons.add_home),
+                  tooltip: 'My Nests',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => MyNestsScreen(authState: widget.authState)),
+                  ),
+                ),
+              ],
+      ),
       body: _buildBody(),
     );
   }
@@ -162,108 +191,54 @@ class MapScreenState extends State<MapScreen> {
       );
     }
 
-    final waypoint = _waypoint;
-    return Column(
-      children: [
-        if (waypoint != null)
-          Container(
-            key: const Key('waypointBanner'),
-            width: double.infinity,
-            padding: const EdgeInsets.all(8.0),
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            child: Text('Delivery spot: ${waypoint.name}'),
-          ),
-        Expanded(
-          child: FlutterMap(
-            options: MapOptions(
-              initialCenter: waypoint != null
-                  ? LatLng(waypoint.latitude, waypoint.longitude)
-                  : const LatLng(0, 0),
-              // Floor of 3 keeps a whole-country/continent view available while stopping
-              // short of the near-zoom-0 world-repeat view that caused "weird behavior"
-              // when zoomed all the way out. initialZoom isn't clamped against minZoom on
-              // first build (only post-init camera moves are), so the no-waypoint default
-              // needs to match the floor directly rather than relying on clamping.
-              initialZoom: waypoint != null ? 13 : 3,
-              minZoom: 3,
-              // Prevents panning past the poles into the background-color void.
-              cameraConstraint: const CameraConstraint.containLatitude(),
-              onTap: (tapPosition, point) => handleMapTap(point),
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.cro_app',
-              ),
-              if (waypoint != null || _friendWaypoints.isNotEmpty)
-                MarkerLayer(markers: [
-                  if (waypoint != null)
-                    Marker(
-                      key: const Key('ownWaypointMarker'),
-                      point: LatLng(waypoint.latitude, waypoint.longitude),
-                      child: GestureDetector(
-                        onTap: () => _showOwnNestDetails(waypoint),
-                        // Same pin shape friends use, so both read as "the same kind of
-                        // thing" - still red so the user's own nest stands out at a glance.
-                        child: const Icon(Icons.location_pin, color: Colors.red),
-                      ),
-                    ),
-                  for (final friendWaypoint in _friendWaypoints)
-                    Marker(
-                      key: Key('friendMarker_${friendWaypoint.userId}'),
-                      point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
-                      child: GestureDetector(
-                        onTap: () => _showFriendNestDetails(friendWaypoint),
-                        child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color!)),
-                      ),
-                    ),
-                ]),
-              RichAttributionWidget(
-                attributions: [
-                  TextSourceAttribution('OpenStreetMap contributors'),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _WaypointNameDialog extends StatefulWidget {
-  @override
-  State<_WaypointNameDialog> createState() => _WaypointNameDialogState();
-}
-
-class _WaypointNameDialogState extends State<_WaypointNameDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Name this waypoint'),
-      content: TextField(
-        key: const Key('waypointNameField'),
-        controller: _controller,
-        decoration: const InputDecoration(labelText: 'Name'),
-        autofocus: true,
+    final hasOwnNests = _ownNests.isNotEmpty;
+    return FlutterMap(
+      options: MapOptions(
+        initialCenter:
+            hasOwnNests ? LatLng(_ownNests.first.latitude, _ownNests.first.longitude) : const LatLng(0, 0),
+        // Floor of 3 keeps a whole-country/continent view available while stopping
+        // short of the near-zoom-0 world-repeat view that caused "weird behavior"
+        // when zoomed all the way out. initialZoom isn't clamped against minZoom on
+        // first build (only post-init camera moves are), so the no-nest default
+        // needs to match the floor directly rather than relying on clamping.
+        initialZoom: hasOwnNests ? 13 : 3,
+        minZoom: 3,
+        // Prevents panning past the poles into the background-color void.
+        cameraConstraint: const CameraConstraint.containLatitude(),
+        onTap: (tapPosition, point) => handleMapTap(point),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.cro_app',
         ),
-        TextButton(
-          key: const Key('saveWaypointButton'),
-          onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('Save'),
+        if (hasOwnNests || _friendWaypoints.isNotEmpty)
+          MarkerLayer(markers: [
+            for (final nest in _ownNests)
+              Marker(
+                key: Key('ownNestMarker_${nest.id}'),
+                point: LatLng(nest.latitude, nest.longitude),
+                child: GestureDetector(
+                  onTap: () => _showOwnNestDetails(nest),
+                  // Same pin shape friends use, so both read as "the same kind of
+                  // thing" - still red so the user's own nests stand out at a glance.
+                  child: const Icon(Icons.house, color: Colors.red),
+                ),
+              ),
+            for (final friendWaypoint in _friendWaypoints)
+              Marker(
+                key: Key('friendMarker_${friendWaypoint.id}'),
+                point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
+                child: GestureDetector(
+                  onTap: () => _showFriendNestDetails(friendWaypoint),
+                  child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color!)),
+                ),
+              ),
+          ]),
+        RichAttributionWidget(
+          attributions: [
+            TextSourceAttribution('OpenStreetMap contributors'),
+          ],
         ),
       ],
     );

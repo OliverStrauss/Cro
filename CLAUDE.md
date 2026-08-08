@@ -73,6 +73,15 @@ No real Azure Cosmos DB account is provisioned yet. Creating one (`az cosmosdb c
 outside this repo, needed before any prod deployment — not required for local dev or CI,
 both of which run entirely against the emulator.
 
+The Waypoints container's partition key changed from `/id` to `/userId` (a user can have
+up to 5 waypoints now, so the owning user's id is the partition key instead of the
+waypoint's own id). `CreateContainerIfNotExistsAsync` (in `Program.cs`, dev-only startup
+provisioning) is a no-op against an existing container, so a local "Waypoints" container
+created before this change is stuck on the old partition key — drop it once via the
+emulator's Data Explorer (`https://localhost:8081/_explorer/index.html`), or just remove
+and re-run the emulator container to reset all local data, before running the API or tests
+again. CI is unaffected — its Cosmos emulator service container is fresh every run.
+
 ### Local Azurite Emulator (required for profile picture upload/tests)
 
 Profile pictures go through Azure Blob Storage via `Azurite`, its official local emulator —

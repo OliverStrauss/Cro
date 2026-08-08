@@ -210,7 +210,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
 
         await SendRequestAsync(tokenA, usernameD);
 
-        await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", tokenB,
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
             new { Name = "B's Spot", Latitude = 10.0, Longitude = 20.0 }));
 
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/waypoints", tokenA));
@@ -218,7 +218,32 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var waypoints = await response.Content.ReadFromJsonAsync<List<FriendWaypointDto>>();
 
         Assert.Single(waypoints!);
-        Assert.Equal(idB, waypoints!.Single().Id);
+        Assert.Equal(idB, waypoints!.Single().UserId);
+    }
+
+    [Fact]
+    public async Task FriendsWaypoints_ReturnsOneRowPerNest_WhenAFriendHasMultipleNests()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0 }));
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Work", Latitude = 11.0, Longitude = 21.0 }));
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/waypoints", tokenA));
+        response.EnsureSuccessStatusCode();
+        var waypoints = await response.Content.ReadFromJsonAsync<List<FriendWaypointDto>>();
+
+        Assert.Equal(2, waypoints!.Count);
+        Assert.All(waypoints, w => Assert.Equal(idB, w.UserId));
+        Assert.Equal(2, waypoints.Select(w => w.Id).Distinct().Count());
     }
 
     [Fact]
@@ -277,5 +302,5 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record FriendDto(string Id, string Username, string? Color);
     private record FriendRequestDto(string Id, string Username);
-    private record FriendWaypointDto(string Id, string Username, string? Color, double Latitude, double Longitude);
+    private record FriendWaypointDto(string Id, string UserId, string Username, string? Color, double Latitude, double Longitude);
 }
