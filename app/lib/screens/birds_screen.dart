@@ -86,6 +86,21 @@ class _BirdsScreenState extends State<BirdsScreen> {
     return 'Unassigned';
   }
 
+  // Only traveling birds have a meaningful ETA. No `intl` dependency in this project, so this
+  // is a plain relative countdown rather than a formatted timestamp.
+  String? _etaText(Bird bird) {
+    if (!bird.isTraveling || bird.estimatedArrivalAt == null) {
+      return null;
+    }
+    final remaining = bird.estimatedArrivalAt!.difference(DateTime.now());
+    if (remaining.isNegative) {
+      return 'Arriving any moment';
+    }
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes.remainder(60);
+    return hours > 0 ? 'Arrives in ${hours}h ${minutes}m' : 'Arrives in ${minutes}m';
+  }
+
   Future<void> _openSendFlow(Bird bird) async {
     final token = widget.authState.token!;
     try {
@@ -158,15 +173,20 @@ class _BirdsScreenState extends State<BirdsScreen> {
     return ListView(
       children: _birds.map((bird) {
         final canSend = !bird.isTraveling && bird.currentNestId != null;
+        final eta = _etaText(bird);
         return Card(
           key: Key('birdCard_${bird.id}'),
           child: ListTile(
+            // This screen only ever shows the caller's own birds, so the icon uses the same
+            // "this is yours" red already used for the user's own nest marker on the map.
+            leading: const Icon(Icons.flutter_dash, color: Colors.red),
             title: Text(bird.name),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(bird.type),
                 Text(_locationText(bird), key: Key('birdLocation_${bird.id}')),
+                if (eta != null) Text(eta, key: Key('birdEta_${bird.id}')),
               ],
             ),
             isThreeLine: true,

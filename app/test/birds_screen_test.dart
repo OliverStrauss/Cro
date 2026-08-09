@@ -76,7 +76,15 @@ class _FakeBirdService implements BirdService {
       throw UnimplementedError('${invocation.memberName} is not used here');
 }
 
-Bird _bird(String id, {String? nestId, String? nestToId, bool isTraveling = false, String type = 'Sparrow'}) => Bird(
+Bird _bird(
+  String id, {
+  String? nestId,
+  String? nestToId,
+  bool isTraveling = false,
+  String type = 'Sparrow',
+  DateTime? estimatedArrivalAt,
+}) =>
+    Bird(
       id: id,
       userId: 'u1',
       name: 'Bird $id',
@@ -84,6 +92,7 @@ Bird _bird(String id, {String? nestId, String? nestToId, bool isTraveling = fals
       isTraveling: isTraveling,
       nestToId: nestToId,
       type: type,
+      estimatedArrivalAt: estimatedArrivalAt,
     );
 
 void main() {
@@ -127,7 +136,12 @@ void main() {
       ..birdsToReturn = [
         _bird('b1', nestId: 'w1'), // resident in own nest
         _bird('b2', nestId: 'w2'), // resident in a friend's nest
-        _bird('b3', isTraveling: true, nestToId: 'w1'), // heading to own nest
+        _bird(
+          'b3',
+          isTraveling: true,
+          nestToId: 'w1',
+          estimatedArrivalAt: DateTime.now().add(const Duration(hours: 3, minutes: 24)),
+        ), // heading to own nest
         _bird('b4'), // unassigned
       ];
     final authState = AuthState()..login('test-token');
@@ -160,6 +174,17 @@ void main() {
 
     final location4 = tester.widget<Text>(find.byKey(const Key('birdLocation_b4')));
     expect(location4.data, 'Unassigned');
+
+    // Every card gets the same placeholder bird icon (this screen only ever shows the
+    // caller's own birds, so there's a single fixed color to use).
+    expect(find.byIcon(Icons.flutter_dash), findsNWidgets(4));
+
+    // Only the traveling bird has an ETA line.
+    final eta3 = tester.widget<Text>(find.byKey(const Key('birdEta_b3')));
+    expect(eta3.data, startsWith('Arrives in 3h'));
+    expect(find.byKey(const Key('birdEta_b1')), findsNothing);
+    expect(find.byKey(const Key('birdEta_b2')), findsNothing);
+    expect(find.byKey(const Key('birdEta_b4')), findsNothing);
   });
 
   testWidgets('tapping an idle, nested bird opens the destination picker and sends it',
