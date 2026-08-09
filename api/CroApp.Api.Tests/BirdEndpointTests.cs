@@ -174,5 +174,9 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         string? NestToId,
         double? Speed,
         string? Content,
+        string Type,
+        DateTimeOffset? DepartedAt,
+        DateTimeOffset? EstimatedArrivalAt,
+        bool IsRead,
         DateTimeOffset UpdatedAt);
 }

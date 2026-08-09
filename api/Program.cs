@@ -41,6 +41,7 @@ if (builder.Environment.IsDevelopment())
 builder.Services.Configure<CosmosDbOptions>(builder.Configuration.GetSection("CosmosDb"));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<BlobStorageOptions>(builder.Configuration.GetSection("BlobStorage"));
+builder.Services.Configure<BirdTravelOptions>(builder.Configuration.GetSection("BirdTravel"));
 
 builder.Services.AddSingleton(sp =>
 {
@@ -305,6 +306,66 @@ app.MapGet("/birds", async (ClaimsPrincipal principal, IBirdService birdService)
 })
 .RequireAuthorization()
 .WithName("ListBirds");
+
+app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPrincipal principal, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await birdService.SendAsync(userId, id, req.NestId, req.Content));
+    }
+    catch (BirdServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("SendBird");
+
+app.MapGet("/waypoints/{id}/birds", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await birdService.GetNestResidentsAsync(userId, id));
+    }
+    catch (BirdServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("GetNestResidentBirds");
+
+app.MapPost("/birds/{id}/read", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await birdService.MarkReadAsync(userId, id));
+    }
+    catch (BirdServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("MarkBirdRead");
 
 app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
 {
@@ -575,6 +636,7 @@ record CreateUserRequest(string Username, string Email, string Password);
 record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
 record SetWaypointRequest(string Name, double Latitude, double Longitude);
+record SendBirdRequest(string NestId, string? Content);
 record SendFriendRequestRequest(string Username);
 record SetFriendColorRequest(string Color);
 

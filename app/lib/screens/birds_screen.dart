@@ -3,22 +3,27 @@ import 'package:flutter/material.dart';
 import '../models/bird.dart';
 import '../models/waypoint.dart';
 import '../services/bird_service.dart';
+import '../services/friends_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
+import '../utils/jwt_utils.dart';
 import 'nest_birds_screen.dart';
 
 class BirdsScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService waypointService;
   final BirdService birdService;
+  final FriendsService friendsService;
 
   BirdsScreen({
     super.key,
     required this.authState,
     WaypointService? waypointService,
     BirdService? birdService,
+    FriendsService? friendsService,
   })  : waypointService = waypointService ?? WaypointService(),
-        birdService = birdService ?? BirdService();
+        birdService = birdService ?? BirdService(),
+        friendsService = friendsService ?? FriendsService();
 
   @override
   State<BirdsScreen> createState() => _BirdsScreenState();
@@ -26,7 +31,8 @@ class BirdsScreen extends StatefulWidget {
 
 class _BirdsScreenState extends State<BirdsScreen> {
   List<Waypoint> _nests = [];
-  List<Bird> _birds = [];
+  List<Bird> _ownBirds = [];
+  Map<String, List<Bird>> _residentsByNestId = {};
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -48,9 +54,20 @@ class _BirdsScreenState extends State<BirdsScreen> {
         widget.waypointService.listWaypoints(token),
         widget.birdService.listBirds(token),
       ]);
+      final nests = results[0] as List<Waypoint>;
+      final ownBirds = results[1] as List<Bird>;
+
+      // A nest can hold birds the caller doesn't own (a friend's delivery), so counts and
+      // unread badges need the full resident list per nest, not just the caller's own birds.
+      final residentsByNestId = <String, List<Bird>>{};
+      for (final nest in nests) {
+        residentsByNestId[nest.id] = await widget.birdService.getNestResidents(token, nest.id);
+      }
+
       setState(() {
-        _nests = results[0] as List<Waypoint>;
-        _birds = results[1] as List<Bird>;
+        _nests = nests;
+        _ownBirds = ownBirds;
+        _residentsByNestId = residentsByNestId;
         _isLoading = false;
       });
     } catch (e) {
@@ -61,18 +78,21 @@ class _BirdsScreenState extends State<BirdsScreen> {
     }
   }
 
-  Map<String?, List<Bird>> get _birdsByNestId {
-    final map = <String?, List<Bird>>{};
-    for (final bird in _birds) {
-      map.putIfAbsent(bird.currentNestId, () => []).add(bird);
-    }
-    return map;
-  }
-
-  void _openNestBirds(String title, List<Bird> birds) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => NestBirdsScreen(title: title, birds: birds),
-    ));
+  void _openNestBirds(String title, String nestId, List<Bird> birds) {
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => NestBirdsScreen(
+            title: title,
+            nestId: nestId,
+            birds: birds,
+            callerUserId: jwtSubject(widget.authState.token!)!,
+            birdService: widget.birdService,
+            waypointService: widget.waypointService,
+            friendsService: widget.friendsService,
+            authState: widget.authState,
+          ),
+        ))
+        .then((_) => _load());
   }
 
   @override
@@ -100,8 +120,7 @@ class _BirdsScreenState extends State<BirdsScreen> {
       );
     }
 
-    final byNest = _birdsByNestId;
-    final unassigned = byNest[null] ?? [];
+    final unassigned = _ownBirds.where((b) => b.currentNestId == null && !b.isTraveling).toList();
 
     if (_nests.isEmpty && unassigned.isEmpty) {
       return const Center(key: Key('noBirdsMessage'), child: Text('No birds yet'));
@@ -110,13 +129,20 @@ class _BirdsScreenState extends State<BirdsScreen> {
     return ListView(
       children: [
         ..._nests.map((nest) {
-          final birds = byNest[nest.id] ?? [];
+          final residents = _residentsByNestId[nest.id] ?? [];
+          final unreadCount = residents.where((b) => !b.isRead).length;
           return Card(
             key: Key('birdNestTile_${nest.id}'),
             child: ListTile(
               title: Text(nest.name),
-              subtitle: Text('${birds.length} ${birds.length == 1 ? 'bird' : 'birds'}'),
-              onTap: () => _openNestBirds(nest.name, birds),
+              subtitle: Text(
+                '${residents.length} ${residents.length == 1 ? 'bird' : 'birds'}'
+                '${unreadCount > 0 ? ' • $unreadCount unread' : ''}',
+              ),
+              trailing: unreadCount > 0
+                  ? Icon(Icons.circle, size: 10, key: Key('unreadBadge_${nest.id}'), color: Theme.of(context).colorScheme.error)
+                  : null,
+              onTap: () => _openNestBirds(nest.name, nest.id, residents),
             ),
           );
         }),
@@ -126,7 +152,6 @@ class _BirdsScreenState extends State<BirdsScreen> {
             child: ListTile(
               title: const Text('Unassigned'),
               subtitle: Text('${unassigned.length} ${unassigned.length == 1 ? 'bird' : 'birds'}'),
-              onTap: () => _openNestBirds('Unassigned', unassigned),
             ),
           ),
       ],
