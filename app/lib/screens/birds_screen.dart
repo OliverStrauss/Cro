@@ -6,8 +6,7 @@ import '../services/bird_service.dart';
 import '../services/friends_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
-import '../utils/jwt_utils.dart';
-import 'nest_birds_screen.dart';
+import '../widgets/send_bird_dialog.dart';
 
 class BirdsScreen extends StatefulWidget {
   final AuthState authState;
@@ -30,9 +29,8 @@ class BirdsScreen extends StatefulWidget {
 }
 
 class _BirdsScreenState extends State<BirdsScreen> {
-  List<Waypoint> _nests = [];
-  List<Bird> _ownBirds = [];
-  Map<String, List<Bird>> _residentsByNestId = {};
+  List<Bird> _birds = [];
+  Map<String, String> _nestNameById = {};
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -51,23 +49,23 @@ class _BirdsScreenState extends State<BirdsScreen> {
     try {
       final token = widget.authState.token!;
       final results = await Future.wait([
-        widget.waypointService.listWaypoints(token),
         widget.birdService.listBirds(token),
+        widget.waypointService.listWaypoints(token),
+        widget.friendsService.getFriendsWaypoints(token),
       ]);
-      final nests = results[0] as List<Waypoint>;
-      final ownBirds = results[1] as List<Bird>;
+      final birds = results[0] as List<Bird>;
+      final ownNests = results[1] as List<Waypoint>;
+      final friendNests = results[2] as List<Waypoint>;
 
-      // A nest can hold birds the caller doesn't own (a friend's delivery), so counts and
-      // unread badges need the full resident list per nest, not just the caller's own birds.
-      final residentsByNestId = <String, List<Bird>>{};
-      for (final nest in nests) {
-        residentsByNestId[nest.id] = await widget.birdService.getNestResidents(token, nest.id);
-      }
+      // A bird's current/destination nest can belong to a friend (it traveled there), so
+      // name lookup needs both the caller's own nests and friends' nests merged together.
+      final nestNameById = <String, String>{
+        for (final nest in [...ownNests, ...friendNests]) nest.id: nest.name,
+      };
 
       setState(() {
-        _nests = nests;
-        _ownBirds = ownBirds;
-        _residentsByNestId = residentsByNestId;
+        _birds = birds;
+        _nestNameById = nestNameById;
         _isLoading = false;
       });
     } catch (e) {
@@ -78,21 +76,54 @@ class _BirdsScreenState extends State<BirdsScreen> {
     }
   }
 
-  void _openNestBirds(String title, String nestId, List<Bird> birds) {
-    Navigator.of(context)
-        .push(MaterialPageRoute(
-          builder: (_) => NestBirdsScreen(
-            title: title,
-            nestId: nestId,
-            birds: birds,
-            callerUserId: jwtSubject(widget.authState.token!)!,
-            birdService: widget.birdService,
-            waypointService: widget.waypointService,
-            friendsService: widget.friendsService,
-            authState: widget.authState,
-          ),
-        ))
-        .then((_) => _load());
+  String _locationText(Bird bird) {
+    if (bird.isTraveling) {
+      return 'Heading to ${_nestNameById[bird.nestToId] ?? 'a nest'}';
+    }
+    if (bird.currentNestId != null) {
+      return _nestNameById[bird.currentNestId] ?? 'Unknown nest';
+    }
+    return 'Unassigned';
+  }
+
+  Future<void> _openSendFlow(Bird bird) async {
+    final token = widget.authState.token!;
+    try {
+      final results = await Future.wait([
+        widget.waypointService.listWaypoints(token),
+        widget.friendsService.getFriendsWaypoints(token),
+      ]);
+      final ownNests = results[0].where((w) => w.id != bird.currentNestId);
+      final friendNests = results[1];
+
+      final destinations = [
+        ...ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)),
+        ...friendNests.map((w) => SendBirdDestination(nestId: w.id, label: '${w.name} (${w.username})')),
+      ];
+
+      if (!mounted) return;
+      final result = await showDialog<SendBirdResult>(
+        context: context,
+        builder: (_) => SendBirdDialog(destinations: destinations),
+      );
+      if (result == null) return;
+
+      await widget.birdService.sendBird(token, bird.id, nestId: result.nestId, content: result.content);
+      _showToast('${bird.name} is on its way!');
+      await _load();
+    } catch (e) {
+      _showToast(e.toString(), isError: true);
+    }
+  }
+
+  void _showToast(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
+    );
   }
 
   @override
@@ -120,41 +151,29 @@ class _BirdsScreenState extends State<BirdsScreen> {
       );
     }
 
-    final unassigned = _ownBirds.where((b) => b.currentNestId == null && !b.isTraveling).toList();
-
-    if (_nests.isEmpty && unassigned.isEmpty) {
+    if (_birds.isEmpty) {
       return const Center(key: Key('noBirdsMessage'), child: Text('No birds yet'));
     }
 
     return ListView(
-      children: [
-        ..._nests.map((nest) {
-          final residents = _residentsByNestId[nest.id] ?? [];
-          final unreadCount = residents.where((b) => !b.isRead).length;
-          return Card(
-            key: Key('birdNestTile_${nest.id}'),
-            child: ListTile(
-              title: Text(nest.name),
-              subtitle: Text(
-                '${residents.length} ${residents.length == 1 ? 'bird' : 'birds'}'
-                '${unreadCount > 0 ? ' • $unreadCount unread' : ''}',
-              ),
-              trailing: unreadCount > 0
-                  ? Icon(Icons.circle, size: 10, key: Key('unreadBadge_${nest.id}'), color: Theme.of(context).colorScheme.error)
-                  : null,
-              onTap: () => _openNestBirds(nest.name, nest.id, residents),
+      children: _birds.map((bird) {
+        final canSend = !bird.isTraveling && bird.currentNestId != null;
+        return Card(
+          key: Key('birdCard_${bird.id}'),
+          child: ListTile(
+            title: Text(bird.name),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(bird.type),
+                Text(_locationText(bird), key: Key('birdLocation_${bird.id}')),
+              ],
             ),
-          );
-        }),
-        if (unassigned.isNotEmpty)
-          Card(
-            key: const Key('unassignedBirdsTile'),
-            child: ListTile(
-              title: const Text('Unassigned'),
-              subtitle: Text('${unassigned.length} ${unassigned.length == 1 ? 'bird' : 'birds'}'),
-            ),
+            isThreeLine: true,
+            onTap: canSend ? () => _openSendFlow(bird) : null,
           ),
-      ],
+        );
+      }).toList(),
     );
   }
 }
