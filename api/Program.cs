@@ -76,6 +76,8 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddScoped<IUserRepository, CosmosUserRepository>();
 builder.Services.AddScoped<IWaypointRepository, CosmosWaypointRepository>();
 builder.Services.AddScoped<IWaypointService, WaypointService>();
+builder.Services.AddScoped<IBirdRepository, CosmosBirdRepository>();
+builder.Services.AddScoped<IBirdService, BirdService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
 
@@ -119,6 +121,10 @@ if (app.Environment.IsDevelopment())
     // manual drop (see CLAUDE.md's Local Cosmos DB Emulator section) - CI is unaffected since
     // its emulator container is fresh every run.
     await database.Database.CreateContainerIfNotExistsAsync(opts.WaypointsContainerName, "/userId");
+    // Same /userId partition-key reasoning as Waypoints: every user has a fixed set of
+    // birds, so scoping by owner keeps GET /birds' lazy-provisioning check and the
+    // nest-assignment update both single-partition operations.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.BirdsContainerName, "/userId");
 
     var blobClient = scope.ServiceProvider.GetRequiredService<BlobServiceClient>();
     var blobOpts = scope.ServiceProvider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
@@ -218,7 +224,7 @@ app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService wayp
 .RequireAuthorization()
 .WithName("ListWaypoints");
 
-app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService) =>
+app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService, IBirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -229,6 +235,12 @@ app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal princip
     try
     {
         var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude);
+        // Any of the owner's birds with no current nest (a brand-new user's birds, or one
+        // who somehow ended up nestless again) get assigned to the nest they just created.
+        // This naturally covers "first nest ever" without a special case. Lives here rather
+        // than inside WaypointService so Waypoint doesn't take on a dependency on Bird - same
+        // composition-at-the-endpoint pattern as GET /friends/waypoints below.
+        await birdService.AssignUnassignedBirdsToNestAsync(userId, saved.Id);
         return Results.Created($"/waypoints/{saved.Id}", saved);
     }
     catch (WaypointServiceException ex)
@@ -280,6 +292,19 @@ app.MapDelete("/waypoints/{id}", async (string id, ClaimsPrincipal principal, IW
 })
 .RequireAuthorization()
 .WithName("DeleteWaypoint");
+
+app.MapGet("/birds", async (ClaimsPrincipal principal, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(await birdService.ListAsync(userId));
+})
+.RequireAuthorization()
+.WithName("ListBirds");
 
 app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
 {

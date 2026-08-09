@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../state/auth_state.dart';
+import 'birds_screen.dart';
 import 'map_screen.dart';
 import 'profile_screen.dart';
 
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final tabs = [
       ProfileScreen(authState: widget.authState),
       MapScreen(key: _mapKey, authState: widget.authState),
+      BirdsScreen(authState: widget.authState),
     ];
 
     return Scaffold(
@@ -51,6 +53,12 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map),
             label: 'Map',
+          ),
+          NavigationDestination(
+            key: Key('navBirds'),
+            icon: Icon(Icons.egg_outlined),
+            selectedIcon: Icon(Icons.egg),
+            label: 'Birds',
           ),
         ],
       ),
