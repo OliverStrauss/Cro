@@ -75,6 +75,7 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddScoped<IUserRepository, CosmosUserRepository>();
 builder.Services.AddScoped<IWaypointRepository, CosmosWaypointRepository>();
+builder.Services.AddScoped<IWaypointService, WaypointService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
 
@@ -111,7 +112,13 @@ if (app.Environment.IsDevelopment())
     var opts = scope.ServiceProvider.GetRequiredService<IOptions<CosmosDbOptions>>().Value;
     var database = await client.CreateDatabaseIfNotExistsAsync(opts.DatabaseName);
     await database.Database.CreateContainerIfNotExistsAsync(opts.UsersContainerName, "/id");
-    await database.Database.CreateContainerIfNotExistsAsync(opts.WaypointsContainerName, "/id");
+    // /userId, not /id - a user can have up to 5 waypoints now, so the owning user's id is
+    // the partition key (one partition per user) while each waypoint gets its own generated
+    // id. CreateContainerIfNotExistsAsync is a no-op against an existing container, so a
+    // pre-existing local "Waypoints" container from before this change needs a one-time
+    // manual drop (see CLAUDE.md's Local Cosmos DB Emulator section) - CI is unaffected since
+    // its emulator container is fresh every run.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.WaypointsContainerName, "/userId");
 
     var blobClient = scope.ServiceProvider.GetRequiredService<BlobServiceClient>();
     var blobOpts = scope.ServiceProvider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
@@ -198,34 +205,81 @@ app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<Jw
 })
 .WithName("Login");
 
-app.MapGet("/waypoint", async (ClaimsPrincipal user, IWaypointRepository repo) =>
+app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService waypointService) =>
 {
-    var userId = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
     {
         return Results.Unauthorized();
     }
 
-    var waypoint = await repo.GetByUserIdAsync(userId);
-    return waypoint is not null ? Results.Ok(waypoint) : Results.NotFound();
+    return Results.Ok(await waypointService.ListAsync(userId));
 })
 .RequireAuthorization()
-.WithName("GetWaypoint");
+.WithName("ListWaypoints");
 
-app.MapPut("/waypoint", async (SetWaypointRequest req, ClaimsPrincipal user, IWaypointRepository repo) =>
+app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService) =>
 {
-    var userId = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
     {
         return Results.Unauthorized();
     }
 
-    var waypoint = new Waypoint(userId, req.Name, req.Latitude, req.Longitude, DateTimeOffset.UtcNow);
-    var saved = await repo.UpsertAsync(waypoint);
-    return Results.Ok(saved);
+    try
+    {
+        var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude);
+        return Results.Created($"/waypoints/{saved.Id}", saved);
+    }
+    catch (WaypointServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
 })
 .RequireAuthorization()
-.WithName("SetWaypoint");
+.WithName("CreateWaypoint");
+
+app.MapPut("/waypoints/{id}", async (string id, SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var saved = await waypointService.UpdateAsync(userId, id, req.Name, req.Latitude, req.Longitude);
+        return Results.Ok(saved);
+    }
+    catch (WaypointServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("UpdateWaypoint");
+
+app.MapDelete("/waypoints/{id}", async (string id, ClaimsPrincipal principal, IWaypointService waypointService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await waypointService.DeleteAsync(userId, id);
+        return Results.NoContent();
+    }
+    catch (WaypointServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("DeleteWaypoint");
 
 app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
 {
@@ -384,31 +438,37 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
         return Results.Unauthorized();
     }
 
-    var acceptedFriends = (user.Friends ?? []).Where(f => f.Status == FriendStatus.Accepted);
+    var acceptedFriends = (user.Friends ?? []).Where(f => f.Status == FriendStatus.Accepted).ToList();
+    var friendIds = acceptedFriends.Select(f => f.Id).ToList();
+    var friendWaypoints = await waypointRepo.GetManyByUserIdsAsync(friendIds);
 
-    // N+1 lookup - same accepted tradeoff as GetByUsernameAsync's cross-partition query,
-    // fine at expected friend-list sizes. Also picks up ProfilePictureUrl (only for
-    // friends who actually have a waypoint, to avoid a wasted read for the rest),
-    // mirroring the same lookup in GET /friends above, so the map screen doesn't need
-    // a per-marker-tap fetch to show a friend's picture.
+    // One row per friend-nest pair now that a friend can have several nests. The
+    // ProfilePictureUrl lookup is cached per friend (not per nest) so a friend with
+    // multiple nests doesn't trigger a redundant read of the same user document -
+    // same accepted N+1-ish tradeoff as GetByUsernameAsync's cross-partition query,
+    // just now N-unique-friends instead of N-nests.
     var results = new List<object>();
-    foreach (var friend in acceptedFriends)
+    var profileCache = new Dictionary<string, User?>();
+    foreach (var waypoint in friendWaypoints)
     {
-        var waypoint = await waypointRepo.GetByUserIdAsync(friend.Id);
-        if (waypoint is not null)
+        var friend = acceptedFriends.First(f => f.Id == waypoint.UserId);
+        if (!profileCache.TryGetValue(friend.Id, out var friendUser))
         {
-            var friendUser = await userRepo.GetByIdAsync(friend.Id);
-            results.Add(new
-            {
-                friend.Id,
-                friend.Username,
-                friend.Color,
-                waypoint.Name,
-                waypoint.Latitude,
-                waypoint.Longitude,
-                friendUser?.ProfilePictureUrl
-            });
+            friendUser = await userRepo.GetByIdAsync(friend.Id);
+            profileCache[friend.Id] = friendUser;
         }
+
+        results.Add(new
+        {
+            waypoint.Id,
+            UserId = friend.Id,
+            friend.Username,
+            friend.Color,
+            waypoint.Name,
+            waypoint.Latitude,
+            waypoint.Longitude,
+            friendUser?.ProfilePictureUrl
+        });
     }
 
     return Results.Ok(results);

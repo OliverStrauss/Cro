@@ -23,4 +23,15 @@
     <ProjectReference Include="..\CroApp.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Every test class here spins up its own WebApplicationFactory<Program> against the
+         same shared Cosmos DB emulator / Azurite instance in CI. xunit parallelizes test
+         collections (one per class) by default, so without this, ~9 classes hit the emulator
+         concurrently on a 4-CPU GitHub-hosted runner - observed both as the emulator process
+         crashing outright under load and as scattered transient 500s from otherwise-unrelated
+         tests' POST /users calls. Serializing collections trades some CI wall-clock time for
+         not hammering the one shared emulator instance from many directions at once. -->
+    <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

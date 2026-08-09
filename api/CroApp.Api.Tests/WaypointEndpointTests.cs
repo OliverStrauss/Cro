@@ -69,6 +69,9 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
         return request;
     }
 
+    private Task<HttpResponseMessage> CreateWaypointAsync(string? token, string name, double lat = 42.0, double lng = -93.5) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token, new { Name = name, Latitude = lat, Longitude = lng }));
+
     private async Task<int> CountWaypointDocumentsAsync(string userId)
     {
         var clientOptions = new CosmosClientOptions
@@ -83,98 +86,193 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
         var container = cosmosClient.GetContainer("CroApp", "Waypoints");
 
         var query = container.GetItemQueryIterator<dynamic>(
-            new QueryDefinition("SELECT VALUE COUNT(1) FROM c WHERE c.id = @userId")
+            new QueryDefinition("SELECT VALUE COUNT(1) FROM c WHERE c.userId = @userId")
                 .WithParameter("@userId", userId));
         var page = await query.ReadNextAsync();
         return (int)page.First();
     }
 
     [Fact]
-    public async Task SetThenGetWaypoint_RoundTripsSuccessfully()
+    public async Task CreateThenListWaypoint_RoundTripsSuccessfully()
     {
         var username = $"waypoint-user-{Guid.NewGuid():N}";
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
 
-        var setResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", token,
-            new { Name = "Backyard", Latitude = 42.0, Longitude = -93.5 }));
-        setResponse.EnsureSuccessStatusCode();
+        var createResponse = await CreateWaypointAsync(token, "Backyard");
+        createResponse.EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
-        var getResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoint", token));
-        getResponse.EnsureSuccessStatusCode();
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
+        listResponse.EnsureSuccessStatusCode();
+        var waypoints = await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>();
 
-        var waypoint = await getResponse.Content.ReadFromJsonAsync<WaypointDto>();
-        Assert.NotNull(waypoint);
-        Assert.Equal("Backyard", waypoint!.Name);
+        var waypoint = Assert.Single(waypoints!);
+        Assert.Equal("Backyard", waypoint.Name);
         Assert.Equal(42.0, waypoint.Latitude);
         Assert.Equal(-93.5, waypoint.Longitude);
     }
 
     [Fact]
-    public async Task GetWaypoint_WithoutToken_ReturnsUnauthorized()
+    public async Task ListWaypoints_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoint", token: null));
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token: null));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task PutWaypoint_WithoutToken_ReturnsUnauthorized()
+    public async Task CreateWaypoint_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", token: null,
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token: null,
             new { Name = "Backyard", Latitude = 42.0, Longitude = -93.5 }));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetWaypoint_ForUserWhoNeverSetOne_ReturnsNotFound()
+    public async Task UpdateWaypoint_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoints/some-id", token: null,
+            new { Name = "Backyard", Latitude = 42.0, Longitude = -93.5 }));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteWaypoint_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Delete, "/waypoints/some-id", token: null));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListWaypoints_ForUserWhoNeverCreatedOne_ReturnsEmptyList()
     {
         var username = $"waypoint-user-{Guid.NewGuid():N}";
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
 
-        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoint", token));
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
+        response.EnsureSuccessStatusCode();
+        var waypoints = await response.Content.ReadFromJsonAsync<List<WaypointDto>>();
+
+        Assert.Empty(waypoints!);
+    }
+
+    [Fact]
+    public async Task CreatingMultipleWaypoints_CreatesSeparateDocuments()
+    {
+        var username = $"waypoint-user-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var first = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
+        await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6);
+
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
+        var waypoints = await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>();
+        Assert.Equal(2, waypoints!.Count);
+
+        var documentCount = await CountWaypointDocumentsAsync(first!.UserId);
+        Assert.Equal(2, documentCount);
+    }
+
+    [Fact]
+    public async Task CreatingASixthWaypoint_ReturnsConflict()
+    {
+        var username = $"waypoint-user-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        for (var i = 0; i < 5; i++)
+        {
+            var response = await CreateWaypointAsync(token, $"Nest {i}", 42.0 + i, -93.5);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+
+        var sixth = await CreateWaypointAsync(token, "One Too Many");
+        Assert.Equal(HttpStatusCode.Conflict, sixth.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateWaypoint_ChangesNameAndLocation()
+    {
+        var username = $"waypoint-user-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+        var created = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
+
+        var updateResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Put, $"/waypoints/{created!.Id}", token,
+            new { Name = "Front Porch", Latitude = 1.0, Longitude = 2.0 }));
+        updateResponse.EnsureSuccessStatusCode();
+
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
+        var waypoint = Assert.Single((await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>())!);
+        Assert.Equal(created.Id, waypoint.Id);
+        Assert.Equal("Front Porch", waypoint.Name);
+        Assert.Equal(1.0, waypoint.Latitude);
+        Assert.Equal(2.0, waypoint.Longitude);
+    }
+
+    [Fact]
+    public async Task UpdateWaypoint_ForAnotherUsersNest_ReturnsNotFound()
+    {
+        var usernameA = $"waypoint-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"waypoint-user-b-{Guid.NewGuid():N}";
+        var tokenA = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var tokenB = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+        var created = await (await CreateWaypointAsync(tokenA, "User A's Spot")).Content.ReadFromJsonAsync<WaypointDto>();
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Put, $"/waypoints/{created!.Id}", tokenB,
+            new { Name = "Hijacked", Latitude = 9.0, Longitude = 9.0 }));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
-    public async Task SettingNewWaypoint_ReplacesOldOne_NotASecondDocument()
+    public async Task DeleteWaypoint_RemovesIt()
     {
         var username = $"waypoint-user-{Guid.NewGuid():N}";
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+        var created = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
 
-        await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", token,
-            new { Name = "Backyard", Latitude = 42.0, Longitude = -93.5 }));
-        await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", token,
-            new { Name = "Front Porch", Latitude = 42.1, Longitude = -93.6 }));
+        var deleteResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/waypoints/{created!.Id}", token));
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
-        var getResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoint", token));
-        var waypoint = await getResponse.Content.ReadFromJsonAsync<WaypointDto>();
-        Assert.Equal("Front Porch", waypoint!.Name);
-
-        var documentCount = await CountWaypointDocumentsAsync(waypoint.Id);
-        Assert.Equal(1, documentCount);
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
+        var waypoints = await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>();
+        Assert.Empty(waypoints!);
     }
 
     [Fact]
-    public async Task Waypoint_IsScopedToTheAuthenticatedUser()
+    public async Task DeleteWaypoint_ForAnotherUsersNest_ReturnsNotFound()
+    {
+        var usernameA = $"waypoint-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"waypoint-user-b-{Guid.NewGuid():N}";
+        var tokenA = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var tokenB = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+        var created = await (await CreateWaypointAsync(tokenA, "User A's Spot")).Content.ReadFromJsonAsync<WaypointDto>();
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/waypoints/{created!.Id}", tokenB));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Waypoints_AreScopedToTheAuthenticatedUser()
     {
         var usernameA = $"waypoint-user-a-{Guid.NewGuid():N}";
         var usernameB = $"waypoint-user-b-{Guid.NewGuid():N}";
         var tokenA = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
         var tokenB = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
 
-        await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", tokenA,
-            new { Name = "User A's Spot", Latitude = 1.0, Longitude = 1.0 }));
-        await _client.SendAsync(AuthedRequest(HttpMethod.Put, "/waypoint", tokenB,
-            new { Name = "User B's Spot", Latitude = 2.0, Longitude = 2.0 }));
+        await CreateWaypointAsync(tokenA, "User A's Spot", 1.0, 1.0);
+        await CreateWaypointAsync(tokenB, "User B's Spot", 2.0, 2.0);
 
-        var getResponseA = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoint", tokenA));
-        var waypointA = await getResponseA.Content.ReadFromJsonAsync<WaypointDto>();
+        var listResponseA = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", tokenA));
+        var waypointsA = await listResponseA.Content.ReadFromJsonAsync<List<WaypointDto>>();
 
-        Assert.Equal("User A's Spot", waypointA!.Name);
+        var waypointA = Assert.Single(waypointsA!);
+        Assert.Equal("User A's Spot", waypointA.Name);
     }
 
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
-    private record WaypointDto(string Id, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt);
+    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt);
 }
