@@ -13,8 +13,10 @@ import '../services/friends_service.dart';
 import '../services/profile_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
+import '../theme.dart';
 import '../utils/color_utils.dart';
 import '../utils/jwt_utils.dart';
+import '../widgets/avatar_with_fallback.dart';
 import '../widgets/nest_details_dialog.dart';
 import '../widgets/waypoint_name_dialog.dart';
 import 'my_nests_screen.dart';
@@ -339,21 +341,39 @@ class MapScreenState extends State<MapScreen> {
               Marker(
                 key: Key('ownNestMarker_${nest.id}'),
                 point: LatLng(nest.latitude, nest.longitude),
+                width: 40,
+                height: 40,
                 child: GestureDetector(
                   onTap: () => _showOwnNestDetails(nest),
-                  // Same pin shape friends use, so both read as "the same kind of
-                  // thing" - still the theme's primary color so the user's own nests
-                  // stand out at a glance.
-                  child: Icon(Icons.house, color: Theme.of(context).colorScheme.primary),
+                  // Border is always the fixed Waypoint blue, regardless of theme -
+                  // this is "the user's own nest" signal, not a themeable role, so a
+                  // friend's differently-colored nest stays visually distinguishable.
+                  child: AvatarWithFallback(
+                    avatarKey: Key('ownNestAvatar_${nest.id}'),
+                    imageUrl: nest.profilePictureUrl,
+                    initialsSource: nest.name,
+                    radius: 14,
+                    hasBorder: true,
+                    borderColor: CroColors.waypointBlue,
+                  ),
                 ),
               ),
             for (final friendWaypoint in _friendWaypoints)
               Marker(
                 key: Key('friendMarker_${friendWaypoint.id}'),
                 point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
+                width: 40,
+                height: 40,
                 child: GestureDetector(
                   onTap: () => _showFriendNestDetails(friendWaypoint),
-                  child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color!)),
+                  child: AvatarWithFallback(
+                    avatarKey: Key('friendNestAvatar_${friendWaypoint.id}'),
+                    imageUrl: friendWaypoint.profilePictureUrl,
+                    initialsSource: friendWaypoint.name,
+                    radius: 14,
+                    hasBorder: true,
+                    borderColor: hexToColor(friendWaypoint.color!),
+                  ),
                 ),
               ),
             for (final tb in travelingBirds)

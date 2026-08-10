@@ -17,6 +17,7 @@ import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
 import 'package:cro_app/theme.dart';
 import 'package:cro_app/utils/color_utils.dart';
+import 'package:cro_app/widgets/avatar_with_fallback.dart';
 
 class _FakeWaypointService implements WaypointService {
   List<Waypoint> waypointsToReturn = [];
@@ -55,6 +56,16 @@ class _FakeWaypointService implements WaypointService {
 
   @override
   Future<void> deleteWaypoint(String token, String id) async {}
+
+  @override
+  Future<String> uploadWaypointPicture(
+    String token,
+    String waypointId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async =>
+      'https://example.com/nest-pictures/$waypointId';
 }
 
 class _FakeFriendsService implements FriendsService {
@@ -372,9 +383,18 @@ void main() {
     expect(find.byKey(const Key('friendMarker_fw2')), findsOneWidget);
   });
 
-  testWidgets('own nest marker uses a house icon in the theme primary color', (WidgetTester tester) async {
+  testWidgets('own nest marker renders as a circular avatar bordered in Waypoint blue', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
-      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+      ..waypointsToReturn = [
+        Waypoint(
+          id: 'w1',
+          userId: 'u1',
+          name: 'Backyard',
+          latitude: 1.0,
+          longitude: 2.0,
+          profilePictureUrl: 'https://example.com/nest.png',
+        )
+      ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
       theme: croTheme,
@@ -389,9 +409,9 @@ void main() {
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final ownMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('ownNestMarker_w1'));
-    final icon = (ownMarker.child as GestureDetector).child as Icon;
-    expect(icon.icon, Icons.house);
-    expect(icon.color, CroColors.waypointBlue);
+    final avatar = (ownMarker.child as GestureDetector).child as AvatarWithFallback;
+    expect(avatar.imageUrl, 'https://example.com/nest.png');
+    expect(avatar.borderColor, CroColors.waypointBlue);
   });
 
   testWidgets('tapping a friend marker shows their nest details in a dialog', (WidgetTester tester) async {
@@ -428,9 +448,13 @@ void main() {
     // No edit action for a friend's nest.
     expect(find.byKey(const Key('editNestFromDialogButton')), findsNothing);
     // The picture fetch fails in the test harness (all HTTP is stubbed), so the avatar
-    // falls back to the initial - exercises the same fallback path used elsewhere.
-    expect(find.byKey(const Key('nestDetailsAvatar')), findsOneWidget);
-    expect(find.text('A'), findsOneWidget);
+    // falls back to the initial - exercises the same fallback path used elsewhere. Scoped
+    // to the dialog's own avatar since the friend's map marker (also an AvatarWithFallback,
+    // also falling back to "A") is still visible behind the dialog.
+    expect(
+      find.descendant(of: find.byKey(const Key('nestDetailsAvatar')), matching: find.text('A')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('tapping the own nest marker shows "Your nest", the nest name, and an edit action',
@@ -539,8 +563,8 @@ void main() {
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final friendMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('friendMarker_fw1'));
-    final icon = (friendMarker.child as GestureDetector).child as Icon;
-    expect(icon.color, hexToColor('#1E88E5'));
+    final avatar = (friendMarker.child as GestureDetector).child as AvatarWithFallback;
+    expect(avatar.borderColor, hexToColor('#1E88E5'));
   });
 
   testWidgets('renders a flight-path line and moving marker for an in-flight own bird',
