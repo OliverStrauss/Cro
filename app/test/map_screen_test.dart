@@ -5,9 +5,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:cro_app/models/bird.dart';
+import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
+import 'package:cro_app/services/bird_service.dart';
 import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
@@ -55,9 +58,13 @@ class _FakeWaypointService implements WaypointService {
 
 class _FakeFriendsService implements FriendsService {
   List<Waypoint> friendWaypointsToReturn = [];
+  List<FriendBird> friendsBirdsToReturn = [];
 
   @override
   Future<List<Waypoint>> getFriendsWaypoints(String token) async => friendWaypointsToReturn;
+
+  @override
+  Future<List<FriendBird>> getFriendsBirds(String token) async => friendsBirdsToReturn;
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -77,6 +84,42 @@ class _FakeProfileService implements ProfileService {
   Future<dynamic> noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
 }
+
+class _FakeBirdService implements BirdService {
+  List<Bird> birdsToReturn = [];
+  Object? errorToThrow;
+  int listBirdsCallCount = 0;
+
+  @override
+  Future<List<Bird>> listBirds(String token) async {
+    listBirdsCallCount++;
+    if (errorToThrow != null) throw errorToThrow!;
+    return birdsToReturn;
+  }
+
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
+}
+
+Bird _travelingBird(
+  String id, {
+  required String nestFromId,
+  required String nestToId,
+  DateTime? departedAt,
+  DateTime? estimatedArrivalAt,
+}) =>
+    Bird(
+      id: id,
+      userId: 'u1',
+      name: 'Bird $id',
+      isTraveling: true,
+      nestFromId: nestFromId,
+      nestToId: nestToId,
+      type: 'Sparrow',
+      departedAt: departedAt ?? DateTime.now().subtract(const Duration(minutes: 1)),
+      estimatedArrivalAt: estimatedArrivalAt ?? DateTime.now().add(const Duration(minutes: 1)),
+    );
 
 // A syntactically valid (unsigned) JWT with the given subject - MapScreen decodes this
 // client-side to know which user id to fetch its own profile for.
@@ -99,7 +142,8 @@ void main() {
           authState: authState,
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
 
     expect(find.byKey(const Key('mapLoadingIndicator')), findsOneWidget);
@@ -114,7 +158,8 @@ void main() {
           authState: authState,
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -133,7 +178,8 @@ void main() {
           authState: authState,
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -150,7 +196,8 @@ void main() {
           authState: authState,
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -166,7 +213,8 @@ void main() {
           authState: authState,
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -182,7 +230,8 @@ void main() {
           authState: authState,
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -198,7 +247,8 @@ void main() {
           authState: authState,
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -226,7 +276,8 @@ void main() {
           authState: authState,
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -274,7 +325,8 @@ void main() {
           authState: authState,
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -310,7 +362,8 @@ void main() {
           authState: authState,
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -327,7 +380,8 @@ void main() {
           authState: authState,
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -357,7 +411,8 @@ void main() {
           authState: authState,
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -386,7 +441,8 @@ void main() {
           authState: authState,
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -407,7 +463,8 @@ void main() {
           authState: authState,
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -429,6 +486,7 @@ void main() {
                   waypointService: _FakeWaypointService(),
                   friendsService: _FakeFriendsService(),
                   profileService: _FakeProfileService(),
+                  birdService: _FakeBirdService(),
                   pickLocationMode: true,
                 ),
               ),
@@ -463,7 +521,8 @@ void main() {
           authState: authState,
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
-          profileService: _FakeProfileService()),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
 
@@ -480,5 +539,290 @@ void main() {
     final friendMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('friendMarker_fw1'));
     final icon = (friendMarker.child as GestureDetector).child as Icon;
     expect(icon.color, hexToColor('#1E88E5'));
+  });
+
+  testWidgets('renders a flight-path line and moving marker for an in-flight own bird',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [_travelingBird('b1', nestFromId: 'w1', nestToId: 'w2')];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('birdMarker_b1')), findsOneWidget);
+    // find.byType(PolylineLayer) doesn't match a generic PolylineLayer<String> instance
+    // (exact-runtimeType comparison vs. a specific generic instantiation) - use an `is`
+    // predicate instead, which does the right thing for generics.
+    final polylineLayerFinder = find.byWidgetPredicate((w) => w is PolylineLayer);
+    expect(polylineLayerFinder, findsOneWidget);
+    final polylineLayer = tester.widget(polylineLayerFinder) as PolylineLayer;
+    expect(polylineLayer.polylines.map((p) => p.hitValue), contains('b1'));
+  });
+
+  testWidgets('renders a flight-path line and moving marker for a friend\'s in-flight bird, colored by sender',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            userId: 'friend1',
+            name: "Friend's Nest",
+            latitude: 1.002,
+            longitude: 2.002,
+            username: 'friendo',
+            color: '#1E88E5'),
+      ]
+      ..friendsBirdsToReturn = [
+        FriendBird(
+          id: 'fb1',
+          userId: 'friend1',
+          username: 'friendo',
+          color: '#1E88E5',
+          name: "Friendo's Bird",
+          type: 'Sparrow',
+          nestFromId: 'fw1',
+          nestToId: 'w1',
+          departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+        ),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pumpAndSettle();
+
+    final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
+    final birdMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('birdMarker_fb1'));
+    final icon = birdMarker.child as Icon;
+    expect(icon.color, hexToColor('#1E88E5'));
+
+    final polylineLayerFinder = find.byWidgetPredicate((w) => w is PolylineLayer);
+    final polylineLayer = tester.widget(polylineLayerFinder) as PolylineLayer;
+    final polyline = polylineLayer.polylines.singleWhere((p) => p.hitValue == 'fb1');
+    expect(polyline.color, hexToColor('#1E88E5'));
+  });
+
+  testWidgets('a non-traveling bird gets no marker or line', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        Bird(id: 'b1', userId: 'u1', name: 'Bird b1', currentNestId: 'w1', isTraveling: false, type: 'Sparrow'),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('birdMarker_b1')), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is PolylineLayer), findsNothing);
+  });
+
+  group('interpolatedBirdPosition', () {
+    final origin = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 0.0, longitude: 0.0);
+    final destination = Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 10.0, longitude: 20.0);
+    final departedAt = DateTime(2026, 1, 1, 0, 0, 0);
+    final estimatedArrivalAt = DateTime(2026, 1, 1, 1, 0, 0); // 1 hour flight
+
+    // Not the lat/lng midpoint (5.0, 10.0): the position is lerped in the same EPSG:3857
+    // projected space PolylineLayer draws its straight line in, so it lands wherever the
+    // 50%-by-projected-distance point on that line unprojects back to - Mercator's
+    // nonlinear north-south scale means that's a hair north of the naive lat midpoint,
+    // and this is what keeps the marker glued to the line at every latitude.
+    test('returns the point 50% along the projected flight line at 50% elapsed', () {
+      final position = interpolatedBirdPosition(
+        origin: origin,
+        destination: destination,
+        departedAt: departedAt,
+        estimatedArrivalAt: estimatedArrivalAt,
+        now: departedAt.add(const Duration(minutes: 30)),
+      );
+      expect(position.latitude, closeTo(5.0191, 0.0001));
+      expect(position.longitude, closeTo(10.0, 0.0001));
+    });
+
+    test('clamps to the destination once now is past the ETA', () {
+      final position = interpolatedBirdPosition(
+        origin: origin,
+        destination: destination,
+        departedAt: departedAt,
+        estimatedArrivalAt: estimatedArrivalAt,
+        now: estimatedArrivalAt.add(const Duration(hours: 5)),
+      );
+      expect(position.latitude, destination.latitude);
+      expect(position.longitude, destination.longitude);
+    });
+
+    test('clamps to the origin if now is before departure (clock skew)', () {
+      final position = interpolatedBirdPosition(
+        origin: origin,
+        destination: destination,
+        departedAt: departedAt,
+        estimatedArrivalAt: estimatedArrivalAt,
+        now: departedAt.subtract(const Duration(minutes: 5)),
+      );
+      expect(position.latitude, origin.latitude);
+      expect(position.longitude, origin.longitude);
+    });
+
+    test('returns the destination when the flight duration is zero', () {
+      final position = interpolatedBirdPosition(
+        origin: origin,
+        destination: destination,
+        departedAt: departedAt,
+        estimatedArrivalAt: departedAt,
+        now: departedAt,
+      );
+      expect(position.latitude, destination.latitude);
+      expect(position.longitude, destination.longitude);
+    });
+
+    test('returns the destination when the flight duration is negative', () {
+      final position = interpolatedBirdPosition(
+        origin: origin,
+        destination: destination,
+        departedAt: departedAt,
+        estimatedArrivalAt: departedAt.subtract(const Duration(minutes: 1)),
+        now: departedAt,
+      );
+      expect(position.latitude, destination.latitude);
+      expect(position.longitude, destination.longitude);
+    });
+  });
+
+  group('live updates', () {
+    testWidgets('does not poll for bird updates unless startLiveUpdates() has been called',
+        (WidgetTester tester) async {
+      final fakeBirdService = _FakeBirdService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            birdService: fakeBirdService),
+      ));
+      await tester.pumpAndSettle();
+      expect(fakeBirdService.listBirdsCallCount, 1);
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(fakeBirdService.listBirdsCallCount, 1);
+    });
+
+    testWidgets('startLiveUpdates() polls birds every 3 seconds while running',
+        (WidgetTester tester) async {
+      final fakeBirdService = _FakeBirdService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            birdService: fakeBirdService),
+      ));
+      await tester.pumpAndSettle();
+      final mapState = tester.state<MapScreenState>(find.byType(MapScreen));
+      final countAfterLoad = fakeBirdService.listBirdsCallCount;
+
+      mapState.startLiveUpdates();
+      await tester.pump(const Duration(seconds: 3));
+      expect(fakeBirdService.listBirdsCallCount, countAfterLoad + 1);
+
+      await tester.pump(const Duration(seconds: 3));
+      expect(fakeBirdService.listBirdsCallCount, countAfterLoad + 2);
+
+      await tester.pump(const Duration(seconds: 3));
+      expect(fakeBirdService.listBirdsCallCount, countAfterLoad + 3);
+
+      mapState.stopLiveUpdates();
+    });
+
+    testWidgets("a bird's marker and flight line disappear after it arrives",
+        (WidgetTester tester) async {
+      final fakeWaypointService = _FakeWaypointService()
+        ..waypointsToReturn = [
+          Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+          Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+        ];
+      final fakeBirdService = _FakeBirdService()
+        ..birdsToReturn = [_travelingBird('b1', nestFromId: 'w1', nestToId: 'w2')];
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: fakeWaypointService,
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            birdService: fakeBirdService),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('birdMarker_b1')), findsOneWidget);
+
+      // Simulate the server having lazily resolved the arrival on the next poll.
+      fakeBirdService.birdsToReturn = [
+        Bird(id: 'b1', userId: 'u1', name: 'Bird b1', currentNestId: 'w2', isTraveling: false, type: 'Sparrow'),
+      ];
+
+      final mapState = tester.state<MapScreenState>(find.byType(MapScreen));
+      mapState.startLiveUpdates();
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(find.byKey(const Key('birdMarker_b1')), findsNothing);
+      expect(find.byWidgetPredicate((w) => w is PolylineLayer), findsNothing);
+
+      mapState.stopLiveUpdates();
+    });
+
+    testWidgets('dispose() cancels the live-update timer', (WidgetTester tester) async {
+      final fakeBirdService = _FakeBirdService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            birdService: fakeBirdService),
+      ));
+      await tester.pumpAndSettle();
+
+      tester.state<MapScreenState>(find.byType(MapScreen)).startLiveUpdates();
+
+      // Swap the widget tree out without calling stopLiveUpdates() first - if dispose()
+      // ever loses its cancel call, this leaves a pending Timer and the test fails at
+      // teardown with a "Timer is still pending" error.
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pumpAndSettle();
+    });
   });
 }

@@ -298,9 +298,59 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task FriendsBirds_ReturnsOnlyAcceptedFriendsInFlightBirds()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}"; // accepted, has a bird in flight
+        var usernameC = $"friend-user-c-{Guid.NewGuid():N}"; // accepted, no birds in flight
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+        var (_, tokenC) = await RegisterAndLoginAsync(usernameC, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+        await SendRequestAsync(tokenA, usernameC);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenC));
+
+        // B's birds are only lazily provisioned on first GET /birds - trigger that before
+        // creating a nest, otherwise AssignUnassignedBirdsToNestAsync has nothing to assign.
+        await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", tokenB));
+
+        // B needs two nests: creating the first auto-assigns B's 3 birds to it, the
+        // second gives somewhere for one of them to be sent to.
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0 }));
+        var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0 }));
+        var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
+
+        var birdsResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", tokenB));
+        var birds = await birdsResponse.Content.ReadFromJsonAsync<List<BirdDto>>();
+        var birdToSend = birds!.First();
+
+        var sendResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdToSend.Id}/send", tokenB,
+            new { NestId = away!.Id }));
+        sendResponse.EnsureSuccessStatusCode();
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/birds", tokenA));
+        response.EnsureSuccessStatusCode();
+        var friendsBirds = await response.Content.ReadFromJsonAsync<List<FriendBirdDto>>();
+
+        var inFlight = Assert.Single(friendsBirds!);
+        Assert.Equal(idB, inFlight.UserId);
+        Assert.Equal(usernameB, inFlight.Username);
+        Assert.Equal(birdToSend.Id, inFlight.Id);
+        Assert.NotNull(inFlight.NestFromId);
+        Assert.Equal(away.Id, inFlight.NestToId);
+    }
+
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record FriendDto(string Id, string Username, string? Color);
     private record FriendRequestDto(string Id, string Username);
     private record FriendWaypointDto(string Id, string UserId, string Username, string? Color, double Latitude, double Longitude);
+    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude);
+    private record BirdDto(string Id, string? CurrentNestId, bool IsTraveling);
+    private record FriendBirdDto(string Id, string UserId, string Username, string? Color, string? NestFromId, string? NestToId);
 }

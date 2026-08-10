@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../models/bird.dart';
+import '../models/friend_bird.dart';
 import '../models/user_profile.dart';
 import '../models/waypoint.dart';
+import '../services/bird_service.dart';
 import '../services/friends_service.dart';
 import '../services/profile_service.dart';
 import '../services/waypoint_service.dart';
@@ -19,6 +24,7 @@ class MapScreen extends StatefulWidget {
   final WaypointService waypointService;
   final FriendsService friendsService;
   final ProfileService profileService;
+  final BirdService birdService;
   // When true, this screen is a location-picker pushed from My Nests: tapping the map pops
   // the tapped LatLng back to the caller instead of opening the name-and-save flow itself.
   final bool pickLocationMode;
@@ -29,10 +35,12 @@ class MapScreen extends StatefulWidget {
     WaypointService? waypointService,
     FriendsService? friendsService,
     ProfileService? profileService,
+    BirdService? birdService,
     this.pickLocationMode = false,
   })  : waypointService = waypointService ?? WaypointService(),
         friendsService = friendsService ?? FriendsService(),
-        profileService = profileService ?? ProfileService();
+        profileService = profileService ?? ProfileService(),
+        birdService = birdService ?? BirdService();
 
   @override
   State<MapScreen> createState() => MapScreenState();
@@ -45,9 +53,12 @@ class MapScreen extends StatefulWidget {
 class MapScreenState extends State<MapScreen> {
   List<Waypoint> _ownNests = [];
   List<Waypoint> _friendWaypoints = [];
+  List<Bird> _birds = [];
+  List<FriendBird> _friendsBirds = [];
   UserProfile? _ownProfile;
   bool _isLoading = true;
   String? _errorMessage;
+  Timer? _liveUpdateTimer;
 
   @override
   void initState() {
@@ -61,6 +72,47 @@ class MapScreenState extends State<MapScreen> {
   // after a friend's color or nest changes elsewhere in the app.
   Future<void> refresh() => _loadData();
 
+  // HomeScreen calls this when the user switches to the Map tab, and stopLiveUpdates()
+  // when they switch away - IndexedStack never disposes this screen on tab switch, so
+  // without that symmetric hook a timer started here would keep polling forever in the
+  // background.
+  void startLiveUpdates() {
+    _liveUpdateTimer?.cancel(); // idempotent - NavigationBar re-fires onDestinationSelected
+    // even when re-tapping the already-selected tab.
+    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 3), (_) => _refreshBirds());
+  }
+
+  void stopLiveUpdates() {
+    _liveUpdateTimer?.cancel();
+    _liveUpdateTimer = null;
+  }
+
+  Future<void> _refreshBirds() async {
+    try {
+      final token = widget.authState.token!;
+      final results = await Future.wait([
+        widget.birdService.listBirds(token),
+        widget.friendsService.getFriendsBirds(token),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _birds = results[0] as List<Bird>;
+        _friendsBirds = results[1] as List<FriendBird>;
+      });
+    } catch (_) {
+      // Swallow - a blip on a silent background poll shouldn't blank an already-rendered
+      // map into the full error+Retry state. The next tick retries in 3s.
+    }
+  }
+
+  @override
+  void dispose() {
+    // Logout swaps HomeScreen out via ListenableBuilder in main.dart, which disposes
+    // this screen while the timer could still be armed - real, not hypothetical.
+    _liveUpdateTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -73,12 +125,16 @@ class MapScreenState extends State<MapScreen> {
       final results = await Future.wait<dynamic>([
         widget.waypointService.listWaypoints(token),
         widget.friendsService.getFriendsWaypoints(token),
+        widget.birdService.listBirds(token),
+        widget.friendsService.getFriendsBirds(token),
         if (userId != null) widget.profileService.getUser(userId),
       ]);
       setState(() {
         _ownNests = results[0] as List<Waypoint>;
         _friendWaypoints = results[1] as List<Waypoint>;
-        _ownProfile = userId != null ? results[2] as UserProfile : null;
+        _birds = results[2] as List<Bird>;
+        _friendsBirds = results[3] as List<FriendBird>;
+        _ownProfile = userId != null ? results[4] as UserProfile : null;
         _isLoading = false;
       });
     } catch (e) {
@@ -118,6 +174,55 @@ class MapScreenState extends State<MapScreen> {
       longitude: friendWaypoint.longitude,
       authState: widget.authState,
     );
+  }
+
+  // Resolves every in-flight bird visible to the caller - their own (from _birds) plus
+  // every accepted friend's (from _friendsBirds, via GET /friends/birds) - to the
+  // origin/destination nests its from/to ids refer to. Drops any bird that can't
+  // currently be placed on the map (not traveling, missing timing data, or pointing at
+  // a nest id that isn't in this user's own-plus-friends nest set - e.g. a stale race
+  // with a friend removing a nest mid-flight) rather than crashing. A bird's line/marker
+  // color always follows whoever sent it - the same red as the user's own nest markers
+  // for their own birds, or that friend's assigned color for a friend's - never the
+  // destination, so two birds converging on the same nest from different senders are
+  // still visually distinguishable.
+  List<_TravelingBird> _resolveTravelingBirds() {
+    final nestsById = <String, Waypoint>{
+      for (final nest in [..._ownNests, ..._friendWaypoints]) nest.id: nest,
+    };
+
+    final result = <_TravelingBird>[];
+    for (final bird in _birds) {
+      if (!bird.isTraveling) continue;
+      final departedAt = bird.departedAt;
+      final estimatedArrivalAt = bird.estimatedArrivalAt;
+      if (departedAt == null || estimatedArrivalAt == null) continue;
+      final origin = nestsById[bird.nestFromId];
+      final destination = nestsById[bird.nestToId];
+      if (origin == null || destination == null) continue;
+      result.add(_TravelingBird(
+        id: bird.id,
+        color: Colors.red,
+        origin: origin,
+        destination: destination,
+        departedAt: departedAt,
+        estimatedArrivalAt: estimatedArrivalAt,
+      ));
+    }
+    for (final friendBird in _friendsBirds) {
+      final origin = nestsById[friendBird.nestFromId];
+      final destination = nestsById[friendBird.nestToId];
+      if (origin == null || destination == null) continue;
+      result.add(_TravelingBird(
+        id: friendBird.id,
+        color: friendBird.color != null ? hexToColor(friendBird.color!) : Colors.grey,
+        origin: origin,
+        destination: destination,
+        departedAt: friendBird.departedAt,
+        estimatedArrivalAt: friendBird.estimatedArrivalAt,
+      ));
+    }
+    return result;
   }
 
   @visibleForTesting
@@ -192,6 +297,8 @@ class MapScreenState extends State<MapScreen> {
     }
 
     final hasOwnNests = _ownNests.isNotEmpty;
+    final travelingBirds = _resolveTravelingBirds();
+    final now = DateTime.now(); // one snapshot per build, shared by every bird this frame
     return FlutterMap(
       options: MapOptions(
         initialCenter:
@@ -212,7 +319,20 @@ class MapScreenState extends State<MapScreen> {
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.example.cro_app',
         ),
-        if (hasOwnNests || _friendWaypoints.isNotEmpty)
+        if (travelingBirds.isNotEmpty)
+          PolylineLayer<String>(polylines: [
+            for (final tb in travelingBirds)
+              Polyline<String>(
+                points: [
+                  LatLng(tb.origin.latitude, tb.origin.longitude),
+                  LatLng(tb.destination.latitude, tb.destination.longitude),
+                ],
+                color: tb.color,
+                strokeWidth: 3,
+                hitValue: tb.id,
+              ),
+          ]),
+        if (hasOwnNests || _friendWaypoints.isNotEmpty || travelingBirds.isNotEmpty)
           MarkerLayer(markers: [
             for (final nest in _ownNests)
               Marker(
@@ -234,6 +354,21 @@ class MapScreenState extends State<MapScreen> {
                   child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color!)),
                 ),
               ),
+            for (final tb in travelingBirds)
+              Marker(
+                key: Key('birdMarker_${tb.id}'),
+                point: interpolatedBirdPosition(
+                  origin: tb.origin,
+                  destination: tb.destination,
+                  departedAt: tb.departedAt,
+                  estimatedArrivalAt: tb.estimatedArrivalAt,
+                  now: now,
+                ),
+                // Same tracking icon already used for birds on BirdsScreen, colored per
+                // the sender rule above instead of hardcoded red. Purely visual - no
+                // tap/dialog, unlike the nest markers.
+                child: Icon(Icons.flutter_dash, color: tb.color),
+              ),
           ]),
         RichAttributionWidget(
           attributions: [
@@ -243,4 +378,71 @@ class MapScreenState extends State<MapScreen> {
       ],
     );
   }
+}
+
+// A traveling bird (the caller's own, or an accepted friend's) paired with its
+// already-resolved origin and destination Waypoints, non-null departedAt/
+// estimatedArrivalAt, and its sender's color - computed once per build and shared
+// between the flight-path PolylineLayer and the moving-bird Markers so both stay in
+// lockstep and neither re-does the nest lookup/null-checks.
+class _TravelingBird {
+  final String id;
+  final Color color;
+  final Waypoint origin;
+  final Waypoint destination;
+  final DateTime departedAt;
+  final DateTime estimatedArrivalAt;
+
+  const _TravelingBird({
+    required this.id,
+    required this.color,
+    required this.origin,
+    required this.destination,
+    required this.departedAt,
+    required this.estimatedArrivalAt,
+  });
+}
+
+// Lerp by elapsed-time fraction, in the same EPSG:3857 (Web Mercator) projected space
+// PolylineLayer draws its straight line in - NOT a plain lat/lng lerp. Mercator's
+// north-south scale is nonlinear in latitude, so a lat/lng lerp and a projected-space
+// lerp only agree on the equator; anywhere else (and especially on long north-south
+// legs) the lat/lng version visibly bows off the line drawn under it. Projecting first
+// makes the two mathematically the same line, so the bird marker can never drift off
+// it, no matter the route or how _fraction_ (i.e. speed) is adjusted.
+// Public (not prefixed with _) and @visibleForTesting so tests can call it directly
+// without pumping a widget.
+@visibleForTesting
+LatLng interpolatedBirdPosition({
+  required Waypoint origin,
+  required Waypoint destination,
+  required DateTime departedAt,
+  required DateTime estimatedArrivalAt,
+  required DateTime now,
+}) {
+  final totalDuration = estimatedArrivalAt.difference(departedAt);
+  if (totalDuration <= Duration.zero) {
+    return LatLng(destination.latitude, destination.longitude);
+  }
+
+  final rawFraction = now.difference(departedAt).inMilliseconds / totalDuration.inMilliseconds;
+  final fraction = rawFraction.clamp(0.0, 1.0);
+  // Short-circuit the endpoints instead of lerping with fraction 0.0/1.0: a project-then-
+  // unproject round-trip through Mercator isn't guaranteed bit-exact (trig rounding), so
+  // lerping "all the way" can land a hair off the original lat/lng.
+  if (fraction <= 0.0) {
+    return LatLng(origin.latitude, origin.longitude);
+  }
+  if (fraction >= 1.0) {
+    return LatLng(destination.latitude, destination.longitude);
+  }
+
+  final projection = const Epsg3857().projection;
+  final (originX, originY) = projection.projectXY(LatLng(origin.latitude, origin.longitude));
+  final (destX, destY) = projection.projectXY(LatLng(destination.latitude, destination.longitude));
+
+  return projection.unprojectXY(
+    originX + (destX - originX) * fraction,
+    originY + (destY - originY) * fraction,
+  );
 }
