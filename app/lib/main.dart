@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'state/auth_state.dart';
+import 'theme.dart';
 
 // Manual-dev-testing convenience only (not used by the automated test suite):
 // `flutter run --dart-define=SKIP_LOGIN=true` jumps straight past the login screen.
@@ -25,7 +26,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Cro',
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
+      theme: croTheme,
       home: ListenableBuilder(
         listenable: authState,
         builder: (context, _) {

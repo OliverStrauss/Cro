@@ -126,6 +126,30 @@ Two GitHub Actions workflows, each scoped to its own `working-directory`, run on
   through — it always runs an image's default command, no args), waits for both to be ready,
   then `dotnet restore`/`build`/`test` against `CroApp.Api.Tests`, in `/api`
 
+## UI theme / color palette
+
+The frontend uses a fixed 8-color brand palette, defined as `CroColors` and wired into a real
+`ColorScheme`/`ThemeData` (`app/lib/theme.dart`, applied in `main.dart`) rather than Flutter's
+default `ColorScheme.fromSeed`. Prefer `Theme.of(context).colorScheme.<role>` (or a `CroColors`
+constant for the rare literal, e.g. an own-nest marker's border, which is always Waypoint blue
+regardless of theme) over hardcoding a `Colors.*` value anywhere in `/app`.
+
+| Palette color | Hex | `ColorScheme` role | Usage |
+|---|---|---|---|
+| Background | `#D3D5D9` | `ThemeData.scaffoldBackgroundColor` | App canvas — a ~30% Fog/white blend, chosen to read as a visibly darker grey canvas rather than near-white, so Fog's grey carries through the whole app rather than just secondary text |
+| Surface | `#FFFFFF` | `colorScheme.surface` | Cards, bubbles |
+| Waypoint blue | `#5EB8E0` | `colorScheme.primary` | Primary, buttons, links |
+| Deep waypoint | `#2E7A9E` | `colorScheme.secondary`, `AppBarTheme` | Headers, pressed states |
+| Sky tint | `#BFE4F4` | `colorScheme.primaryContainer` | In-transit highlight, selection |
+| Ink | `#2B2F33` | `colorScheme.onSurface` | Primary text |
+| Fog | `#6B7280` | `colorScheme.onSurfaceVariant` | Secondary text, timestamps |
+| Delivery amber | `#F2A65A` | `colorScheme.tertiary` | In-transit badge, unread-message badge — used sparingly |
+
+`colorScheme.error`/`onError` are left at Material's defaults — the palette doesn't specify an
+error color. `scaffoldBackgroundColor` is set independently of `colorScheme.surface` (rather
+than letting Material 3 derive one from the other) so the palette's explicit
+canvas-vs-card-surface split is preserved exactly.
+
 ## Workflow conventions
 
 - Issues are written as Jira-style user stories: "As the CroApp, I want ... so that ..."

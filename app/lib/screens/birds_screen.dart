@@ -184,8 +184,9 @@ class BirdsScreenState extends State<BirdsScreen> {
           key: Key('birdCard_${bird.id}'),
           child: ListTile(
             // This screen only ever shows the caller's own birds, so the icon uses the same
-            // "this is yours" red already used for the user's own nest marker on the map.
-            leading: const Icon(Icons.flutter_dash, color: Colors.red),
+            // "this is yours" primary color already used for the user's own nest marker on
+            // the map.
+            leading: Icon(Icons.flutter_dash, color: Theme.of(context).colorScheme.primary),
             title: Text(bird.name),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

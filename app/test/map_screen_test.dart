@@ -15,6 +15,7 @@ import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
+import 'package:cro_app/theme.dart';
 import 'package:cro_app/utils/color_utils.dart';
 
 class _FakeWaypointService implements WaypointService {
@@ -371,11 +372,12 @@ void main() {
     expect(find.byKey(const Key('friendMarker_fw2')), findsOneWidget);
   });
 
-  testWidgets('own nest marker uses a house icon, still red', (WidgetTester tester) async {
+  testWidgets('own nest marker uses a house icon in the theme primary color', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
+      theme: croTheme,
       home: MapScreen(
           authState: authState,
           waypointService: fakeWaypointService,
@@ -389,7 +391,7 @@ void main() {
     final ownMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('ownNestMarker_w1'));
     final icon = (ownMarker.child as GestureDetector).child as Icon;
     expect(icon.icon, Icons.house);
-    expect(icon.color, Colors.red);
+    expect(icon.color, CroColors.waypointBlue);
   });
 
   testWidgets('tapping a friend marker shows their nest details in a dialog', (WidgetTester tester) async {

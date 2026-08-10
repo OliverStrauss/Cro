@@ -182,10 +182,9 @@ class MapScreenState extends State<MapScreen> {
   // currently be placed on the map (not traveling, missing timing data, or pointing at
   // a nest id that isn't in this user's own-plus-friends nest set - e.g. a stale race
   // with a friend removing a nest mid-flight) rather than crashing. A bird's line/marker
-  // color always follows whoever sent it - the same red as the user's own nest markers
-  // for their own birds, or that friend's assigned color for a friend's - never the
-  // destination, so two birds converging on the same nest from different senders are
-  // still visually distinguishable.
+  // color always follows whoever sent it - the theme's primary color for their own birds,
+  // or that friend's assigned color for a friend's - never the destination, so two birds
+  // converging on the same nest from different senders are still visually distinguishable.
   List<_TravelingBird> _resolveTravelingBirds() {
     final nestsById = <String, Waypoint>{
       for (final nest in [..._ownNests, ..._friendWaypoints]) nest.id: nest,
@@ -202,7 +201,7 @@ class MapScreenState extends State<MapScreen> {
       if (origin == null || destination == null) continue;
       result.add(_TravelingBird(
         id: bird.id,
-        color: Colors.red,
+        color: Theme.of(context).colorScheme.primary,
         origin: origin,
         destination: destination,
         departedAt: departedAt,
@@ -215,7 +214,9 @@ class MapScreenState extends State<MapScreen> {
       if (origin == null || destination == null) continue;
       result.add(_TravelingBird(
         id: friendBird.id,
-        color: friendBird.color != null ? hexToColor(friendBird.color!) : Colors.grey,
+        color: friendBird.color != null
+            ? hexToColor(friendBird.color!)
+            : Theme.of(context).colorScheme.onSurfaceVariant,
         origin: origin,
         destination: destination,
         departedAt: friendBird.departedAt,
@@ -341,8 +342,9 @@ class MapScreenState extends State<MapScreen> {
                 child: GestureDetector(
                   onTap: () => _showOwnNestDetails(nest),
                   // Same pin shape friends use, so both read as "the same kind of
-                  // thing" - still red so the user's own nests stand out at a glance.
-                  child: const Icon(Icons.house, color: Colors.red),
+                  // thing" - still the theme's primary color so the user's own nests
+                  // stand out at a glance.
+                  child: Icon(Icons.house, color: Theme.of(context).colorScheme.primary),
                 ),
               ),
             for (final friendWaypoint in _friendWaypoints)
