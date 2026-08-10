@@ -136,7 +136,7 @@ regardless of theme) over hardcoding a `Colors.*` value anywhere in `/app`.
 
 | Palette color | Hex | `ColorScheme` role | Usage |
 |---|---|---|---|
-| Background | `#F4F6F8` | `ThemeData.scaffoldBackgroundColor` | App canvas |
+| Background | `#D3D5D9` | `ThemeData.scaffoldBackgroundColor` | App canvas — a ~30% Fog/white blend, chosen to read as a visibly darker grey canvas rather than near-white, so Fog's grey carries through the whole app rather than just secondary text |
 | Surface | `#FFFFFF` | `colorScheme.surface` | Cards, bubbles |
 | Waypoint blue | `#5EB8E0` | `colorScheme.primary` | Primary, buttons, links |
 | Deep waypoint | `#2E7A9E` | `colorScheme.secondary`, `AppBarTheme` | Headers, pressed states |

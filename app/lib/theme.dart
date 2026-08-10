@@ -7,7 +7,10 @@ import 'package:flutter/material.dart';
 class CroColors {
   CroColors._();
 
-  static const background = Color(0xFFF4F6F8);
+  // A darker, more clearly grey canvas than the original near-white spec - a light blend
+  // of Fog with white (roughly 30% Fog) rather than a flat near-white, per explicit
+  // preference for Fog's grey to read through the app background, not just secondary text.
+  static const background = Color(0xFFD3D5D9);
   static const surface = Color(0xFFFFFFFF);
   static const waypointBlue = Color(0xFF5EB8E0);
   static const deepWaypoint = Color(0xFF2E7A9E);
