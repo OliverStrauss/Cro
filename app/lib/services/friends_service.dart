@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import '../models/friend.dart';
+import '../models/friend_bird.dart';
 import '../models/friend_request.dart';
 import '../models/waypoint.dart';
 
@@ -93,6 +94,13 @@ class FriendsService {
         await _get('/friends/waypoints', token, "Could not load friends' waypoints");
     return (jsonDecode(response.body) as List<dynamic>)
         .map((e) => Waypoint.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<FriendBird>> getFriendsBirds(String token) async {
+    final response = await _get('/friends/birds', token, "Could not load friends' birds");
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => FriendBird.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

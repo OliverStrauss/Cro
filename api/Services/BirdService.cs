@@ -29,6 +29,22 @@ public class BirdService(
         return resolved;
     }
 
+    // Friends'-birds-on-the-map support: unlike ListAsync, this deliberately does NOT
+    // provision - a friend with zero birds simply has none traveling, and viewing someone
+    // else's map shouldn't have the side effect of creating bird documents in their
+    // account. Still resolves arrivals so a friend's just-landed bird doesn't show as
+    // traveling for a few extra seconds compared to their own GET /birds view of it.
+    public async Task<List<Bird>> ListTravelingAsync(string userId)
+    {
+        var existing = await birdRepository.ListByUserIdAsync(userId);
+        var resolved = new List<Bird>();
+        foreach (var bird in existing.Where(b => b.IsTraveling))
+        {
+            resolved.Add(await ResolveArrivalIfDueAsync(bird));
+        }
+        return resolved.Where(b => b.IsTraveling).ToList();
+    }
+
     // Lazy provisioning: some users predate this feature and have zero birds, and every
     // new registration also hits this path the first time it calls GET /birds - keeping
     // creation here (not in POST /users) means there's exactly one place that ever

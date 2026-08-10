@@ -562,6 +562,53 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
 .RequireAuthorization()
 .WithName("GetFriendsWaypoints");
 
+app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository userRepo, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userRepo.GetByIdAsync(userId);
+    if (user is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var acceptedFriends = (user.Friends ?? []).Where(f => f.Status == FriendStatus.Accepted).ToList();
+
+    // Every flight path/bird on the map is colored by whoever sent it, not by
+    // destination, so the caller's own nest can show several different friends'
+    // colors converging on it - each friend's Color here is that friend's own
+    // assigned color, same field GetFriendsWaypoints uses for their nest pins.
+    var results = new List<object>();
+    foreach (var friend in acceptedFriends)
+    {
+        var travelingBirds = await birdService.ListTravelingAsync(friend.Id);
+        foreach (var bird in travelingBirds)
+        {
+            results.Add(new
+            {
+                bird.Id,
+                UserId = friend.Id,
+                friend.Username,
+                friend.Color,
+                bird.Name,
+                bird.Type,
+                bird.NestFromId,
+                bird.NestToId,
+                bird.DepartedAt,
+                bird.EstimatedArrivalAt,
+            });
+        }
+    }
+
+    return Results.Ok(results);
+})
+.RequireAuthorization()
+.WithName("GetFriendsBirds");
+
 app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;

@@ -25,10 +25,10 @@ class BirdsScreen extends StatefulWidget {
         friendsService = friendsService ?? FriendsService();
 
   @override
-  State<BirdsScreen> createState() => _BirdsScreenState();
+  State<BirdsScreen> createState() => BirdsScreenState();
 }
 
-class _BirdsScreenState extends State<BirdsScreen> {
+class BirdsScreenState extends State<BirdsScreen> {
   List<Bird> _birds = [];
   Map<String, String> _nestNameById = {};
   bool _isLoading = true;
@@ -39,6 +39,12 @@ class _BirdsScreenState extends State<BirdsScreen> {
     super.initState();
     _load();
   }
+
+  // IndexedStack keeps this screen alive rather than disposing it, so switching tabs
+  // doesn't naturally re-fetch - exposed so HomeScreen can force a refresh whenever the
+  // user switches to this tab (e.g. after creating their first nest, which assigns any
+  // previously-nestless birds server-side).
+  Future<void> refresh() => _load();
 
   Future<void> _load() async {
     setState(() {
@@ -172,7 +178,7 @@ class _BirdsScreenState extends State<BirdsScreen> {
 
     return ListView(
       children: _birds.map((bird) {
-        final canSend = !bird.isTraveling && bird.currentNestId != null;
+        final canSend = !bird.isTraveling;
         final eta = _etaText(bird);
         return Card(
           key: Key('birdCard_${bird.id}'),

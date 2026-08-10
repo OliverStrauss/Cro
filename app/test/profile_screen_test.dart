@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:cro_app/models/friend.dart';
+import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/friend_request.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
@@ -100,6 +101,9 @@ class _FakeFriendsService implements FriendsService {
 
   @override
   Future<List<Waypoint>> getFriendsWaypoints(String token) async => [];
+
+  @override
+  Future<List<FriendBird>> getFriendsBirds(String token) async => [];
 
   @override
   Future<void> setFriendColor(String token, String friendId, String color) async {
