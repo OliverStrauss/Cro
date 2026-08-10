@@ -68,6 +68,16 @@ class _FakeWaypointService implements WaypointService {
     lastDeletedId = id;
     waypointsToReturn = waypointsToReturn.where((w) => w.id != id).toList();
   }
+
+  @override
+  Future<String> uploadWaypointPicture(
+    String token,
+    String waypointId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async =>
+      'https://example.com/nest-pictures/$waypointId';
 }
 
 class _FakeFriendsService implements FriendsService {

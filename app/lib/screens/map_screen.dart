@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -6,15 +7,15 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/bird.dart';
 import '../models/friend_bird.dart';
-import '../models/user_profile.dart';
 import '../models/waypoint.dart';
 import '../services/bird_service.dart';
 import '../services/friends_service.dart';
 import '../services/profile_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
+import '../theme.dart';
 import '../utils/color_utils.dart';
-import '../utils/jwt_utils.dart';
+import '../widgets/avatar_with_fallback.dart';
 import '../widgets/nest_details_dialog.dart';
 import '../widgets/waypoint_name_dialog.dart';
 import 'my_nests_screen.dart';
@@ -55,7 +56,6 @@ class MapScreenState extends State<MapScreen> {
   List<Waypoint> _friendWaypoints = [];
   List<Bird> _birds = [];
   List<FriendBird> _friendsBirds = [];
-  UserProfile? _ownProfile;
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _liveUpdateTimer;
@@ -121,20 +121,17 @@ class MapScreenState extends State<MapScreen> {
 
     try {
       final token = widget.authState.token!;
-      final userId = jwtSubject(token);
-      final results = await Future.wait<dynamic>([
+      final results = await Future.wait([
         widget.waypointService.listWaypoints(token),
         widget.friendsService.getFriendsWaypoints(token),
         widget.birdService.listBirds(token),
         widget.friendsService.getFriendsBirds(token),
-        if (userId != null) widget.profileService.getUser(userId),
       ]);
       setState(() {
         _ownNests = results[0] as List<Waypoint>;
         _friendWaypoints = results[1] as List<Waypoint>;
         _birds = results[2] as List<Bird>;
         _friendsBirds = results[3] as List<FriendBird>;
-        _ownProfile = userId != null ? results[4] as UserProfile : null;
         _isLoading = false;
       });
     } catch (e) {
@@ -145,21 +142,29 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showOwnNestDetails(Waypoint nest) {
-    NestDetailsDialog.show(
+  // Same popup shape as a friend's nest below - own nests additionally get editable
+  // name/picture and a "Birds here" list of the caller's own idle birds parked at this
+  // nest (never a friend's inbox, never birds sent by anyone but the caller). Refreshes
+  // after closing since a rename/re-picture or a send from inside the dialog should be
+  // reflected on this screen's own-nest marker and bird data too.
+  Future<void> _showOwnNestDetails(Waypoint nest) async {
+    await NestDetailsDialog.show(
       context,
-      // Falls back to the nest's own name only if the own-profile fetch itself
-      // failed - an edge case, not the common path (the fetch is otherwise part of
-      // the same all-or-nothing _loadData load as the nest itself).
-      username: _ownProfile?.username ?? nest.name,
+      username: nest.name,
       isOwn: true,
-      profilePictureUrl: _ownProfile?.profilePictureUrl,
+      profilePictureUrl: nest.profilePictureUrl,
       waypointId: nest.id,
       waypointName: nest.name,
       latitude: nest.latitude,
       longitude: nest.longitude,
       authState: widget.authState,
+      residentBirds: _birds.where((b) => b.currentNestId == nest.id && !b.isTraveling).toList(),
+      waypointService: widget.waypointService,
+      friendsService: widget.friendsService,
+      birdService: widget.birdService,
+      profileService: widget.profileService,
     );
+    refresh();
   }
 
   void _showFriendNestDetails(Waypoint friendWaypoint) {
@@ -314,6 +319,11 @@ class MapScreenState extends State<MapScreen> {
         // Prevents panning past the poles into the background-color void.
         cameraConstraint: const CameraConstraint.containLatitude(),
         onTap: (tapPosition, point) => handleMapTap(point),
+        // Rotation is disabled entirely (rather than support it) so the flight-line arrows
+        // below can always be drawn pointing in their on-screen compass bearing - allowing
+        // rotation would mean either re-rotating every arrow to track the camera or letting
+        // them visually drift from the direction they're actually pointing.
+        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
       ),
       children: [
         TileLayer(
@@ -339,21 +349,39 @@ class MapScreenState extends State<MapScreen> {
               Marker(
                 key: Key('ownNestMarker_${nest.id}'),
                 point: LatLng(nest.latitude, nest.longitude),
+                width: 40,
+                height: 40,
                 child: GestureDetector(
                   onTap: () => _showOwnNestDetails(nest),
-                  // Same pin shape friends use, so both read as "the same kind of
-                  // thing" - still the theme's primary color so the user's own nests
-                  // stand out at a glance.
-                  child: Icon(Icons.house, color: Theme.of(context).colorScheme.primary),
+                  // Border is always the fixed Waypoint blue, regardless of theme -
+                  // this is "the user's own nest" signal, not a themeable role, so a
+                  // friend's differently-colored nest stays visually distinguishable.
+                  child: AvatarWithFallback(
+                    avatarKey: Key('ownNestAvatar_${nest.id}'),
+                    imageUrl: nest.profilePictureUrl,
+                    initialsSource: nest.name,
+                    radius: 14,
+                    hasBorder: true,
+                    borderColor: CroColors.waypointBlue,
+                  ),
                 ),
               ),
             for (final friendWaypoint in _friendWaypoints)
               Marker(
                 key: Key('friendMarker_${friendWaypoint.id}'),
                 point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
+                width: 40,
+                height: 40,
                 child: GestureDetector(
                   onTap: () => _showFriendNestDetails(friendWaypoint),
-                  child: Icon(Icons.location_pin, color: hexToColor(friendWaypoint.color!)),
+                  child: AvatarWithFallback(
+                    avatarKey: Key('friendNestAvatar_${friendWaypoint.id}'),
+                    imageUrl: friendWaypoint.profilePictureUrl,
+                    initialsSource: friendWaypoint.name,
+                    radius: 14,
+                    hasBorder: true,
+                    borderColor: hexToColor(friendWaypoint.color!),
+                  ),
                 ),
               ),
             for (final tb in travelingBirds)
@@ -371,6 +399,21 @@ class MapScreenState extends State<MapScreen> {
                 // tap/dialog, unlike the nest markers.
                 child: Icon(Icons.flutter_dash, color: tb.color),
               ),
+            for (final tb in travelingBirds)
+              for (final fraction in _arrowFractions)
+                Marker(
+                  key: Key('flightArrow_${tb.id}_$fraction'),
+                  point: positionAtFraction(origin: tb.origin, destination: tb.destination, fraction: fraction),
+                  width: 16,
+                  height: 16,
+                  // Points up by default, rotated clockwise by the line's compass bearing -
+                  // subtle (low opacity, small) so it reads as a direction hint on the line
+                  // rather than competing with the bird marker itself.
+                  child: Transform.rotate(
+                    angle: bearingDegrees(origin: tb.origin, destination: tb.destination) * math.pi / 180,
+                    child: Icon(Icons.arrow_upward, size: 14, color: tb.color.withValues(alpha: 0.6)),
+                  ),
+                ),
           ]),
         RichAttributionWidget(
           attributions: [
@@ -405,15 +448,43 @@ class _TravelingBird {
   });
 }
 
-// Lerp by elapsed-time fraction, in the same EPSG:3857 (Web Mercator) projected space
-// PolylineLayer draws its straight line in - NOT a plain lat/lng lerp. Mercator's
-// north-south scale is nonlinear in latitude, so a lat/lng lerp and a projected-space
-// lerp only agree on the equator; anywhere else (and especially on long north-south
-// legs) the lat/lng version visibly bows off the line drawn under it. Projecting first
-// makes the two mathematically the same line, so the bird marker can never drift off
-// it, no matter the route or how _fraction_ (i.e. speed) is adjusted.
+// Lerp by _fraction_, in the same EPSG:3857 (Web Mercator) projected space PolylineLayer
+// draws its straight line in - NOT a plain lat/lng lerp. Mercator's north-south scale is
+// nonlinear in latitude, so a lat/lng lerp and a projected-space lerp only agree on the
+// equator; anywhere else (and especially on long north-south legs) the lat/lng version
+// visibly bows off the line drawn under it. Projecting first makes the two mathematically
+// the same line, so a point placed with this can never drift off it. Shared by
+// interpolatedBirdPosition (time-based fraction) and the flight-arrow markers (fixed
+// fractions along the line) below.
 // Public (not prefixed with _) and @visibleForTesting so tests can call it directly
 // without pumping a widget.
+@visibleForTesting
+LatLng positionAtFraction({
+  required Waypoint origin,
+  required Waypoint destination,
+  required double fraction,
+}) {
+  final clamped = fraction.clamp(0.0, 1.0);
+  // Short-circuit the endpoints instead of lerping with fraction 0.0/1.0: a project-then-
+  // unproject round-trip through Mercator isn't guaranteed bit-exact (trig rounding), so
+  // lerping "all the way" can land a hair off the original lat/lng.
+  if (clamped <= 0.0) {
+    return LatLng(origin.latitude, origin.longitude);
+  }
+  if (clamped >= 1.0) {
+    return LatLng(destination.latitude, destination.longitude);
+  }
+
+  final projection = const Epsg3857().projection;
+  final (originX, originY) = projection.projectXY(LatLng(origin.latitude, origin.longitude));
+  final (destX, destY) = projection.projectXY(LatLng(destination.latitude, destination.longitude));
+
+  return projection.unprojectXY(
+    originX + (destX - originX) * clamped,
+    originY + (destY - originY) * clamped,
+  );
+}
+
 @visibleForTesting
 LatLng interpolatedBirdPosition({
   required Waypoint origin,
@@ -427,24 +498,29 @@ LatLng interpolatedBirdPosition({
     return LatLng(destination.latitude, destination.longitude);
   }
 
-  final rawFraction = now.difference(departedAt).inMilliseconds / totalDuration.inMilliseconds;
-  final fraction = rawFraction.clamp(0.0, 1.0);
-  // Short-circuit the endpoints instead of lerping with fraction 0.0/1.0: a project-then-
-  // unproject round-trip through Mercator isn't guaranteed bit-exact (trig rounding), so
-  // lerping "all the way" can land a hair off the original lat/lng.
-  if (fraction <= 0.0) {
-    return LatLng(origin.latitude, origin.longitude);
-  }
-  if (fraction >= 1.0) {
-    return LatLng(destination.latitude, destination.longitude);
-  }
+  final fraction = now.difference(departedAt).inMilliseconds / totalDuration.inMilliseconds;
+  return positionAtFraction(origin: origin, destination: destination, fraction: fraction);
+}
 
+// The compass bearing (degrees clockwise from north, [0, 360)) of the straight
+// projected-space line from origin to destination - i.e. the visual direction that line
+// is actually drawn in on an unrotated, north-up map, not the great-circle initial bearing
+// (which would drift from the rendered straight line over long routes). Epsg3857's
+// projected Y increases with latitude (north), matching screen "up" on a north-up map, so
+// this is the standard atan2(east-component, north-component) compass-bearing formula.
+@visibleForTesting
+double bearingDegrees({
+  required Waypoint origin,
+  required Waypoint destination,
+}) {
   final projection = const Epsg3857().projection;
   final (originX, originY) = projection.projectXY(LatLng(origin.latitude, origin.longitude));
   final (destX, destY) = projection.projectXY(LatLng(destination.latitude, destination.longitude));
 
-  return projection.unprojectXY(
-    originX + (destX - originX) * fraction,
-    originY + (destY - originY) * fraction,
-  );
+  final radians = math.atan2(destX - originX, destY - originY);
+  return (radians * 180 / math.pi + 360) % 360;
 }
+
+// Fixed fractions along a flight line at which to draw a small directional arrow, evenly
+// spaced but not at the endpoints themselves (0.0/1.0 sit right on the nest markers).
+const List<double> _arrowFractions = [0.2, 0.4, 0.6, 0.8];
