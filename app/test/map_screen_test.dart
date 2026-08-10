@@ -671,6 +671,13 @@ void main() {
     final polylineLayer = tester.widget(polylineLayerFinder) as PolylineLayer;
     final polyline = polylineLayer.polylines.singleWhere((p) => p.hitValue == 'fb1');
     expect(polyline.color, hexToColor('#1E88E5'));
+
+    // Flight-line arrows aren't just an own-bird thing - they render for every traveling
+    // bird visible on the map, friends' included, since both feed the same travelingBirds
+    // list the arrow markers are built from.
+    for (final fraction in [0.2, 0.4, 0.6, 0.8]) {
+      expect(find.byKey(Key('flightArrow_fb1_$fraction')), findsOneWidget);
+    }
   });
 
   testWidgets('a non-traveling bird gets no marker or line', (WidgetTester tester) async {
