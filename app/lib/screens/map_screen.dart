@@ -7,7 +7,6 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/bird.dart';
 import '../models/friend_bird.dart';
-import '../models/user_profile.dart';
 import '../models/waypoint.dart';
 import '../services/bird_service.dart';
 import '../services/friends_service.dart';
@@ -16,7 +15,6 @@ import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
 import '../theme.dart';
 import '../utils/color_utils.dart';
-import '../utils/jwt_utils.dart';
 import '../widgets/avatar_with_fallback.dart';
 import '../widgets/nest_details_dialog.dart';
 import '../widgets/waypoint_name_dialog.dart';
@@ -58,7 +56,6 @@ class MapScreenState extends State<MapScreen> {
   List<Waypoint> _friendWaypoints = [];
   List<Bird> _birds = [];
   List<FriendBird> _friendsBirds = [];
-  UserProfile? _ownProfile;
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _liveUpdateTimer;
@@ -124,20 +121,17 @@ class MapScreenState extends State<MapScreen> {
 
     try {
       final token = widget.authState.token!;
-      final userId = jwtSubject(token);
-      final results = await Future.wait<dynamic>([
+      final results = await Future.wait([
         widget.waypointService.listWaypoints(token),
         widget.friendsService.getFriendsWaypoints(token),
         widget.birdService.listBirds(token),
         widget.friendsService.getFriendsBirds(token),
-        if (userId != null) widget.profileService.getUser(userId),
       ]);
       setState(() {
         _ownNests = results[0] as List<Waypoint>;
         _friendWaypoints = results[1] as List<Waypoint>;
         _birds = results[2] as List<Bird>;
         _friendsBirds = results[3] as List<FriendBird>;
-        _ownProfile = userId != null ? results[4] as UserProfile : null;
         _isLoading = false;
       });
     } catch (e) {
@@ -148,21 +142,29 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showOwnNestDetails(Waypoint nest) {
-    NestDetailsDialog.show(
+  // Same popup shape as a friend's nest below - own nests additionally get editable
+  // name/picture and a "Birds here" list of the caller's own idle birds parked at this
+  // nest (never a friend's inbox, never birds sent by anyone but the caller). Refreshes
+  // after closing since a rename/re-picture or a send from inside the dialog should be
+  // reflected on this screen's own-nest marker and bird data too.
+  Future<void> _showOwnNestDetails(Waypoint nest) async {
+    await NestDetailsDialog.show(
       context,
-      // Falls back to the nest's own name only if the own-profile fetch itself
-      // failed - an edge case, not the common path (the fetch is otherwise part of
-      // the same all-or-nothing _loadData load as the nest itself).
-      username: _ownProfile?.username ?? nest.name,
+      username: nest.name,
       isOwn: true,
-      profilePictureUrl: _ownProfile?.profilePictureUrl,
+      profilePictureUrl: nest.profilePictureUrl,
       waypointId: nest.id,
       waypointName: nest.name,
       latitude: nest.latitude,
       longitude: nest.longitude,
       authState: widget.authState,
+      residentBirds: _birds.where((b) => b.currentNestId == nest.id && !b.isTraveling).toList(),
+      waypointService: widget.waypointService,
+      friendsService: widget.friendsService,
+      birdService: widget.birdService,
+      profileService: widget.profileService,
     );
+    refresh();
   }
 
   void _showFriendNestDetails(Waypoint friendWaypoint) {

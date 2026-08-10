@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:cro_app/models/bird.dart';
@@ -23,6 +25,8 @@ class _FakeWaypointService implements WaypointService {
   List<Waypoint> waypointsToReturn = [];
   Object? errorToThrow;
   Waypoint? lastCreatedWaypoint;
+  String? lastUploadedWaypointId;
+  String? lastUploadedFilename;
   int _nextId = 1;
 
   @override
@@ -64,8 +68,11 @@ class _FakeWaypointService implements WaypointService {
     List<int> bytes, {
     required String filename,
     required String contentType,
-  }) async =>
-      'https://example.com/nest-pictures/$waypointId';
+  }) async {
+    lastUploadedWaypointId = waypointId;
+    lastUploadedFilename = filename;
+    return 'https://example.com/nest-pictures/$waypointId';
+  }
 }
 
 class _FakeFriendsService implements FriendsService {
@@ -85,12 +92,17 @@ class _FakeFriendsService implements FriendsService {
 
 class _FakeProfileService implements ProfileService {
   UserProfile? profileToReturn = UserProfile(id: 'u1', username: 'me', email: 'me@example.com');
+  XFile? imageToReturn;
 
   @override
   Future<UserProfile> getUser(String userId) async {
     if (profileToReturn == null) throw ProfileException('not found');
     return profileToReturn!;
   }
+
+  // Used by the own-nest dialog's picture-change flow.
+  @override
+  Future<XFile?> pickImage() async => imageToReturn;
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -101,12 +113,24 @@ class _FakeBirdService implements BirdService {
   List<Bird> birdsToReturn = [];
   Object? errorToThrow;
   int listBirdsCallCount = 0;
+  String? lastSentBirdId;
+  String? lastSentNestId;
+  String? lastSentContent;
 
   @override
   Future<List<Bird>> listBirds(String token) async {
     listBirdsCallCount++;
     if (errorToThrow != null) throw errorToThrow!;
     return birdsToReturn;
+  }
+
+  // Used by the own-nest dialog's "Birds here" send flow.
+  @override
+  Future<Bird> sendBird(String token, String birdId, {required String nestId, String? content}) async {
+    lastSentBirdId = birdId;
+    lastSentNestId = nestId;
+    lastSentContent = content;
+    return Bird(id: birdId, userId: 'u1', name: 'Bird $birdId', isTraveling: true, type: 'Sparrow');
   }
 
   @override
@@ -457,7 +481,7 @@ void main() {
     );
   });
 
-  testWidgets('tapping the own nest marker shows "Your nest", the nest name, and an edit action',
+  testWidgets('tapping the own nest marker shows "Your nest", the nest name, and coordinates - "This nest is empty" when it has no birds',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
@@ -475,11 +499,184 @@ void main() {
     await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
     await tester.pumpAndSettle();
 
+    // Same popup shape as a friend's nest - just with the extra own-nest content below.
     expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
     expect(find.text('Your nest'), findsOneWidget);
-    expect(find.text('Backyard'), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsWaypointName')), findsOneWidget);
+    expect(find.text('Backyard'), findsWidgets);
+    expect(find.byKey(const Key('nestDetailsCoordinates')), findsOneWidget);
     expect(find.text('(1.0000, 2.0000)'), findsOneWidget);
-    expect(find.byKey(const Key('editNestFromDialogButton')), findsOneWidget);
+    expect(find.byKey(const Key('renameNestButton')), findsOneWidget);
+    expect(find.byKey(const Key('noBirdsAtNestMessage')), findsOneWidget);
+    expect(find.text('This nest is empty'), findsOneWidget);
+  });
+
+  testWidgets('the own-nest dialog lists only the caller\'s own idle birds parked at that nest',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 3.0, longitude: 4.0),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        Bird(id: 'b1', userId: 'u1', name: 'Here', currentNestId: 'w1', isTraveling: false, type: 'Sparrow'),
+        Bird(id: 'b2', userId: 'u1', name: 'Elsewhere', currentNestId: 'w2', isTraveling: false, type: 'Falcon'),
+        _travelingBird('b3', nestFromId: 'w1', nestToId: 'w2'),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    // b1 is parked at w1 (shown), b2 is parked at a different own nest (not shown), b3 is
+    // traveling (not "at" any nest yet, not shown).
+    expect(find.byKey(const Key('birdTile_b1')), findsOneWidget);
+    expect(find.byKey(const Key('birdTile_b2')), findsNothing);
+    expect(find.byKey(const Key('birdTile_b3')), findsNothing);
+    expect(find.byKey(const Key('noBirdsAtNestMessage')), findsNothing);
+  });
+
+  testWidgets('tapping one of the caller\'s own birds in the nest dialog sends it', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 3.0, longitude: 4.0),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        Bird(id: 'b1', userId: 'u1', name: 'Here', currentNestId: 'w1', isTraveling: false, type: 'Sparrow'),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('birdTile_b1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sendBirdDestinationDropdown')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cabin').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
+    await tester.pumpAndSettle();
+
+    expect(fakeBirdService.lastSentBirdId, 'b1');
+    expect(fakeBirdService.lastSentNestId, 'w2');
+    expect(find.byKey(const Key('birdTile_b1')), findsNothing);
+    expect(find.byKey(const Key('noBirdsAtNestMessage')), findsOneWidget);
+  });
+
+  testWidgets('picking and uploading a nest picture from the dialog calls uploadWaypointPicture',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+    final fakeProfileService = _FakeProfileService()
+      ..imageToReturn = XFile.fromData(Uint8List.fromList([1, 2, 3]), path: 'nest.png', mimeType: 'image/png');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: fakeProfileService,
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('nestPictureButton')));
+    await tester.pumpAndSettle();
+
+    expect(fakeWaypointService.lastUploadedWaypointId, 'w1');
+    expect(fakeWaypointService.lastUploadedFilename, 'nest.png');
+    expect(find.text('Nest picture updated'), findsOneWidget);
+  });
+
+  testWidgets('renaming from within the own-nest dialog updates the displayed name', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('renameNestButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('waypointNameField')), 'Treehouse');
+    await tester.tap(find.byKey(const Key('saveWaypointButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('nestDetailsWaypointName')), findsOneWidget);
+    expect(find.text('Treehouse'), findsWidgets);
+  });
+
+  testWidgets('a friend\'s nest dialog has no picture/rename affordances or bird list', (WidgetTester tester) async {
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            userId: 'friend1',
+            name: "Friend's Nest",
+            latitude: 1.002,
+            longitude: 2.002,
+            username: 'friendo',
+            color: '#1E88E5'),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: _FakeWaypointService(),
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('friendMarker_fw1')));
+    await tester.pumpAndSettle();
+
+    // Same popup shape as an own nest (avatar, title, name, coordinates) - just without
+    // the own-nest-only editing/bird-list content.
+    expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsAvatar')), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsWaypointName')), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsCoordinates')), findsOneWidget);
+    expect(find.byKey(const Key('renameNestButton')), findsNothing);
+    expect(find.byKey(const Key('noBirdsAtNestMessage')), findsNothing);
+    expect(find.text('Birds here'), findsNothing);
   });
 
   testWidgets('shows a My Nests button in the app bar by default', (WidgetTester tester) async {
