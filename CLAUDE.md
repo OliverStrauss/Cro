@@ -136,14 +136,14 @@ regardless of theme) over hardcoding a `Colors.*` value anywhere in `/app`.
 
 | Palette color | Hex | `ColorScheme` role | Usage |
 |---|---|---|---|
-| Background | `#D3D5D9` | `ThemeData.scaffoldBackgroundColor` | App canvas — a ~30% Fog/white blend, chosen to read as a visibly darker grey canvas rather than near-white, so Fog's grey carries through the whole app rather than just secondary text |
+| Background | `#D4D7DC` | `ThemeData.scaffoldBackgroundColor` | App canvas — a ~30% Fog/white blend, chosen to read as a visibly darker grey canvas rather than near-white, so Fog's grey carries through the whole app rather than just secondary text |
 | Surface | `#FFFFFF` | `colorScheme.surface` | Cards, bubbles |
-| Waypoint blue | `#5EB8E0` | `colorScheme.primary` | Primary, buttons, links |
-| Deep waypoint | `#2E7A9E` | `colorScheme.secondary`, `AppBarTheme` | Headers, pressed states |
+| Waypoint blue | `#5CB6E3` | `colorScheme.primary` | Primary, buttons, links |
+| Deep waypoint | `#2A7194` | `colorScheme.secondary`, `AppBarTheme` | Headers, pressed states |
 | Sky tint | `#BFE4F4` | `colorScheme.primaryContainer` | In-transit highlight, selection |
 | Ink | `#2B2F33` | `colorScheme.onSurface` | Primary text |
 | Fog | `#6B7280` | `colorScheme.onSurfaceVariant` | Secondary text, timestamps |
-| Delivery amber | `#F2A65A` | `colorScheme.tertiary` | In-transit badge, unread-message badge — used sparingly |
+| Delivery amber | `#F3AA5E` | `colorScheme.tertiary` | In-transit badge, unread-message badge — used sparingly |
 
 `colorScheme.error`/`onError` are left at Material's defaults — the palette doesn't specify an
 error color. `scaffoldBackgroundColor` is set independently of `colorScheme.surface` (rather

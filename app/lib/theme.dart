@@ -10,14 +10,14 @@ class CroColors {
   // A darker, more clearly grey canvas than the original near-white spec - a light blend
   // of Fog with white (roughly 30% Fog) rather than a flat near-white, per explicit
   // preference for Fog's grey to read through the app background, not just secondary text.
-  static const background = Color(0xFFD3D5D9);
+  static const background = Color(0xFFD4D7DC);
   static const surface = Color(0xFFFFFFFF);
-  static const waypointBlue = Color(0xFF5EB8E0);
-  static const deepWaypoint = Color(0xFF2E7A9E);
+  static const waypointBlue = Color(0xFF5CB6E3);
+  static const deepWaypoint = Color(0xFF2A7194);
   static const skyTint = Color(0xFFBFE4F4);
   static const ink = Color(0xFF2B2F33);
   static const fog = Color(0xFF6B7280);
-  static const deliveryAmber = Color(0xFFF2A65A);
+  static const deliveryAmber = Color(0xFFF3AA5E);
 }
 
 final ThemeData croTheme = ThemeData(
