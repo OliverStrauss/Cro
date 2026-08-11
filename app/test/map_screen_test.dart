@@ -100,7 +100,7 @@ class _FakeProfileService implements ProfileService {
     return profileToReturn!;
   }
 
-  // Used by the own-nest dialog's picture-change flow.
+  // Used by the own-nest sheet's picture-change flow.
   @override
   Future<XFile?> pickImage() async => imageToReturn;
 
@@ -124,7 +124,7 @@ class _FakeBirdService implements BirdService {
     return birdsToReturn;
   }
 
-  // Used by the own-nest dialog's "Birds here" send flow.
+  // Used by the own-nest sheet's "Birds here" send flow.
   @override
   Future<Bird> sendBird(String token, String birdId, {required String nestId, String? content}) async {
     lastSentBirdId = birdId;
@@ -438,7 +438,7 @@ void main() {
     expect(avatar.borderColor, CroColors.waypointBlue);
   });
 
-  testWidgets('tapping a friend marker shows their nest details in a dialog', (WidgetTester tester) async {
+  testWidgets('tapping a friend marker shows their nest details in a sheet', (WidgetTester tester) async {
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
         Waypoint(
@@ -465,7 +465,7 @@ void main() {
     await tester.tap(find.byKey(const Key('friendMarker_fw1')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsSheet')), findsOneWidget);
     expect(find.text("alice's nest"), findsOneWidget);
     expect(find.text("Alice's Yard"), findsOneWidget);
     expect(find.text('(1.0010, 2.0010)'), findsOneWidget);
@@ -473,8 +473,8 @@ void main() {
     expect(find.byKey(const Key('editNestFromDialogButton')), findsNothing);
     // The picture fetch fails in the test harness (all HTTP is stubbed), so the avatar
     // falls back to the initial - exercises the same fallback path used elsewhere. Scoped
-    // to the dialog's own avatar since the friend's map marker (also an AvatarWithFallback,
-    // also falling back to "A") is still visible behind the dialog.
+    // to the sheet's own avatar since the friend's map marker (also an AvatarWithFallback,
+    // also falling back to "A") is still visible behind the sheet.
     expect(
       find.descendant(of: find.byKey(const Key('nestDetailsAvatar')), matching: find.text('A')),
       findsOneWidget,
@@ -500,7 +500,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Same popup shape as a friend's nest - just with the extra own-nest content below.
-    expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsSheet')), findsOneWidget);
     expect(find.text('Your nest'), findsOneWidget);
     expect(find.byKey(const Key('nestDetailsWaypointName')), findsOneWidget);
     expect(find.text('Backyard'), findsWidgets);
@@ -511,7 +511,7 @@ void main() {
     expect(find.text('This nest is empty'), findsOneWidget);
   });
 
-  testWidgets('the own-nest dialog lists only the caller\'s own idle birds parked at that nest',
+  testWidgets('the own-nest sheet lists only the caller\'s own idle birds parked at that nest',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [
@@ -546,7 +546,7 @@ void main() {
     expect(find.byKey(const Key('noBirdsAtNestMessage')), findsNothing);
   });
 
-  testWidgets('tapping one of the caller\'s own birds in the nest dialog sends it', (WidgetTester tester) async {
+  testWidgets('tapping one of the caller\'s own birds in the nest sheet sends it', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [
         Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0),
@@ -587,7 +587,7 @@ void main() {
     expect(find.byKey(const Key('noBirdsAtNestMessage')), findsOneWidget);
   });
 
-  testWidgets('picking and uploading a nest picture from the dialog calls uploadWaypointPicture',
+  testWidgets('picking and uploading a nest picture from the sheet calls uploadWaypointPicture',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
@@ -615,7 +615,7 @@ void main() {
     expect(find.text('Nest picture updated'), findsOneWidget);
   });
 
-  testWidgets('renaming from within the own-nest dialog updates the displayed name', (WidgetTester tester) async {
+  testWidgets('renaming from within the own-nest sheet updates the displayed name', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
@@ -642,7 +642,7 @@ void main() {
     expect(find.text('Treehouse'), findsWidgets);
   });
 
-  testWidgets('a friend\'s nest dialog has no picture/rename affordances or bird list', (WidgetTester tester) async {
+  testWidgets('a friend\'s nest sheet has no picture/rename affordances or bird list', (WidgetTester tester) async {
     final fakeFriendsService = _FakeFriendsService()
       ..friendWaypointsToReturn = [
         Waypoint(
@@ -670,7 +670,7 @@ void main() {
 
     // Same popup shape as an own nest (avatar, title, name, coordinates) - just without
     // the own-nest-only editing/bird-list content.
-    expect(find.byKey(const Key('nestDetailsDialog')), findsOneWidget);
+    expect(find.byKey(const Key('nestDetailsSheet')), findsOneWidget);
     expect(find.byKey(const Key('nestDetailsAvatar')), findsOneWidget);
     expect(find.byKey(const Key('nestDetailsWaypointName')), findsOneWidget);
     expect(find.byKey(const Key('nestDetailsCoordinates')), findsOneWidget);

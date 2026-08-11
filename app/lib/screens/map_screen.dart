@@ -16,7 +16,7 @@ import '../state/auth_state.dart';
 import '../theme.dart';
 import '../utils/color_utils.dart';
 import '../widgets/avatar_with_fallback.dart';
-import '../widgets/nest_details_dialog.dart';
+import '../widgets/nest_details_sheet.dart';
 import '../widgets/waypoint_name_dialog.dart';
 import 'my_nests_screen.dart';
 
@@ -148,7 +148,7 @@ class MapScreenState extends State<MapScreen> {
   // after closing since a rename/re-picture or a send from inside the dialog should be
   // reflected on this screen's own-nest marker and bird data too.
   Future<void> _showOwnNestDetails(Waypoint nest) async {
-    await NestDetailsDialog.show(
+    await NestDetailsSheet.show(
       context,
       username: nest.name,
       isOwn: true,
@@ -158,6 +158,7 @@ class MapScreenState extends State<MapScreen> {
       latitude: nest.latitude,
       longitude: nest.longitude,
       authState: widget.authState,
+      ringColor: CroColors.waypointBlue,
       residentBirds: _birds.where((b) => b.currentNestId == nest.id && !b.isTraveling).toList(),
       waypointService: widget.waypointService,
       friendsService: widget.friendsService,
@@ -168,7 +169,7 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _showFriendNestDetails(Waypoint friendWaypoint) {
-    NestDetailsDialog.show(
+    NestDetailsSheet.show(
       context,
       username: friendWaypoint.username!,
       isOwn: false,
@@ -178,6 +179,7 @@ class MapScreenState extends State<MapScreen> {
       latitude: friendWaypoint.latitude,
       longitude: friendWaypoint.longitude,
       authState: widget.authState,
+      ringColor: hexToColor(friendWaypoint.color!),
     );
   }
 
