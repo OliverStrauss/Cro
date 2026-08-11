@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
+// latlong2 also declares its own Path<T> class (for geo paths), which collides with
+// dart:ui's Path (needed here for the dashed-border CustomPainter below) - only LatLng is
+// actually used from this import.
+import 'package:latlong2/latlong.dart' hide Path;
 
 import '../models/waypoint.dart';
 import '../services/friends_service.dart';
 import '../services/profile_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
+import '../theme.dart';
+import '../widgets/avatar_with_fallback.dart';
 import '../widgets/waypoint_name_dialog.dart';
 import 'map_screen.dart';
 
@@ -35,6 +40,10 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
   List<Waypoint> _nests = [];
   bool _isLoading = true;
   String? _errorMessage;
+  // The nest currently in its "Confirm?" state, awaiting a second tap on the same row's
+  // delete action - a lighter two-tap inline pattern instead of a separate confirmation
+  // dialog. Null when nothing is pending confirmation.
+  String? _confirmDeleteId;
 
   @override
   void initState() {
@@ -85,26 +94,13 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
     }
   }
 
-  Future<void> _deleteNest(Waypoint nest) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete this nest?'),
-        content: Text('"${nest.name}" will be removed.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          TextButton(
-            key: const Key('confirmDeleteNestButton'),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) {
+  Future<void> _handleDeleteTap(Waypoint nest) async {
+    if (_confirmDeleteId != nest.id) {
+      setState(() => _confirmDeleteId = nest.id);
       return;
     }
 
+    setState(() => _confirmDeleteId = null);
     try {
       await widget.waypointService.deleteWaypoint(widget.authState.token!, nest.id);
       await _loadNests();
@@ -165,11 +161,6 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('My Nests')),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        key: const Key('addNestButton'),
-        onPressed: _addNest,
-        child: const Icon(Icons.add),
-      ),
     );
   }
 
@@ -192,40 +183,143 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
       );
     }
 
-    if (_nests.isEmpty) {
-      return const Center(
-        key: Key('noNestsMessage'),
-        child: Text('No nests yet - tap + to add one'),
-      );
-    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (_nests.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              key: Key('noNestsMessage'),
+              child: Text(
+                'No nests yet - tap + to add one',
+                style: TextStyle(fontSize: 13.5, color: CroColors.fog),
+              ),
+            ),
+          ),
+        for (final nest in _nests) ...[
+          _buildNestRow(nest),
+          const SizedBox(height: 12),
+        ],
+        _buildAddNestRow(),
+      ],
+    );
+  }
 
-    return ListView.builder(
-      itemCount: _nests.length,
-      itemBuilder: (context, index) {
-        final nest = _nests[index];
-        return Card(
-          key: Key('nestTile_${nest.id}'),
-          child: ListTile(
-            title: Text(nest.name),
-            subtitle: Text('(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})'),
-            trailing: Row(
+  Widget _buildNestRow(Waypoint nest) {
+    final isConfirmingDelete = _confirmDeleteId == nest.id;
+    return Container(
+      key: Key('nestTile_${nest.id}'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: CroColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
+      ),
+      child: Row(
+        children: [
+          AvatarWithFallback(
+            imageUrl: nest.profilePictureUrl,
+            initialsSource: nest.name,
+            radius: 22,
+            hasBorder: true,
+            borderColor: CroColors.waypointBlue,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  key: Key('renameNestButton_${nest.id}'),
-                  icon: const Icon(Icons.edit),
-                  onPressed: () => _renameNest(nest),
-                ),
-                IconButton(
-                  key: Key('deleteNestButton_${nest.id}'),
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _deleteNest(nest),
+                Text(nest.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: CroColors.ink)),
+                const SizedBox(height: 2),
+                Text(
+                  '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
+                  style: const TextStyle(fontSize: 12, color: CroColors.fog),
                 ),
               ],
             ),
           ),
-        );
-      },
+          IconButton(
+            key: Key('renameNestButton_${nest.id}'),
+            icon: const Icon(Icons.edit, size: 18),
+            onPressed: () => _renameNest(nest),
+          ),
+          GestureDetector(
+            key: Key('deleteNestButton_${nest.id}'),
+            onTap: () => _handleDeleteTap(nest),
+            child: Text(
+              isConfirmingDelete ? 'Confirm?' : 'Delete',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isConfirmingDelete ? Theme.of(context).colorScheme.error : CroColors.fog,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
+
+  Widget _buildAddNestRow() {
+    return GestureDetector(
+      key: const Key('addNestButton'),
+      onTap: _addNest,
+      child: CustomPaint(
+        painter: _DashedRoundedBorderPainter(color: CroColors.waypointBlue.withValues(alpha: 0.5)),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '+',
+                style: TextStyle(fontSize: 18, height: 1, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Add a nest',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Flutter has no built-in dashed-border decoration, and this is the only place in the app
+// that needs one - not worth pulling in a dependency for a single dashed rounded rect.
+class _DashedRoundedBorderPainter extends CustomPainter {
+  final Color color;
+
+  const _DashedRoundedBorderPainter({required this.color});
+
+  static const _radius = 16.0;
+  static const _dashWidth = 6.0;
+  static const _dashSpace = 4.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(_radius)));
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = distance + _dashWidth;
+        canvas.drawPath(metric.extractPath(distance, next.clamp(0.0, metric.length)), paint);
+        distance = next + _dashSpace;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRoundedBorderPainter oldDelegate) => oldDelegate.color != color;
 }

@@ -177,7 +177,8 @@ void main() {
     expect(find.text('Cabin'), findsOneWidget);
   });
 
-  testWidgets('deleting a nest confirms, then calls deleteWaypoint and refreshes', (WidgetTester tester) async {
+  testWidgets('deleting a nest is a two-tap inline confirm, then calls deleteWaypoint and refreshes',
+      (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()
       ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login('test-token');
@@ -186,10 +187,15 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    // First tap only arms the confirmation - no delete yet.
     await tester.tap(find.byKey(const Key('deleteNestButton_w1')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('confirmDeleteNestButton')));
+    expect(fakeService.lastDeletedId, null);
+    expect(find.text('Confirm?'), findsOneWidget);
+
+    // Second tap on the same row's delete action actually deletes.
+    await tester.tap(find.byKey(const Key('deleteNestButton_w1')));
     await tester.pumpAndSettle();
 
     expect(fakeService.lastDeletedId, 'w1');
