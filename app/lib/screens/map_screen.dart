@@ -51,7 +51,7 @@ class MapScreen extends StatefulWidget {
 // flutter_map's internal gesture recognizer doesn't reliably fire from a synthetic
 // tester.tap() in the widget test harness, so tests bypass just that gesture-detection
 // layer while still exercising the real dialog/save flow that follows.
-class MapScreenState extends State<MapScreen> {
+class MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   List<Waypoint> _ownNests = [];
   List<Waypoint> _friendWaypoints = [];
   List<Bird> _birds = [];
@@ -59,11 +59,29 @@ class MapScreenState extends State<MapScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _liveUpdateTimer;
+  // Drives a gentle shared bob for every traveling-bird marker - one controller for all
+  // birds rather than one each, since they're all meant to move in lockstep. Constructed
+  // eagerly in initState (not as a lazy `late final` field initializer) so it's always
+  // built while the state is definitely mounted. Only actually runs (via
+  // _syncBirdBobAnimation) while at least one bird is traveling, rather than
+  // unconditionally from initState - an indefinitely-repeating ticker with nothing to
+  // animate is a wasted wakeup every frame for as long as this screen is alive.
+  late final AnimationController _birdBobController;
 
   @override
   void initState() {
     super.initState();
+    _birdBobController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
     _loadData();
+  }
+
+  void _syncBirdBobAnimation() {
+    final hasTravelingBirds = _birds.any((b) => b.isTraveling) || _friendsBirds.isNotEmpty;
+    if (hasTravelingBirds && !_birdBobController.isAnimating) {
+      _birdBobController.repeat(reverse: true);
+    } else if (!hasTravelingBirds && _birdBobController.isAnimating) {
+      _birdBobController.stop();
+    }
   }
 
   // HomeScreen keeps every tab alive in an IndexedStack rather than rebuilding them on
@@ -99,6 +117,7 @@ class MapScreenState extends State<MapScreen> {
         _birds = results[0] as List<Bird>;
         _friendsBirds = results[1] as List<FriendBird>;
       });
+      _syncBirdBobAnimation();
     } catch (_) {
       // Swallow - a blip on a silent background poll shouldn't blank an already-rendered
       // map into the full error+Retry state. The next tick retries in 3s.
@@ -110,6 +129,7 @@ class MapScreenState extends State<MapScreen> {
     // Logout swaps HomeScreen out via ListenableBuilder in main.dart, which disposes
     // this screen while the timer could still be armed - real, not hypothetical.
     _liveUpdateTimer?.cancel();
+    _birdBobController.dispose();
     super.dispose();
   }
 
@@ -134,6 +154,7 @@ class MapScreenState extends State<MapScreen> {
         _friendsBirds = results[3] as List<FriendBird>;
         _isLoading = false;
       });
+      _syncBirdBobAnimation();
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
@@ -307,6 +328,7 @@ class MapScreenState extends State<MapScreen> {
     final hasOwnNests = _ownNests.isNotEmpty;
     final travelingBirds = _resolveTravelingBirds();
     final now = DateTime.now(); // one snapshot per build, shared by every bird this frame
+    final legendEntries = _buildLegendEntries();
     return FlutterMap(
       options: MapOptions(
         initialCenter:
@@ -336,12 +358,14 @@ class MapScreenState extends State<MapScreen> {
           PolylineLayer<String>(polylines: [
             for (final tb in travelingBirds)
               Polyline<String>(
-                points: [
-                  LatLng(tb.origin.latitude, tb.origin.longitude),
-                  LatLng(tb.destination.latitude, tb.destination.longitude),
-                ],
+                // A gentle curve instead of a straight line - easier to tell apart when
+                // several birds' lines overlap or cross near a shared nest.
+                points: curvedFlightPathPoints(origin: tb.origin, destination: tb.destination),
                 color: tb.color,
                 strokeWidth: 3,
+                // Dashed instead of solid carries the "in motion" cue that the removed
+                // directional-arrow markers used to provide.
+                pattern: StrokePattern.dashed(segments: const [8, 6]),
                 hitValue: tb.id,
               ),
           ]),
@@ -351,20 +375,27 @@ class MapScreenState extends State<MapScreen> {
               Marker(
                 key: Key('ownNestMarker_${nest.id}'),
                 point: LatLng(nest.latitude, nest.longitude),
-                width: 40,
-                height: 40,
+                width: 72,
+                height: 62,
                 child: GestureDetector(
                   onTap: () => _showOwnNestDetails(nest),
-                  // Border is always the fixed Waypoint blue, regardless of theme -
-                  // this is "the user's own nest" signal, not a themeable role, so a
-                  // friend's differently-colored nest stays visually distinguishable.
-                  child: AvatarWithFallback(
-                    avatarKey: Key('ownNestAvatar_${nest.id}'),
-                    imageUrl: nest.profilePictureUrl,
-                    initialsSource: nest.name,
-                    radius: 14,
-                    hasBorder: true,
-                    borderColor: CroColors.waypointBlue,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Border is always the fixed Waypoint blue, regardless of theme -
+                      // this is "the user's own nest" signal, not a themeable role, so a
+                      // friend's differently-colored nest stays visually distinguishable.
+                      AvatarWithFallback(
+                        avatarKey: Key('ownNestAvatar_${nest.id}'),
+                        imageUrl: nest.profilePictureUrl,
+                        initialsSource: nest.name,
+                        radius: 14,
+                        hasBorder: true,
+                        borderColor: CroColors.waypointBlue,
+                      ),
+                      const SizedBox(height: 4),
+                      _NestLabel(name: nest.name),
+                    ],
                   ),
                 ),
               ),
@@ -372,17 +403,24 @@ class MapScreenState extends State<MapScreen> {
               Marker(
                 key: Key('friendMarker_${friendWaypoint.id}'),
                 point: LatLng(friendWaypoint.latitude, friendWaypoint.longitude),
-                width: 40,
-                height: 40,
+                width: 72,
+                height: 62,
                 child: GestureDetector(
                   onTap: () => _showFriendNestDetails(friendWaypoint),
-                  child: AvatarWithFallback(
-                    avatarKey: Key('friendNestAvatar_${friendWaypoint.id}'),
-                    imageUrl: friendWaypoint.profilePictureUrl,
-                    initialsSource: friendWaypoint.name,
-                    radius: 14,
-                    hasBorder: true,
-                    borderColor: hexToColor(friendWaypoint.color!),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AvatarWithFallback(
+                        avatarKey: Key('friendNestAvatar_${friendWaypoint.id}'),
+                        imageUrl: friendWaypoint.profilePictureUrl,
+                        initialsSource: friendWaypoint.name,
+                        radius: 14,
+                        hasBorder: true,
+                        borderColor: hexToColor(friendWaypoint.color!),
+                      ),
+                      const SizedBox(height: 4),
+                      _NestLabel(name: friendWaypoint.name),
+                    ],
                   ),
                 ),
               ),
@@ -396,27 +434,60 @@ class MapScreenState extends State<MapScreen> {
                   estimatedArrivalAt: tb.estimatedArrivalAt,
                   now: now,
                 ),
-                // Same tracking icon already used for birds on BirdsScreen, colored per
-                // the sender rule above instead of hardcoded red. Purely visual - no
-                // tap/dialog, unlike the nest markers.
-                child: Icon(Icons.flutter_dash, color: tb.color),
-              ),
-            for (final tb in travelingBirds)
-              for (final fraction in _arrowFractions)
-                Marker(
-                  key: Key('flightArrow_${tb.id}_$fraction'),
-                  point: positionAtFraction(origin: tb.origin, destination: tb.destination, fraction: fraction),
-                  width: 16,
-                  height: 16,
-                  // Points up by default, rotated clockwise by the line's compass bearing -
-                  // subtle (low opacity, small) so it reads as a direction hint on the line
-                  // rather than competing with the bird marker itself.
-                  child: Transform.rotate(
-                    angle: bearingDegrees(origin: tb.origin, destination: tb.destination) * math.pi / 180,
-                    child: Icon(Icons.arrow_upward, size: 14, color: tb.color.withValues(alpha: 0.6)),
+                width: 22,
+                height: 22,
+                // Purely visual - no tap/dialog, unlike the nest markers.
+                child: AnimatedBuilder(
+                  animation: _birdBobController,
+                  builder: (context, child) => Transform.translate(
+                    offset: Offset(0, -4 * _birdBobController.value),
+                    child: child,
+                  ),
+                  child: BirdTravelMarker(
+                    color: tb.color,
+                    headingDegrees: bearingDegrees(origin: tb.origin, destination: tb.destination),
                   ),
                 ),
+              ),
           ]),
+        if (legendEntries.isNotEmpty)
+          Positioned(
+            left: 12,
+            bottom: 12,
+            child: Container(
+              key: const Key('mapLegend'),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final entry in legendEntries)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(color: entry.color, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            entry.label,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: CroColors.ink),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         RichAttributionWidget(
           attributions: [
             TextSourceAttribution('OpenStreetMap contributors'),
@@ -425,6 +496,95 @@ class MapScreenState extends State<MapScreen> {
       ],
     );
   }
+
+  // One legend row per person currently visible on the map: "You" (fixed Waypoint blue,
+  // only if the caller has at least one nest) plus one deduped row per distinct friend
+  // username seen on either a friend nest or a friend's in-flight bird - a friend visible
+  // only via a bird still gets a row, not just friends with a nest planted.
+  List<_LegendEntry> _buildLegendEntries() {
+    final colorByUsername = <String, Color>{};
+    for (final waypoint in _friendWaypoints) {
+      final username = waypoint.username;
+      if (username != null && waypoint.color != null) {
+        colorByUsername[username] = hexToColor(waypoint.color!);
+      }
+    }
+    for (final friendBird in _friendsBirds) {
+      if (friendBird.color != null) {
+        colorByUsername.putIfAbsent(friendBird.username, () => hexToColor(friendBird.color!));
+      }
+    }
+
+    return [
+      if (_ownNests.isNotEmpty) const _LegendEntry('You', CroColors.waypointBlue),
+      for (final entry in colorByUsername.entries) _LegendEntry(entry.key, entry.value),
+    ];
+  }
+}
+
+class _NestLabel extends StatelessWidget {
+  final String name;
+
+  const _NestLabel({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: CroColors.ink),
+      ),
+    );
+  }
+}
+
+// A filled circle in the sender's color with a small triangular "beak" pointing along
+// headingDegrees - the same north-up compass-bearing convention the removed flight-line
+// arrow markers used, now carried by the bird marker itself instead of a separate marker.
+// Public (not the usual private-widget convention) and @visibleForTesting so tests can
+// reach into the marker's AnimatedBuilder.child and assert on its color/heading directly.
+@visibleForTesting
+class BirdTravelMarker extends StatelessWidget {
+  final Color color;
+  final double headingDegrees;
+
+  const BirdTravelMarker({super.key, required this.color, required this.headingDegrees});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: const [BoxShadow(color: Color(0x4D2B2F33), blurRadius: 6, offset: Offset(0, 2))],
+          ),
+        ),
+        Transform.rotate(
+          angle: headingDegrees * math.pi / 180,
+          child: const Icon(Icons.arrow_drop_up, size: 16, color: Colors.white),
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendEntry {
+  final String label;
+  final Color color;
+
+  const _LegendEntry(this.label, this.color);
 }
 
 // A traveling bird (the caller's own, or an accepted friend's) paired with its
@@ -523,6 +683,36 @@ double bearingDegrees({
   return (radians * 180 / math.pi + 360) % 360;
 }
 
-// Fixed fractions along a flight line at which to draw a small directional arrow, evenly
-// spaced but not at the endpoints themselves (0.0/1.0 sit right on the nest markers).
-const List<double> _arrowFractions = [0.2, 0.4, 0.6, 0.8];
+// Samples a quadratic bezier from origin to destination, bowed via a control point offset
+// perpendicular to the midpoint by 15% of the projected segment length - a gentle curve
+// rather than a rigid straight line. Sampled (not drawn natively) because Polyline only
+// draws straight segments between its points; done in the same EPSG:3857 projected space
+// positionAtFraction/bearingDegrees already use, then unprojected back to LatLng, so the
+// curve matches how flutter_map itself projects the map.
+@visibleForTesting
+List<LatLng> curvedFlightPathPoints({
+  required Waypoint origin,
+  required Waypoint destination,
+  int samples = 20,
+}) {
+  final projection = const Epsg3857().projection;
+  final (originX, originY) = projection.projectXY(LatLng(origin.latitude, origin.longitude));
+  final (destX, destY) = projection.projectXY(LatLng(destination.latitude, destination.longitude));
+
+  final midX = (originX + destX) / 2;
+  final midY = (originY + destY) / 2;
+  final dx = destX - originX;
+  final dy = destY - originY;
+  final controlX = midX - dy * 0.15;
+  final controlY = midY + dx * 0.15;
+
+  final points = <LatLng>[];
+  for (var i = 0; i <= samples; i++) {
+    final t = i / samples;
+    final u = 1 - t;
+    final x = u * u * originX + 2 * u * t * controlX + t * t * destX;
+    final y = u * u * originY + 2 * u * t * controlY + t * t * destY;
+    points.add(projection.unprojectXY(x, y));
+  }
+  return points;
+}

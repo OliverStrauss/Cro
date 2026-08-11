@@ -433,7 +433,8 @@ void main() {
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final ownMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('ownNestMarker_w1'));
-    final avatar = (ownMarker.child as GestureDetector).child as AvatarWithFallback;
+    final column = (ownMarker.child as GestureDetector).child as Column;
+    final avatar = column.children.first as AvatarWithFallback;
     expect(avatar.imageUrl, 'https://example.com/nest.png');
     expect(avatar.borderColor, CroColors.waypointBlue);
   });
@@ -467,7 +468,12 @@ void main() {
 
     expect(find.byKey(const Key('nestDetailsSheet')), findsOneWidget);
     expect(find.text("alice's nest"), findsOneWidget);
-    expect(find.text("Alice's Yard"), findsOneWidget);
+    // Scoped to the sheet since the friend's map marker (now labeled with its own
+    // nest-name pill) is still visible behind the sheet and would also match "Alice's Yard".
+    expect(
+      find.descendant(of: find.byKey(const Key('nestDetailsSheet')), matching: find.text("Alice's Yard")),
+      findsOneWidget,
+    );
     expect(find.text('(1.0010, 2.0010)'), findsOneWidget);
     // No edit action for a friend's nest.
     expect(find.byKey(const Key('editNestFromDialogButton')), findsNothing);
@@ -533,10 +539,14 @@ void main() {
           profileService: _FakeProfileService(),
           birdService: fakeBirdService),
     ));
-    await tester.pumpAndSettle();
+    // Not pumpAndSettle(): b3 is traveling, which keeps the bob-animation controller
+    // continuously repeating and never "settling" by design.
+    await tester.pump();
+    await tester.pump();
 
     await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300)); // let the sheet's slide-up transition finish
 
     // b1 is parked at w1 (shown), b2 is parked at a different own nest (not shown), b3 is
     // traveling (not "at" any nest yet, not shown).
@@ -760,7 +770,8 @@ void main() {
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final friendMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('friendMarker_fw1'));
-    final avatar = (friendMarker.child as GestureDetector).child as AvatarWithFallback;
+    final column = (friendMarker.child as GestureDetector).child as Column;
+    final avatar = column.children.first as AvatarWithFallback;
     expect(avatar.borderColor, hexToColor('#1E88E5'));
   });
 
@@ -782,7 +793,10 @@ void main() {
           profileService: _FakeProfileService(),
           birdService: fakeBirdService),
     ));
-    await tester.pumpAndSettle();
+    // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
+    // continuously repeating, which never "settles" by design.
+    await tester.pump();
+    await tester.pump();
 
     expect(find.byKey(const Key('birdMarker_b1')), findsOneWidget);
     // find.byType(PolylineLayer) doesn't match a generic PolylineLayer<String> instance
@@ -792,31 +806,6 @@ void main() {
     expect(polylineLayerFinder, findsOneWidget);
     final polylineLayer = tester.widget(polylineLayerFinder) as PolylineLayer;
     expect(polylineLayer.polylines.map((p) => p.hitValue), contains('b1'));
-  });
-
-  testWidgets('renders a directional arrow marker at each fixed fraction along an in-flight bird\'s line',
-      (WidgetTester tester) async {
-    final fakeWaypointService = _FakeWaypointService()
-      ..waypointsToReturn = [
-        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
-        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
-      ];
-    final fakeBirdService = _FakeBirdService()
-      ..birdsToReturn = [_travelingBird('b1', nestFromId: 'w1', nestToId: 'w2')];
-    final authState = AuthState()..login(_fakeJwtFor('u1'));
-    await tester.pumpWidget(MaterialApp(
-      home: MapScreen(
-          authState: authState,
-          waypointService: fakeWaypointService,
-          friendsService: _FakeFriendsService(),
-          profileService: _FakeProfileService(),
-          birdService: fakeBirdService),
-    ));
-    await tester.pumpAndSettle();
-
-    for (final fraction in [0.2, 0.4, 0.6, 0.8]) {
-      expect(find.byKey(Key('flightArrow_b1_$fraction')), findsOneWidget);
-    }
   });
 
   testWidgets('renders a flight-path line and moving marker for a friend\'s in-flight bird, colored by sender',
@@ -857,24 +846,21 @@ void main() {
           profileService: _FakeProfileService(),
           birdService: _FakeBirdService()),
     ));
-    await tester.pumpAndSettle();
+    // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
+    // continuously repeating, which never "settles" by design.
+    await tester.pump();
+    await tester.pump();
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final birdMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('birdMarker_fb1'));
-    final icon = birdMarker.child as Icon;
-    expect(icon.color, hexToColor('#1E88E5'));
+    final animatedBuilder = birdMarker.child as AnimatedBuilder;
+    final marker = animatedBuilder.child as BirdTravelMarker;
+    expect(marker.color, hexToColor('#1E88E5'));
 
     final polylineLayerFinder = find.byWidgetPredicate((w) => w is PolylineLayer);
     final polylineLayer = tester.widget(polylineLayerFinder) as PolylineLayer;
     final polyline = polylineLayer.polylines.singleWhere((p) => p.hitValue == 'fb1');
     expect(polyline.color, hexToColor('#1E88E5'));
-
-    // Flight-line arrows aren't just an own-bird thing - they render for every traveling
-    // bird visible on the map, friends' included, since both feed the same travelingBirds
-    // list the arrow markers are built from.
-    for (final fraction in [0.2, 0.4, 0.6, 0.8]) {
-      expect(find.byKey(Key('flightArrow_fb1_$fraction')), findsOneWidget);
-    }
   });
 
   testWidgets('a non-traveling bird gets no marker or line', (WidgetTester tester) async {
@@ -897,6 +883,72 @@ void main() {
 
     expect(find.byKey(const Key('birdMarker_b1')), findsNothing);
     expect(find.byWidgetPredicate((w) => w is PolylineLayer), findsNothing);
+  });
+
+  testWidgets('legend shows "You" plus one row per distinct friend visible on the map', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            userId: 'f1',
+            name: "Alice's Yard",
+            username: 'alice',
+            color: '#E53935',
+            latitude: 1.001,
+            longitude: 2.001),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mapLegend')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('mapLegend')), matching: find.text('You')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('mapLegend')), matching: find.text('alice')), findsOneWidget);
+  });
+
+  testWidgets('legend is hidden when there are no own nests or friends to show', (WidgetTester tester) async {
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: _FakeWaypointService(),
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mapLegend')), findsNothing);
+  });
+
+  group('curvedFlightPathPoints', () {
+    final origin = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 0.0, longitude: 0.0);
+    final destination = Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 0.0, longitude: 1.0);
+
+    test('starts exactly at the origin and ends exactly at the destination', () {
+      final points = curvedFlightPathPoints(origin: origin, destination: destination);
+      expect(points.first.latitude, closeTo(origin.latitude, 1e-9));
+      expect(points.first.longitude, closeTo(origin.longitude, 1e-9));
+      expect(points.last.latitude, closeTo(destination.latitude, 1e-9));
+      expect(points.last.longitude, closeTo(destination.longitude, 1e-9));
+    });
+
+    test('bows away from the straight line at the midpoint, unlike a straight polyline', () {
+      final points = curvedFlightPathPoints(origin: origin, destination: destination);
+      final midpoint = points[points.length ~/ 2];
+      // The straight line from (0,0) to (0,1) sits exactly on latitude 0 - a curved path's
+      // midpoint should be offset away from it, not sitting on top of the straight line.
+      expect(midpoint.latitude, isNot(closeTo(0.0, 1e-6)));
+    });
   });
 
   group('interpolatedBirdPosition', () {
@@ -1099,7 +1151,10 @@ void main() {
             profileService: _FakeProfileService(),
             birdService: fakeBirdService),
       ));
-      await tester.pumpAndSettle();
+      // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
+      // continuously repeating, which never "settles" by design.
+      await tester.pump();
+      await tester.pump();
       expect(find.byKey(const Key('birdMarker_b1')), findsOneWidget);
 
       // Simulate the server having lazily resolved the arrival on the next poll.
