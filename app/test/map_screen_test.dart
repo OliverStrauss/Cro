@@ -808,6 +808,90 @@ void main() {
     expect(polylineLayer.polylines.map((p) => p.hitValue), contains('b1'));
   });
 
+  testWidgets('tapping an own bird marker opens the bird details sheet, sent by "You"', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [_travelingBird('b1', nestFromId: 'w1', nestToId: 'w2')];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_b1')));
+    // Not pumpAndSettle(): the bob-animation controller is still repeating in the
+    // background while this sheet is open.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdDetailsSheet')), findsOneWidget);
+    expect(find.text('Bird b1'), findsOneWidget);
+    expect(find.text('Sparrow · Sent by You'), findsOneWidget);
+    expect(find.text('Cabin', skipOffstage: false), findsWidgets);
+    expect(tester.widget<Text>(find.byKey(const Key('birdDetailsDestination'))).data, 'Cabin');
+  });
+
+  testWidgets('tapping a friend\'s bird marker opens the bird details sheet, sent by their username',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            userId: 'friend1',
+            name: "Friend's Nest",
+            latitude: 1.002,
+            longitude: 2.002,
+            username: 'friendo',
+            color: '#1E88E5'),
+      ]
+      ..friendsBirdsToReturn = [
+        FriendBird(
+          id: 'fb1',
+          userId: 'friend1',
+          username: 'friendo',
+          color: '#1E88E5',
+          name: "Friendo's Bird",
+          type: 'Sparrow',
+          nestFromId: 'fw1',
+          nestToId: 'w1',
+          departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+        ),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_fb1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdDetailsSheet')), findsOneWidget);
+    expect(find.text("Friendo's Bird"), findsOneWidget);
+    expect(find.text('Sparrow · Sent by friendo'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('birdDetailsDestination'))).data, 'Home');
+  });
+
   testWidgets('renders a flight-path line and moving marker for a friend\'s in-flight bird, colored by sender',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
@@ -853,7 +937,7 @@ void main() {
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final birdMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('birdMarker_fb1'));
-    final animatedBuilder = birdMarker.child as AnimatedBuilder;
+    final animatedBuilder = (birdMarker.child as GestureDetector).child as AnimatedBuilder;
     final marker = animatedBuilder.child as BirdTravelMarker;
     expect(marker.color, hexToColor('#1E88E5'));
 

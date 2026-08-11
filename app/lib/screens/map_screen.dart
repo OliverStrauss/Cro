@@ -16,6 +16,7 @@ import '../state/auth_state.dart';
 import '../theme.dart';
 import '../utils/color_utils.dart';
 import '../widgets/avatar_with_fallback.dart';
+import '../widgets/bird_details_sheet.dart';
 import '../widgets/nest_details_sheet.dart';
 import '../widgets/waypoint_name_dialog.dart';
 import 'my_nests_screen.dart';
@@ -220,6 +221,19 @@ class MapScreenState extends State<MapScreen>
     );
   }
 
+  void _showBirdDetails(_TravelingBird tb) {
+    BirdDetailsSheet.show(
+      context,
+      name: tb.name,
+      type: tb.type,
+      senderLabel: tb.senderLabel,
+      color: tb.color,
+      destinationName: tb.destination.name,
+      departedAt: tb.departedAt,
+      estimatedArrivalAt: tb.estimatedArrivalAt,
+    );
+  }
+
   // Resolves every in-flight bird visible to the caller - their own (from _birds) plus
   // every accepted friend's (from _friendsBirds, via GET /friends/birds) - to the
   // origin/destination nests its from/to ids refer to. Drops any bird that can't
@@ -246,6 +260,9 @@ class MapScreenState extends State<MapScreen>
       result.add(
         _TravelingBird(
           id: bird.id,
+          name: bird.name,
+          type: bird.type,
+          senderLabel: 'You',
           color: Theme.of(context).colorScheme.primary,
           origin: origin,
           destination: destination,
@@ -261,6 +278,9 @@ class MapScreenState extends State<MapScreen>
       result.add(
         _TravelingBird(
           id: friendBird.id,
+          name: friendBird.name,
+          type: friendBird.type,
+          senderLabel: friendBird.username,
           color: friendBird.color != null
               ? hexToColor(friendBird.color!)
               : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -487,25 +507,27 @@ class MapScreenState extends State<MapScreen>
                   ),
                   width: 22,
                   height: 22,
-                  // Purely visual - no tap/dialog, unlike the nest markers.
-                  child: AnimatedBuilder(
-                    animation: _birdBobController,
-                    builder: (context, child) => Transform.translate(
-                      offset: Offset(0, -4 * _birdBobController.value),
-                      child: child,
-                    ),
-                    child: BirdTravelMarker(
-                      color: tb.color,
-                      // The curve's tangent direction at the bird's current position, not
-                      // the fixed origin-to-destination chord - so the beak actually turns
-                      // to follow the bow in the flight path as the bird travels along it.
-                      headingDegrees: bearingDegrees(
-                        origin: tb.origin,
-                        destination: tb.destination,
-                        fraction: elapsedFraction(
-                          departedAt: tb.departedAt,
-                          estimatedArrivalAt: tb.estimatedArrivalAt,
-                          now: now,
+                  child: GestureDetector(
+                    onTap: () => _showBirdDetails(tb),
+                    child: AnimatedBuilder(
+                      animation: _birdBobController,
+                      builder: (context, child) => Transform.translate(
+                        offset: Offset(0, -4 * _birdBobController.value),
+                        child: child,
+                      ),
+                      child: BirdTravelMarker(
+                        color: tb.color,
+                        // The curve's tangent direction at the bird's current position, not
+                        // the fixed origin-to-destination chord - so the beak actually turns
+                        // to follow the bow in the flight path as the bird travels along it.
+                        headingDegrees: bearingDegrees(
+                          origin: tb.origin,
+                          destination: tb.destination,
+                          fraction: elapsedFraction(
+                            departedAt: tb.departedAt,
+                            estimatedArrivalAt: tb.estimatedArrivalAt,
+                            now: now,
+                          ),
                         ),
                       ),
                     ),
@@ -687,6 +709,11 @@ class _LegendEntry {
 // lockstep and neither re-does the nest lookup/null-checks.
 class _TravelingBird {
   final String id;
+  final String name;
+  final String type;
+  // "You" for the caller's own bird, the friend's username for a friend's - who to show
+  // as the sender on the bird-details sheet.
+  final String senderLabel;
   final Color color;
   final Waypoint origin;
   final Waypoint destination;
@@ -695,6 +722,9 @@ class _TravelingBird {
 
   const _TravelingBird({
     required this.id,
+    required this.name,
+    required this.type,
+    required this.senderLabel,
     required this.color,
     required this.origin,
     required this.destination,
@@ -764,8 +794,10 @@ LatLng positionAtFraction({
   );
 
   final u = 1 - clamped;
-  final x = u * u * originX + 2 * u * clamped * controlX + clamped * clamped * destX;
-  final y = u * u * originY + 2 * u * clamped * controlY + clamped * clamped * destY;
+  final x =
+      u * u * originX + 2 * u * clamped * controlX + clamped * clamped * destX;
+  final y =
+      u * u * originY + 2 * u * clamped * controlY + clamped * clamped * destY;
   return projection.unprojectXY(x, y);
 }
 
@@ -779,7 +811,8 @@ double elapsedFraction({
   if (totalDuration <= Duration.zero) {
     return 1.0;
   }
-  return now.difference(departedAt).inMilliseconds / totalDuration.inMilliseconds;
+  return now.difference(departedAt).inMilliseconds /
+      totalDuration.inMilliseconds;
 }
 
 @visibleForTesting
@@ -836,8 +869,10 @@ double bearingDegrees({
   final clamped = fraction.clamp(0.0, 1.0);
   final u = 1 - clamped;
   // Derivative of a quadratic bezier: B'(t) = 2(1-t)(P1-P0) + 2t(P2-P1).
-  final tangentX = 2 * u * (controlX - originX) + 2 * clamped * (destX - controlX);
-  final tangentY = 2 * u * (controlY - originY) + 2 * clamped * (destY - controlY);
+  final tangentX =
+      2 * u * (controlX - originX) + 2 * clamped * (destX - controlX);
+  final tangentY =
+      2 * u * (controlY - originY) + 2 * clamped * (destY - controlY);
 
   final radians = math.atan2(tangentX, tangentY);
   return (radians * 180 / math.pi + 360) % 360;
