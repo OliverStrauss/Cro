@@ -197,6 +197,37 @@ app.MapGet("/users/{id}", async (string id, IUserRepository repo) =>
     await repo.GetByIdAsync(id) is { } user ? Results.Ok(user.ToResponse()) : Results.NotFound())
 .WithName("GetUserById");
 
+// Powers the Profile screen's live "Add Friends" suggestions as the caller types - unlike
+// GET /users/{id}, this is authenticated (it's a directory search over every user, not a
+// single already-known id) and deliberately returns only id/username/profilePictureUrl,
+// the same minimal shape as the friend-request endpoints below, never email or the friends
+// graph. The caller's own account is excluded so the search box can never suggest
+// friending yourself. Route ordering vs. GET /users/{id} above doesn't matter - ASP.NET
+// Core's endpoint routing prefers the literal "search" segment over the {id} parameter
+// regardless of registration order.
+app.MapGet("/users/search", async (string? q, ClaimsPrincipal principal, IUserRepository repo) =>
+{
+    var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (callerId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var prefix = q?.Trim() ?? "";
+    if (prefix.Length == 0)
+    {
+        return Results.Ok(Array.Empty<object>());
+    }
+
+    var matches = await repo.SearchByUsernamePrefixAsync(prefix, limit: 8);
+    var results = matches
+        .Where(u => u.Id != callerId)
+        .Select(u => new { u.Id, u.Username, u.ProfilePictureUrl });
+    return Results.Ok(results);
+})
+.RequireAuthorization()
+.WithName("SearchUsers");
+
 app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<JwtOptions> jwtOpts) =>
 {
     var user = await repo.GetByUsernameAsync(req.Username);

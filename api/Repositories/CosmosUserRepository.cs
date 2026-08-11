@@ -56,6 +56,27 @@ public class CosmosUserRepository : IUserRepository
         return null;
     }
 
+    // Case-insensitive username-prefix search, for the "Add Friends" live-suggestions
+    // dropdown. Cross-partition query, same tradeoff as GetByUsernameAsync above - fine at
+    // current tiny user counts. Stops paging as soon as `limit` results are in hand rather
+    // than always exhausting the query, so a broad prefix on a larger user base doesn't
+    // page through every match just to throw most of them away.
+    public async Task<List<User>> SearchByUsernamePrefixAsync(string prefix, int limit)
+    {
+        var query = _container.GetItemQueryIterator<User>(
+            new QueryDefinition("SELECT * FROM c WHERE STARTSWITH(c.username, @prefix, true)")
+                .WithParameter("@prefix", prefix));
+
+        var results = new List<User>();
+        while (query.HasMoreResults && results.Count < limit)
+        {
+            var page = await query.ReadNextAsync();
+            results.AddRange(page);
+        }
+
+        return results.Take(limit).ToList();
+    }
+
     public async Task<User> UpdateAsync(User user)
     {
         var response = await _container.UpsertItemAsync(user, new PartitionKey(user.Id));
