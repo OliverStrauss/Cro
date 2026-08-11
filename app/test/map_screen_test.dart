@@ -957,12 +957,12 @@ void main() {
     final departedAt = DateTime(2026, 1, 1, 0, 0, 0);
     final estimatedArrivalAt = DateTime(2026, 1, 1, 1, 0, 0); // 1 hour flight
 
-    // Not the lat/lng midpoint (5.0, 10.0): the position is lerped in the same EPSG:3857
-    // projected space PolylineLayer draws its straight line in, so it lands wherever the
-    // 50%-by-projected-distance point on that line unprojects back to - Mercator's
-    // nonlinear north-south scale means that's a hair north of the naive lat midpoint,
-    // and this is what keeps the marker glued to the line at every latitude.
-    test('returns the point 50% along the projected flight line at 50% elapsed', () {
+    // Not the lat/lng midpoint (5.0, 10.0), and not the straight-line chord's midpoint
+    // either: the marker follows the same bowed curve PolylineLayer draws (see
+    // curvedFlightPathPoints), so at 50% elapsed it should land exactly on that curve's
+    // t=0.5 sample - which is what actually keeps the marker glued to the drawn line at
+    // every point along the flight, not just at the endpoints.
+    test('at 50% elapsed, lands exactly on the curved flight path, not the straight-line midpoint', () {
       final position = interpolatedBirdPosition(
         origin: origin,
         destination: destination,
@@ -970,8 +970,10 @@ void main() {
         estimatedArrivalAt: estimatedArrivalAt,
         now: departedAt.add(const Duration(minutes: 30)),
       );
-      expect(position.latitude, closeTo(5.0191, 0.0001));
-      expect(position.longitude, closeTo(10.0, 0.0001));
+      final curveMidpoint = curvedFlightPathPoints(origin: origin, destination: destination)[10];
+      expect(position.latitude, closeTo(curveMidpoint.latitude, 1e-9));
+      expect(position.longitude, closeTo(curveMidpoint.longitude, 1e-9));
+      expect(position.latitude, isNot(closeTo(5.0, 0.01)));
     });
 
     test('clamps to the destination once now is past the ETA', () {
@@ -1079,6 +1081,49 @@ void main() {
       final destination = Waypoint(id: 'w2', userId: 'u1', name: 'West', latitude: 0.0, longitude: 0.0);
 
       expect(bearingDegrees(origin: origin, destination: destination), closeTo(270.0, 0.01));
+    });
+
+    test('at a given fraction, matches the curved path\'s tangent direction rather than the fixed chord bearing', () {
+      final origin = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 0.0, longitude: 0.0);
+      final destination = Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 5.0, longitude: 10.0);
+
+      final atStart = bearingDegrees(origin: origin, destination: destination, fraction: 0.0);
+      final atMidpoint = bearingDegrees(origin: origin, destination: destination); // default fraction: 0.5
+      final atEnd = bearingDegrees(origin: origin, destination: destination, fraction: 1.0);
+
+      // The path bows, so a bird following it turns over the course of the flight - the
+      // heading near the start and end shouldn't match the midpoint chord bearing.
+      expect(atStart, isNot(closeTo(atMidpoint, 0.01)));
+      expect(atEnd, isNot(closeTo(atMidpoint, 0.01)));
+    });
+  });
+
+  group('elapsedFraction', () {
+    final departedAt = DateTime(2026, 1, 1, 0, 0, 0);
+    final estimatedArrivalAt = DateTime(2026, 1, 1, 1, 0, 0);
+
+    test('returns 0.5 at the halfway point of the flight', () {
+      final fraction = elapsedFraction(
+        departedAt: departedAt,
+        estimatedArrivalAt: estimatedArrivalAt,
+        now: departedAt.add(const Duration(minutes: 30)),
+      );
+      expect(fraction, closeTo(0.5, 0.0001));
+    });
+
+    test('returns 1.0 when the flight duration is zero or negative', () {
+      expect(
+        elapsedFraction(departedAt: departedAt, estimatedArrivalAt: departedAt, now: departedAt),
+        1.0,
+      );
+      expect(
+        elapsedFraction(
+          departedAt: departedAt,
+          estimatedArrivalAt: departedAt.subtract(const Duration(minutes: 1)),
+          now: departedAt,
+        ),
+        1.0,
+      );
     });
   });
 

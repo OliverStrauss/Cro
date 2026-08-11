@@ -28,9 +28,9 @@ class MyNestsScreen extends StatefulWidget {
     WaypointService? waypointService,
     FriendsService? friendsService,
     ProfileService? profileService,
-  })  : waypointService = waypointService ?? WaypointService(),
-        friendsService = friendsService ?? FriendsService(),
-        profileService = profileService ?? ProfileService();
+  }) : waypointService = waypointService ?? WaypointService(),
+       friendsService = friendsService ?? FriendsService(),
+       profileService = profileService ?? ProfileService();
 
   @override
   State<MyNestsScreen> createState() => _MyNestsScreenState();
@@ -58,7 +58,9 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
     });
 
     try {
-      final nests = await widget.waypointService.listWaypoints(widget.authState.token!);
+      final nests = await widget.waypointService.listWaypoints(
+        widget.authState.token!,
+      );
       setState(() {
         _nests = nests;
         _isLoading = false;
@@ -102,7 +104,10 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
 
     setState(() => _confirmDeleteId = null);
     try {
-      await widget.waypointService.deleteWaypoint(widget.authState.token!, nest.id);
+      await widget.waypointService.deleteWaypoint(
+        widget.authState.token!,
+        nest.id,
+      );
       await _loadNests();
     } catch (e) {
       _showToast(e.toString(), isError: true);
@@ -166,7 +171,10 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(key: Key('myNestsLoadingIndicator'), child: CircularProgressIndicator());
+      return const Center(
+        key: Key('myNestsLoadingIndicator'),
+        child: CircularProgressIndicator(),
+      );
     }
 
     if (_errorMessage != null) {
@@ -206,58 +214,93 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
     );
   }
 
+  // Pushes the map centered on this nest - the row's own tap area, separate from the
+  // rename/delete controls nested inside it, which each capture their own tap via the
+  // gesture arena before it would reach this GestureDetector.
+  void _openNestOnMap(Waypoint nest) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MapScreen(
+          authState: widget.authState,
+          waypointService: widget.waypointService,
+          friendsService: widget.friendsService,
+          profileService: widget.profileService,
+          focusPoint: LatLng(nest.latitude, nest.longitude),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNestRow(Waypoint nest) {
     final isConfirmingDelete = _confirmDeleteId == nest.id;
-    return Container(
+    return GestureDetector(
       key: Key('nestTile_${nest.id}'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: CroColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
-      ),
-      child: Row(
-        children: [
-          AvatarWithFallback(
-            imageUrl: nest.profilePictureUrl,
-            initialsSource: nest.name,
-            radius: 22,
-            hasBorder: true,
-            borderColor: CroColors.waypointBlue,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nest.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: CroColors.ink)),
-                const SizedBox(height: 2),
-                Text(
-                  '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
-                  style: const TextStyle(fontSize: 12, color: CroColors.fog),
-                ),
-              ],
+      onTap: () => _openNestOnMap(nest),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: CroColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0F2B2F33),
+              blurRadius: 3,
+              offset: Offset(0, 1),
             ),
-          ),
-          IconButton(
-            key: Key('renameNestButton_${nest.id}'),
-            icon: const Icon(Icons.edit, size: 18),
-            onPressed: () => _renameNest(nest),
-          ),
-          GestureDetector(
-            key: Key('deleteNestButton_${nest.id}'),
-            onTap: () => _handleDeleteTap(nest),
-            child: Text(
-              isConfirmingDelete ? 'Confirm?' : 'Delete',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isConfirmingDelete ? Theme.of(context).colorScheme.error : CroColors.fog,
+          ],
+        ),
+        child: Row(
+          children: [
+            AvatarWithFallback(
+              imageUrl: nest.profilePictureUrl,
+              initialsSource: nest.name,
+              radius: 22,
+              hasBorder: true,
+              borderColor: CroColors.waypointBlue,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    nest.name,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: CroColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
+                    style: const TextStyle(fontSize: 12, color: CroColors.fog),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            IconButton(
+              key: Key('renameNestButton_${nest.id}'),
+              icon: const Icon(Icons.edit, size: 18),
+              onPressed: () => _renameNest(nest),
+            ),
+            GestureDetector(
+              key: Key('deleteNestButton_${nest.id}'),
+              onTap: () => _handleDeleteTap(nest),
+              child: Text(
+                isConfirmingDelete ? 'Confirm?' : 'Delete',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isConfirmingDelete
+                      ? Theme.of(context).colorScheme.error
+                      : CroColors.fog,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -267,7 +310,9 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
       key: const Key('addNestButton'),
       onTap: _addNest,
       child: CustomPaint(
-        painter: _DashedRoundedBorderPainter(color: CroColors.waypointBlue.withValues(alpha: 0.5)),
+        painter: _DashedRoundedBorderPainter(
+          color: CroColors.waypointBlue.withValues(alpha: 0.5),
+        ),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           alignment: Alignment.center,
@@ -276,12 +321,21 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
             children: [
               const Text(
                 '+',
-                style: TextStyle(fontSize: 18, height: 1, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint),
+                style: TextStyle(
+                  fontSize: 18,
+                  height: 1,
+                  fontWeight: FontWeight.w700,
+                  color: CroColors.deepWaypoint,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
                 'Add a nest',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: CroColors.deepWaypoint,
+                ),
               ),
             ],
           ),
@@ -304,7 +358,13 @@ class _DashedRoundedBorderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(_radius)));
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          const Radius.circular(_radius),
+        ),
+      );
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -314,12 +374,16 @@ class _DashedRoundedBorderPainter extends CustomPainter {
       var distance = 0.0;
       while (distance < metric.length) {
         final next = distance + _dashWidth;
-        canvas.drawPath(metric.extractPath(distance, next.clamp(0.0, metric.length)), paint);
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0.0, metric.length)),
+          paint,
+        );
         distance = next + _dashSpace;
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DashedRoundedBorderPainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(covariant _DashedRoundedBorderPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
