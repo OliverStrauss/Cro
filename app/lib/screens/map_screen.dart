@@ -400,7 +400,7 @@ class MapScreenState extends State<MapScreen> {
                 child: Icon(Icons.flutter_dash, color: tb.color),
               ),
             for (final tb in travelingBirds)
-              for (final fraction in _arrowFractions)
+              for (final fraction in arrowFractionsFor(tb.origin, tb.destination))
                 Marker(
                   key: Key('flightArrow_${tb.id}_$fraction'),
                   point: positionAtFraction(origin: tb.origin, destination: tb.destination, fraction: fraction),
@@ -521,6 +521,24 @@ double bearingDegrees({
   return (radians * 180 / math.pi + 360) % 360;
 }
 
-// Fixed fractions along a flight line at which to draw a small directional arrow, evenly
-// spaced but not at the endpoints themselves (0.0/1.0 sit right on the nest markers).
-const List<double> _arrowFractions = [0.2, 0.4, 0.6, 0.8];
+// One arrow roughly every _arrowInterval meters of real-world flight distance, rather than
+// a fixed count per line - a short hop across town gets one or two, a cross-country flight
+// gets many, all evenly spaced. Distance (not the Mercator-projected one used for drawing
+// the line itself) is what should drive "how much line is there to mark", since Mercator
+// distances are wildly inflated away from the equator. Clamped to keep an extremely long
+// line from generating an unreasonable number of markers.
+const double _arrowInterval = 50000;
+const int _maxArrowsPerLine = 12;
+
+@visibleForTesting
+List<double> arrowFractionsFor(Waypoint origin, Waypoint destination) {
+  final distanceMeters = const Distance().as(
+    LengthUnit.Meter,
+    LatLng(origin.latitude, origin.longitude),
+    LatLng(destination.latitude, destination.longitude),
+  );
+  final count = (distanceMeters / _arrowInterval).floor().clamp(1, _maxArrowsPerLine);
+  // Not at the endpoints themselves (0.0/1.0 sit right on the nest markers) - spread count
+  // arrows evenly across the interior of the line instead.
+  return [for (var i = 1; i <= count; i++) i / (count + 1)];
+}

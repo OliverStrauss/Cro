@@ -794,7 +794,7 @@ void main() {
     expect(polylineLayer.polylines.map((p) => p.hitValue), contains('b1'));
   });
 
-  testWidgets('renders a directional arrow marker at each fixed fraction along an in-flight bird\'s line',
+  testWidgets('renders a directional arrow marker for a short in-flight bird line',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [
@@ -814,9 +814,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    for (final fraction in [0.2, 0.4, 0.6, 0.8]) {
-      expect(find.byKey(Key('flightArrow_b1_$fraction')), findsOneWidget);
-    }
+    // ~157m apart - well under one _arrowInterval, so exactly one arrow at the midpoint.
+    expect(find.byKey(const Key('flightArrow_b1_0.5')), findsOneWidget);
   });
 
   testWidgets('renders a flight-path line and moving marker for a friend\'s in-flight bird, colored by sender',
@@ -871,10 +870,8 @@ void main() {
 
     // Flight-line arrows aren't just an own-bird thing - they render for every traveling
     // bird visible on the map, friends' included, since both feed the same travelingBirds
-    // list the arrow markers are built from.
-    for (final fraction in [0.2, 0.4, 0.6, 0.8]) {
-      expect(find.byKey(Key('flightArrow_fb1_$fraction')), findsOneWidget);
-    }
+    // list the arrow markers are built from. Short hop, so exactly one arrow.
+    expect(find.byKey(const Key('flightArrow_fb1_0.5')), findsOneWidget);
   });
 
   testWidgets('a non-traveling bird gets no marker or line', (WidgetTester tester) async {
@@ -1027,6 +1024,31 @@ void main() {
       final destination = Waypoint(id: 'w2', userId: 'u1', name: 'West', latitude: 0.0, longitude: 0.0);
 
       expect(bearingDegrees(origin: origin, destination: destination), closeTo(270.0, 0.01));
+    });
+  });
+
+  group('arrowFractionsFor', () {
+    test('a hop well under one interval gets a single arrow at the midpoint', () {
+      final origin = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0);
+      final destination = Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001);
+
+      expect(arrowFractionsFor(origin, destination), [0.5]);
+    });
+
+    test('scales the arrow count with real-world distance, evenly spaced', () {
+      // ~334km at the equator - floor(334km / 50km) = 6 arrows.
+      final origin = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 0.0, longitude: 0.0);
+      final destination = Waypoint(id: 'w2', userId: 'u1', name: 'Far', latitude: 0.0, longitude: 3.0);
+
+      final fractions = arrowFractionsFor(origin, destination);
+      expect(fractions, [for (var i = 1; i <= 6; i++) i / 7]);
+    });
+
+    test('clamps to at most 12 arrows on an extremely long line', () {
+      final origin = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 0.0, longitude: -170.0);
+      final destination = Waypoint(id: 'w2', userId: 'u1', name: 'Far', latitude: 0.0, longitude: 170.0);
+
+      expect(arrowFractionsFor(origin, destination).length, 12);
     });
   });
 

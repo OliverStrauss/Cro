@@ -143,6 +143,7 @@ void main() {
           estimatedArrivalAt: DateTime.now().add(const Duration(hours: 3, minutes: 24)),
         ), // heading to own nest
         _bird('b4'), // unassigned
+        _bird('b5', isTraveling: true, nestToId: 'w2'), // heading to a friend's nest
       ];
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
@@ -159,6 +160,7 @@ void main() {
     expect(find.byKey(const Key('birdCard_b2')), findsOneWidget);
     expect(find.byKey(const Key('birdCard_b3')), findsOneWidget);
     expect(find.byKey(const Key('birdCard_b4')), findsOneWidget);
+    expect(find.byKey(const Key('birdCard_b5')), findsOneWidget);
 
     expect(find.text('Bird b1'), findsOneWidget);
     expect(find.text('Sparrow'), findsWidgets);
@@ -169,15 +171,20 @@ void main() {
     final location2 = tester.widget<Text>(find.byKey(const Key('birdLocation_b2')));
     expect(location2.data, "Sam's Cabin");
 
+    // Own destination nest -> "Your nest"; friend's destination nest -> "{username}'s nest" -
+    // same "Your nest"/"{username}'s nest" phrasing NestDetailsDialog uses elsewhere.
     final location3 = tester.widget<Text>(find.byKey(const Key('birdLocation_b3')));
-    expect(location3.data, 'Heading to Home');
+    expect(location3.data, 'Heading to Your nest, Home');
 
     final location4 = tester.widget<Text>(find.byKey(const Key('birdLocation_b4')));
     expect(location4.data, 'Unassigned');
 
+    final location5 = tester.widget<Text>(find.byKey(const Key('birdLocation_b5')));
+    expect(location5.data, "Heading to sam's nest, Sam's Cabin");
+
     // Every card gets the same placeholder bird icon (this screen only ever shows the
     // caller's own birds, so there's a single fixed color to use).
-    expect(find.byIcon(Icons.flutter_dash), findsNWidgets(4));
+    expect(find.byIcon(Icons.flutter_dash), findsNWidgets(5));
 
     // Only the traveling bird has an ETA line.
     final eta3 = tester.widget<Text>(find.byKey(const Key('birdEta_b3')));
@@ -224,7 +231,7 @@ void main() {
     expect(fakeBirds.lastSentContent, 'Hi there');
 
     final location1 = tester.widget<Text>(find.byKey(const Key('birdLocation_b1')));
-    expect(location1.data, 'Heading to Cabin');
+    expect(location1.data, 'Heading to Your nest, Cabin');
   });
 
   testWidgets('a traveling bird is not tappable', (WidgetTester tester) async {

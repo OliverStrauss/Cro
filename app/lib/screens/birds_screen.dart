@@ -31,6 +31,10 @@ class BirdsScreen extends StatefulWidget {
 class BirdsScreenState extends State<BirdsScreen> {
   List<Bird> _birds = [];
   Map<String, String> _nestNameById = {};
+  // Pre-formatted possessive ("Your" / "Alice's") so _locationText can drop it straight
+  // into "Heading to {author} nest, {name}" - same "Your nest"/"{username}'s nest"
+  // phrasing NestDetailsDialog already uses elsewhere, for consistency.
+  Map<String, String> _nestAuthorById = {};
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -69,9 +73,18 @@ class BirdsScreenState extends State<BirdsScreen> {
         for (final nest in [...ownNests, ...friendNests]) nest.id: nest.name,
       };
 
+      // GET /waypoints (own) never includes a username - a nest you own is always
+      // authored by you, so that's hardcoded here rather than fetched. GET
+      // /friends/waypoints already embeds the owning friend's username per nest.
+      final nestAuthorById = <String, String>{
+        for (final nest in ownNests) nest.id: 'Your',
+        for (final nest in friendNests) nest.id: "${nest.username}'s",
+      };
+
       setState(() {
         _birds = birds;
         _nestNameById = nestNameById;
+        _nestAuthorById = nestAuthorById;
         _isLoading = false;
       });
     } catch (e) {
@@ -84,7 +97,12 @@ class BirdsScreenState extends State<BirdsScreen> {
 
   String _locationText(Bird bird) {
     if (bird.isTraveling) {
-      return 'Heading to ${_nestNameById[bird.nestToId] ?? 'a nest'}';
+      final nestName = _nestNameById[bird.nestToId] ?? 'a nest';
+      final author = _nestAuthorById[bird.nestToId];
+      // Falls back to the plain nest name if the destination can't be resolved to an
+      // owner (e.g. a stale race with a friend removing a nest mid-flight) rather than
+      // showing a broken "null nest, {name}".
+      return author == null ? 'Heading to $nestName' : 'Heading to $author nest, $nestName';
     }
     if (bird.currentNestId != null) {
       return _nestNameById[bird.currentNestId] ?? 'Unknown nest';
