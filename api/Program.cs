@@ -47,7 +47,7 @@ builder.Services.Configure<BirdTravelOptions>(builder.Configuration.GetSection("
 builder.Services.AddSingleton(sp =>
 {
     var opts = sp.GetRequiredService<IOptions<CosmosDbOptions>>().Value;
-    var clientOptions = new CosmosClientOptions
+    var cosmosClientOptions = new CosmosClientOptions
     {
         SerializerOptions = new CosmosSerializationOptions
         {
@@ -55,18 +55,15 @@ builder.Services.AddSingleton(sp =>
         }
     };
 
-    // The emulator serves a self-signed cert. Only bypass validation when explicitly
-    // configured to use the emulator, so this never applies to a real Cosmos endpoint.
+    // The vnext-preview emulator's gateway serves plain HTTP on 8081 (not the classic
+    // emulator's self-signed HTTPS), so the connection string uses an http:// endpoint and
+    // no TLS bypass is needed here. Gateway mode is required against the Docker emulator.
     if (opts.UseEmulator)
     {
-        clientOptions.HttpClientFactory = () => new HttpClient(new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-        });
-        clientOptions.ConnectionMode = ConnectionMode.Gateway;
+        cosmosClientOptions.ConnectionMode = ConnectionMode.Gateway;
     }
 
-    return new CosmosClient(opts.ConnectionString, clientOptions);
+    return new CosmosClient(opts.ConnectionString, cosmosClientOptions);
 });
 
 builder.Services.AddSingleton(sp =>
