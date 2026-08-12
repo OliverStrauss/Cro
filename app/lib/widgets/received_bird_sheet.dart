@@ -1,9 +1,9 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
 import '../services/bird_service.dart';
 import '../services/profile_service.dart';
 import '../theme.dart';
+import 'bird_payload_view.dart';
 
 // Bottom sheet shown when tapping a bird someone else sent that's landed at the caller's
 // own nest - same chrome as BirdDetailsSheet, but for reading an arrived message instead of
@@ -78,8 +78,6 @@ class ReceivedBirdSheet extends StatefulWidget {
 
 class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
   String _senderLabel = '…';
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlayingAudio = false;
 
   @override
   void initState() {
@@ -88,9 +86,6 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
     if (!widget.isRead) {
       _markRead();
     }
-    _audioPlayer.onPlayerComplete.listen((_) {
-      if (mounted) setState(() => _isPlayingAudio = false);
-    });
   }
 
   // Fire-and-forget - a failed read-receipt shouldn't block the caller from reading the
@@ -112,22 +107,6 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
       if (!mounted) return;
       setState(() => _senderLabel = 'someone');
     }
-  }
-
-  Future<void> _toggleAudio() async {
-    if (_isPlayingAudio) {
-      await _audioPlayer.pause();
-    } else {
-      await _audioPlayer.play(UrlSource(widget.audioUrl!));
-    }
-    if (!mounted) return;
-    setState(() => _isPlayingAudio = !_isPlayingAudio);
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
   }
 
   @override
@@ -182,7 +161,14 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
               const SizedBox(height: 16),
               const Divider(height: 1),
               const SizedBox(height: 14),
-              Align(alignment: Alignment.centerLeft, child: _buildPayload()),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: BirdPayloadView(
+                  content: widget.content,
+                  audioUrl: widget.audioUrl,
+                  imageUrl: widget.imageUrl,
+                ),
+              ),
               const SizedBox(height: 18),
               GestureDetector(
                 onTap: () => Navigator.of(context).pop(),
@@ -195,49 +181,6 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildPayload() {
-    final hasContent = widget.content != null && widget.content!.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (hasContent)
-          Text(
-            widget.content!,
-            key: const Key('receivedBirdContent'),
-            style: const TextStyle(fontSize: 14, color: CroColors.ink),
-          ),
-        if (widget.imageUrl != null) ...[
-          if (hasContent) const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(widget.imageUrl!, key: const Key('receivedBirdImage')),
-          ),
-        ],
-        if (widget.audioUrl != null) ...[
-          if (hasContent || widget.imageUrl != null) const SizedBox(height: 12),
-          GestureDetector(
-            key: const Key('receivedBirdAudioButton'),
-            onTap: _toggleAudio,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _isPlayingAudio ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                  size: 32,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                const Text('Voice message', style: TextStyle(fontSize: 13, color: CroColors.ink)),
-              ],
-            ),
-          ),
-        ],
-        if (!hasContent && widget.imageUrl == null && widget.audioUrl == null)
-          const Text('This bird carried no message.', style: TextStyle(fontSize: 13, color: CroColors.fog)),
-      ],
     );
   }
 }

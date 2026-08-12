@@ -12,6 +12,11 @@ class FriendBird {
   final DateTime departedAt;
   final DateTime estimatedArrivalAt;
   final bool isPublic;
+  // Only ever populated when isPublic - GET /friends/birds omits these for a still-private
+  // bird so a friend's in-flight message can't be read early, same rule reactions follow.
+  final String? content;
+  final String? audioUrl;
+  final String? imageUrl;
 
   FriendBird({
     required this.id,
@@ -25,6 +30,9 @@ class FriendBird {
     required this.departedAt,
     required this.estimatedArrivalAt,
     this.isPublic = false,
+    this.content,
+    this.audioUrl,
+    this.imageUrl,
   });
 
   factory FriendBird.fromJson(Map<String, dynamic> json) => FriendBird(
@@ -39,5 +47,8 @@ class FriendBird {
         departedAt: DateTime.parse(json['departedAt'] as String),
         estimatedArrivalAt: DateTime.parse(json['estimatedArrivalAt'] as String),
         isPublic: json['isPublic'] as bool? ?? false,
+        content: json['content'] as String?,
+        audioUrl: json['audioUrl'] as String?,
+        imageUrl: json['imageUrl'] as String?,
       );
 }

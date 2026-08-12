@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/bird_reaction.dart';
 import '../services/bird_reaction_service.dart';
 import '../theme.dart';
+import 'bird_payload_view.dart';
 
 // Bottom sheet shown when tapping a moving bird marker on the map - same chrome as
 // NestDetailsSheet, mostly informational (who sent the bird, where it's headed, how far
@@ -21,6 +22,13 @@ class BirdDetailsSheet extends StatefulWidget {
   final DateTime estimatedArrivalAt;
   final bool isPublic;
   final String token;
+  // A private bird's message stays a surprise until it's delivered - only ever populated
+  // (by either GET /birds for the caller's own, or GET /friends/birds for a friend's, both
+  // of which withhold these for a still-private bird) when isPublic is true, same rule
+  // reactions already follow.
+  final String? content;
+  final String? audioUrl;
+  final String? imageUrl;
   final BirdReactionService? reactionService;
 
   const BirdDetailsSheet({
@@ -35,6 +43,9 @@ class BirdDetailsSheet extends StatefulWidget {
     required this.estimatedArrivalAt,
     required this.isPublic,
     required this.token,
+    this.content,
+    this.audioUrl,
+    this.imageUrl,
     this.reactionService,
   });
 
@@ -50,6 +61,9 @@ class BirdDetailsSheet extends StatefulWidget {
     required DateTime estimatedArrivalAt,
     required bool isPublic,
     required String token,
+    String? content,
+    String? audioUrl,
+    String? imageUrl,
     BirdReactionService? reactionService,
   }) {
     return showModalBottomSheet<void>(
@@ -67,6 +81,9 @@ class BirdDetailsSheet extends StatefulWidget {
         estimatedArrivalAt: estimatedArrivalAt,
         isPublic: isPublic,
         token: token,
+        content: content,
+        audioUrl: audioUrl,
+        imageUrl: imageUrl,
         reactionService: reactionService,
       ),
     );
@@ -256,6 +273,17 @@ class _BirdDetailsSheetState extends State<BirdDetailsSheet> {
               ),
             ),
             if (widget.isPublic) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: BirdPayloadView(
+                  content: widget.content,
+                  audioUrl: widget.audioUrl,
+                  imageUrl: widget.imageUrl,
+                ),
+              ),
               const SizedBox(height: 16),
               const Divider(height: 1),
               const SizedBox(height: 12),

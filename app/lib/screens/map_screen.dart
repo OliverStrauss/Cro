@@ -270,6 +270,9 @@ class MapScreenState extends State<MapScreen>
       estimatedArrivalAt: tb.estimatedArrivalAt,
       isPublic: tb.isPublic,
       token: widget.authState.token!,
+      content: tb.content,
+      audioUrl: tb.audioUrl,
+      imageUrl: tb.imageUrl,
     );
   }
 
@@ -321,6 +324,9 @@ class MapScreenState extends State<MapScreen>
           departedAt: departedAt,
           estimatedArrivalAt: estimatedArrivalAt,
           isPublic: bird.isPublic,
+          content: bird.content,
+          audioUrl: bird.audioUrl,
+          imageUrl: bird.imageUrl,
         ),
       );
     }
@@ -342,6 +348,9 @@ class MapScreenState extends State<MapScreen>
           departedAt: friendBird.departedAt,
           estimatedArrivalAt: friendBird.estimatedArrivalAt,
           isPublic: friendBird.isPublic,
+          content: friendBird.content,
+          audioUrl: friendBird.audioUrl,
+          imageUrl: friendBird.imageUrl,
         ),
       );
     }
@@ -905,6 +914,11 @@ class _TravelingBird {
   final DateTime departedAt;
   final DateTime estimatedArrivalAt;
   final bool isPublic;
+  // Only ever populated when isPublic - a private bird's message stays a surprise until
+  // it's delivered, same rule GET /birds and GET /friends/birds already enforce server-side.
+  final String? content;
+  final String? audioUrl;
+  final String? imageUrl;
 
   const _TravelingBird({
     required this.id,
@@ -917,6 +931,9 @@ class _TravelingBird {
     required this.departedAt,
     required this.estimatedArrivalAt,
     this.isPublic = false,
+    this.content,
+    this.audioUrl,
+    this.imageUrl,
   });
 }
 

@@ -55,11 +55,18 @@ builder.Services.AddSingleton(sp =>
         }
     };
 
-    // The vnext-preview emulator's gateway serves plain HTTP on 8081 (not the classic
-    // emulator's self-signed HTTPS), so the connection string uses an http:// endpoint and
-    // no TLS bypass is needed here. Gateway mode is required against the Docker emulator.
+    // Two different emulator images are in play (see CLAUDE.md): CI's classic x64 image
+    // serves a self-signed HTTPS cert on 8081 and needs this bypass; local Apple Silicon
+    // dev's vnext-preview image serves plain HTTP instead, where the callback below simply
+    // never fires (no TLS handshake happens over http://) - so setting it unconditionally
+    // is correct and harmless for both, rather than branching on which emulator/scheme is
+    // in use. Gateway mode is required against either Docker emulator.
     if (opts.UseEmulator)
     {
+        cosmosClientOptions.HttpClientFactory = () => new HttpClient(new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        });
         cosmosClientOptions.ConnectionMode = ConnectionMode.Gateway;
     }
 
@@ -901,6 +908,12 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository u
                 bird.DepartedAt,
                 bird.EstimatedArrivalAt,
                 bird.IsPublic,
+                // A friend's still-in-flight private bird's message stays a surprise until it
+                // lands at the caller's own nest - only a public bird's payload is fair game
+                // to show here, same "IsPublic gates it" rule reactions already follow.
+                Content = bird.IsPublic ? bird.Content : null,
+                AudioUrl = bird.IsPublic ? bird.AudioUrl : null,
+                ImageUrl = bird.IsPublic ? bird.ImageUrl : null,
             });
         }
     }
