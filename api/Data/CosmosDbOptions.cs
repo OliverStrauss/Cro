@@ -7,5 +7,6 @@ public class CosmosDbOptions
     public string UsersContainerName { get; set; } = string.Empty;
     public string WaypointsContainerName { get; set; } = string.Empty;
     public string BirdsContainerName { get; set; } = string.Empty;
+    public string HubsContainerName { get; set; } = string.Empty;
     public bool UseEmulator { get; set; }
 }

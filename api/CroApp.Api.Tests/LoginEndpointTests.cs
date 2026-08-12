@@ -32,6 +32,7 @@ public class LoginEndpointTests : IClassFixture<WebApplicationFactory<Program>>
                     ["CosmosDb:DatabaseName"] = "CroApp",
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
+                    ["CosmosDb:HubsContainerName"] = "Hubs",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
                     ["Jwt:Audience"] = "CroApp.Api.Tests"

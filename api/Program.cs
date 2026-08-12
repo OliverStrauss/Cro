@@ -79,6 +79,8 @@ builder.Services.AddScoped<IWaypointRepository, CosmosWaypointRepository>();
 builder.Services.AddScoped<IWaypointService, WaypointService>();
 builder.Services.AddScoped<IBirdRepository, CosmosBirdRepository>();
 builder.Services.AddScoped<IBirdService, BirdService>();
+builder.Services.AddScoped<IHubRepository, CosmosHubRepository>();
+builder.Services.AddScoped<IHubService, HubService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
 builder.Services.AddScoped<INestPictureService, NestPictureService>();
@@ -127,6 +129,38 @@ if (app.Environment.IsDevelopment())
     // birds, so scoping by owner keeps GET /birds' lazy-provisioning check and the
     // nest-assignment update both single-partition operations.
     await database.Database.CreateContainerIfNotExistsAsync(opts.BirdsContainerName, "/userId");
+    // /status, not /userId - a Hub has no single user-owner, and the dominant query is
+    // "list every approved Hub" (see Hub.cs), which a /status partition keeps
+    // single-partition.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.HubsContainerName, "/status");
+
+    // Dev-only seed users: "Oliver 1" (regular) and "Admin 1" (IsAdmin) so there's always a
+    // known admin account locally to place Hubs through the app's own "Add Hub" flow,
+    // without a standalone admin-promotion endpoint. Idempotent (checked by username first)
+    // so re-running the API against an already-seeded database doesn't error or duplicate.
+    // Same well-known-dev-credential category as the Cosmos/Azurite connection strings in
+    // CLAUDE.md - never meaningful outside a local emulator.
+    var userRepoForSeed = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+    var seedHasher = new PasswordHasher<User>();
+    async Task SeedDevUserAsync(string username, bool isAdmin)
+    {
+        if (await userRepoForSeed.GetByUsernameAsync(username) is not null)
+        {
+            return;
+        }
+        var seedUser = new User(
+            Guid.NewGuid().ToString(),
+            username,
+            $"{username.Replace(" ", "").ToLowerInvariant()}@example.com",
+            DateTimeOffset.UtcNow,
+            PasswordHash: "",
+            Friends: [],
+            IsAdmin: isAdmin);
+        seedUser = seedUser with { PasswordHash = seedHasher.HashPassword(seedUser, "correct-horse-battery-staple") };
+        await userRepoForSeed.CreateAsync(seedUser);
+    }
+    await SeedDevUserAsync("Oliver 1", isAdmin: false);
+    await SeedDevUserAsync("Admin 1", isAdmin: true);
 
     var blobClient = scope.ServiceProvider.GetRequiredService<BlobServiceClient>();
     var blobOpts = scope.ServiceProvider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
@@ -338,6 +372,61 @@ app.MapDelete("/waypoints/{id}", async (string id, ClaimsPrincipal principal, IW
 })
 .RequireAuthorization()
 .WithName("DeleteWaypoint");
+
+app.MapGet("/hubs", async (ClaimsPrincipal principal, IHubService hubService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(await hubService.ListApprovedAsync());
+})
+.RequireAuthorization()
+.WithName("ListHubs");
+
+app.MapPost("/hubs", async (SetHubRequest req, ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    // Admin check is a per-request repository lookup rather than a JWT claim, so granting
+    // or revoking IsAdmin takes effect immediately without re-issuing tokens - see User.cs.
+    var caller = await userRepo.GetByIdAsync(userId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    var saved = await hubService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude, req.Category);
+    return Results.Created($"/hubs/{saved.Id}", saved);
+})
+.RequireAuthorization()
+.WithName("CreateHub");
+
+app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await birdService.GetHubResidentsAsync(id));
+    }
+    catch (BirdServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("GetHubResidentBirds");
 
 app.MapGet("/birds", async (ClaimsPrincipal principal, IBirdService birdService) =>
 {
@@ -751,6 +840,7 @@ record CreateUserRequest(string Username, string Email, string Password);
 record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
 record SetWaypointRequest(string Name, double Latitude, double Longitude);
+record SetHubRequest(string Name, double Latitude, double Longitude, string? Category);
 record SendBirdRequest(string NestId, string? Content);
 record SendFriendRequestRequest(string Username);
 record SetFriendColorRequest(string Color);

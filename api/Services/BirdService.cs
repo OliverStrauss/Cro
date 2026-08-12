@@ -9,6 +9,7 @@ public class BirdService(
     IBirdRepository birdRepository,
     IWaypointRepository waypointRepository,
     IUserRepository userRepository,
+    IHubRepository hubRepository,
     IOptions<BirdTravelOptions> birdTravelOptions) : IBirdService
 {
     private const int BirdsPerUser = 3;
@@ -145,6 +146,22 @@ public class BirdService(
         }
         // Drop still-inbound birds that were only fetched so resolution could run on them.
         return resolved.Where(b => b.CurrentNestId == nest.Id).ToList();
+    }
+
+    // Hub analog of GetNestResidentsAsync, deliberately without an owner-gate - nobody owns
+    // a Hub, so anyone can see who's currently sitting at a public landmark.
+    public async Task<List<Bird>> GetHubResidentsAsync(string hubId)
+    {
+        var hub = await hubRepository.GetAsync(hubId)
+            ?? throw new BirdServiceException(404, "Hub not found.");
+
+        var candidates = await birdRepository.GetByNestIdAsync(hub.Id);
+        var resolved = new List<Bird>();
+        foreach (var bird in candidates)
+        {
+            resolved.Add(await ResolveArrivalIfDueAsync(bird));
+        }
+        return resolved.Where(b => b.CurrentNestId == hub.Id).ToList();
     }
 
     public async Task<Bird> MarkReadAsync(string userId, string birdId)

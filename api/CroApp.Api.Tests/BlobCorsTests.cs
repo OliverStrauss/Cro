@@ -33,6 +33,7 @@ public class BlobCorsTests : IClassFixture<WebApplicationFactory<Program>>
                     ["CosmosDb:DatabaseName"] = "CroApp",
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
+                    ["CosmosDb:HubsContainerName"] = "Hubs",
                     ["BlobStorage:ConnectionString"] = blobConnectionString,
                     ["BlobStorage:ProfilePicturesContainerName"] = "profile-pictures",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,

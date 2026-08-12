@@ -9,11 +9,13 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/friend_bird.dart';
+import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
 import 'package:cro_app/services/bird_service.dart';
 import 'package:cro_app/services/friends_service.dart';
+import 'package:cro_app/services/hub_service.dart';
 import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
@@ -109,6 +111,40 @@ class _FakeProfileService implements ProfileService {
       throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
 }
 
+class _FakeHubService implements HubService {
+  List<Hub> hubsToReturn = [];
+  Hub? lastCreatedHub;
+  String? lastCreatedName;
+  String? lastCreatedCategory;
+
+  @override
+  Future<List<Hub>> listHubs(String token) async => hubsToReturn;
+
+  @override
+  Future<Hub> createHub(
+    String token, {
+    required String name,
+    required double latitude,
+    required double longitude,
+    String? category,
+  }) async {
+    lastCreatedName = name;
+    lastCreatedCategory = category;
+    final created = Hub(
+      id: 'new-hub-${hubsToReturn.length + 1}',
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      status: 'Approved',
+      createdByUserId: 'u1',
+      category: category,
+    );
+    lastCreatedHub = created;
+    hubsToReturn = [...hubsToReturn, created];
+    return created;
+  }
+}
+
 class _FakeBirdService implements BirdService {
   List<Bird> birdsToReturn = [];
   Object? errorToThrow;
@@ -179,6 +215,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
 
@@ -195,6 +232,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -215,6 +253,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -233,6 +272,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -250,6 +290,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -267,6 +308,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -284,6 +326,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -313,6 +356,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -362,6 +406,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -381,16 +426,16 @@ void main() {
             userId: 'f1',
             username: 'alice',
             color: '#E53935',
-            latitude: 1.001,
-            longitude: 2.001),
+            latitude: 42.031,
+            longitude: -93.631),
         Waypoint(
             id: 'fw2',
             name: "Alice's Work",
             userId: 'f1',
             username: 'alice',
             color: '#E53935',
-            latitude: 1.002,
-            longitude: 2.002),
+            latitude: 42.032,
+            longitude: -93.632),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -399,6 +444,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -427,6 +473,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -448,8 +495,8 @@ void main() {
             userId: 'f1',
             username: 'alice',
             color: '#E53935',
-            latitude: 1.001,
-            longitude: 2.001,
+            latitude: 42.031,
+            longitude: -93.631,
             profilePictureUrl: 'https://example.com/alice.png'),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
@@ -459,6 +506,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -474,7 +522,7 @@ void main() {
       find.descendant(of: find.byKey(const Key('nestDetailsSheet')), matching: find.text("Alice's Yard")),
       findsOneWidget,
     );
-    expect(find.text('(1.0010, 2.0010)'), findsOneWidget);
+    expect(find.text('(42.0310, -93.6310)'), findsOneWidget);
     // No edit action for a friend's nest.
     expect(find.byKey(const Key('editNestFromDialogButton')), findsNothing);
     // The picture fetch fails in the test harness (all HTTP is stubbed), so the avatar
@@ -498,6 +546,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -537,6 +586,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     // Not pumpAndSettle(): b3 is traveling, which keeps the bob-animation controller
@@ -573,6 +623,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     await tester.pumpAndSettle();
@@ -610,6 +661,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: fakeProfileService,
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -635,6 +687,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -659,8 +712,8 @@ void main() {
             id: 'fw1',
             userId: 'friend1',
             name: "Friend's Nest",
-            latitude: 1.002,
-            longitude: 2.002,
+            latitude: 42.032,
+            longitude: -93.632,
             username: 'friendo',
             color: '#1E88E5'),
       ];
@@ -671,6 +724,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -697,6 +751,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -719,6 +774,7 @@ void main() {
                   waypointService: _FakeWaypointService(),
                   friendsService: _FakeFriendsService(),
                   profileService: _FakeProfileService(),
+                  hubService: _FakeHubService(),
                   birdService: _FakeBirdService(),
                   pickLocationMode: true,
                 ),
@@ -755,6 +811,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -791,6 +848,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
@@ -823,6 +881,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     await tester.pump();
@@ -877,6 +936,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pump();
@@ -928,6 +988,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
@@ -961,6 +1022,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     await tester.pumpAndSettle();
@@ -990,6 +1052,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -1007,6 +1070,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -1222,6 +1286,7 @@ void main() {
             waypointService: _FakeWaypointService(),
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       await tester.pumpAndSettle();
@@ -1243,6 +1308,7 @@ void main() {
             waypointService: _FakeWaypointService(),
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       await tester.pumpAndSettle();
@@ -1278,6 +1344,7 @@ void main() {
             waypointService: fakeWaypointService,
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
@@ -1310,6 +1377,7 @@ void main() {
             waypointService: _FakeWaypointService(),
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       await tester.pumpAndSettle();
@@ -1321,6 +1389,118 @@ void main() {
       // teardown with a "Timer is still pending" error.
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await tester.pumpAndSettle();
+    });
+  });
+
+  group('Hub support', () {
+    testWidgets('non-admin users do not see the Add Hub button', (WidgetTester tester) async {
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('addHubButton')), findsNothing);
+    });
+
+    testWidgets('admin users see the Add Hub button, arm-then-tap places a Hub', (WidgetTester tester) async {
+      final fakeProfileService = _FakeProfileService()
+        ..profileToReturn = UserProfile(id: 'u1', username: 'admin', email: 'admin@example.com', isAdmin: true);
+      final fakeHubService = _FakeHubService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: fakeProfileService,
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('addHubButton')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('addHubButton')));
+      await tester.pumpAndSettle();
+
+      tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(42.03, -93.63));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hubNameField')), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('hubNameField')), 'Ames Public Library');
+      await tester.tap(find.byKey(const Key('saveHubButton')));
+      await tester.pumpAndSettle();
+
+      expect(fakeHubService.lastCreatedName, 'Ames Public Library');
+      expect(find.byKey(Key('hubMarker_${fakeHubService.lastCreatedHub!.id}')), findsOneWidget);
+    });
+
+    testWidgets('a plain map tap (Add Hub not armed) still creates a nest, not a Hub', (WidgetTester tester) async {
+      final fakeProfileService = _FakeProfileService()
+        ..profileToReturn = UserProfile(id: 'u1', username: 'admin', email: 'admin@example.com', isAdmin: true);
+      final fakeWaypointService = _FakeWaypointService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: fakeWaypointService,
+            friendsService: _FakeFriendsService(),
+            profileService: fakeProfileService,
+            hubService: _FakeHubService(),
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('waypointNameField')), findsOneWidget);
+      expect(find.byKey(const Key('hubNameField')), findsNothing);
+    });
+
+    testWidgets('tapping a Hub marker shows its details sheet', (WidgetTester tester) async {
+      final fakeHubService = _FakeHubService()
+        ..hubsToReturn = [
+          Hub(
+            id: 'h1',
+            name: 'Mucky Duck Pub',
+            latitude: 42.03,
+            longitude: -93.63,
+            status: 'Approved',
+            createdByUserId: 'admin1',
+            category: 'Pub',
+          ),
+        ];
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('hubMarker_h1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hubDetailsSheet')), findsOneWidget);
+      // Scoped to the sheet since the Hub's map marker (labeled with its own name pill) is
+      // still visible behind the sheet and would also match "Mucky Duck Pub".
+      expect(
+        find.descendant(of: find.byKey(const Key('hubDetailsSheet')), matching: find.text('Mucky Duck Pub')),
+        findsOneWidget,
+      );
+      expect(find.text('Pub'), findsOneWidget);
     });
   });
 }

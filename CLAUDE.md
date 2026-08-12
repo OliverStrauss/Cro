@@ -82,6 +82,13 @@ emulator's Data Explorer (`https://localhost:8081/_explorer/index.html`), or jus
 and re-run the emulator container to reset all local data, before running the API or tests
 again. CI is unaffected — its Cosmos emulator service container is fresh every run.
 
+A `Hubs` container (partition key `/status`) is provisioned the same dev-only way for
+app-curated public landmark nests. On startup, `Program.cs` also idempotently seeds two dev
+users if they don't already exist — `Oliver 1` (regular) and `Admin 1` (admin, can place
+Hubs via the map's "Add Hub" button) — both with the fixed local dev password
+`correct-horse-battery-staple`, same well-known-local-credential category as the Cosmos/
+Azurite connection strings above, never meaningful outside a local emulator.
+
 ### Local Azurite Emulator (required for profile picture upload/tests)
 
 Profile pictures go through Azure Blob Storage via `Azurite`, its official local emulator —

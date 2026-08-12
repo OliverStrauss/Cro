@@ -34,6 +34,7 @@ public class WaypointPictureEndpointTests : IClassFixture<WebApplicationFactory<
                     ["CosmosDb:DatabaseName"] = "CroApp",
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
+                    ["CosmosDb:HubsContainerName"] = "Hubs",
                     ["BlobStorage:ConnectionString"] = blobConnectionString,
                     ["BlobStorage:ProfilePicturesContainerName"] = "profile-pictures",
                     ["BlobStorage:NestPicturesContainerName"] = "nest-pictures",
