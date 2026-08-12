@@ -8,13 +8,6 @@ namespace CroApp.Api.Services;
 
 public class ProfilePictureService : IProfilePictureService
 {
-    private static readonly HashSet<string> AllowedContentTypes =
-    [
-        "image/png", "image/jpeg", "image/gif", "image/webp"
-    ];
-
-    private const long MaxSizeBytes = 5 * 1024 * 1024;
-
     private readonly BlobContainerClient _container;
     private readonly IUserRepository _userRepository;
 
@@ -29,12 +22,12 @@ public class ProfilePictureService : IProfilePictureService
 
     public async Task<string> UploadAsync(string userId, Stream content, string contentType, long contentLength)
     {
-        if (!AllowedContentTypes.Contains(contentType))
+        if (!ImageUploadValidation.AllowedContentTypes.Contains(contentType))
         {
             throw new ProfilePictureServiceException(400, "Unsupported image type.");
         }
 
-        if (contentLength > MaxSizeBytes)
+        if (contentLength > ImageUploadValidation.MaxSizeBytes)
         {
             throw new ProfilePictureServiceException(400, "Image is too large (5MB max).");
         }

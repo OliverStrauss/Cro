@@ -9,6 +9,7 @@ class AvatarWithFallback extends StatefulWidget {
   final double radius;
   final Key? avatarKey;
   final bool hasBorder;
+  final Color? borderColor;
 
   const AvatarWithFallback({
     super.key,
@@ -17,6 +18,7 @@ class AvatarWithFallback extends StatefulWidget {
     this.radius = 24,
     this.avatarKey,
     this.hasBorder = false,
+    this.borderColor,
   });
 
   @override
@@ -68,7 +70,10 @@ class _AvatarWithFallbackState extends State<AvatarWithFallback> {
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Theme.of(context).colorScheme.primary, width: 3),
+        border: Border.all(
+          color: widget.borderColor ?? Theme.of(context).colorScheme.primary,
+          width: 3,
+        ),
       ),
       child: avatar,
     );

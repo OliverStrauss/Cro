@@ -68,6 +68,16 @@ class _FakeWaypointService implements WaypointService {
     lastDeletedId = id;
     waypointsToReturn = waypointsToReturn.where((w) => w.id != id).toList();
   }
+
+  @override
+  Future<String> uploadWaypointPicture(
+    String token,
+    String waypointId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async =>
+      'https://example.com/nest-pictures/$waypointId';
 }
 
 class _FakeFriendsService implements FriendsService {
@@ -130,6 +140,41 @@ void main() {
     expect(find.byKey(const Key('noNestsMessage')), findsNothing);
   });
 
+  testWidgets('tapping a nest row opens the map focused on that nest', (WidgetTester tester) async {
+    final fakeService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 12.5, longitude: -8.25)];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MyNestsScreen(authState: authState, waypointService: fakeService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('nestTile_w1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MapScreen), findsOneWidget);
+    final mapScreen = tester.widget<MapScreen>(find.byType(MapScreen));
+    expect(mapScreen.focusPoint, const LatLng(12.5, -8.25));
+    expect(mapScreen.pickLocationMode, false);
+  });
+
+  testWidgets('tapping the rename or delete controls on a nest row does not also navigate to the map',
+      (WidgetTester tester) async {
+    final fakeService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MyNestsScreen(authState: authState, waypointService: fakeService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('renameNestButton_w1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MapScreen), findsNothing);
+    expect(find.byKey(const Key('waypointNameField')), findsOneWidget);
+  });
+
   testWidgets('shows an error and retry button on failure', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()..loadErrorToThrow = WaypointException('Could not load nests');
     final authState = AuthState()..login('test-token');
@@ -167,7 +212,8 @@ void main() {
     expect(find.text('Cabin'), findsOneWidget);
   });
 
-  testWidgets('deleting a nest confirms, then calls deleteWaypoint and refreshes', (WidgetTester tester) async {
+  testWidgets('deleting a nest is a two-tap inline confirm, then calls deleteWaypoint and refreshes',
+      (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()
       ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login('test-token');
@@ -176,10 +222,15 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    // First tap only arms the confirmation - no delete yet.
     await tester.tap(find.byKey(const Key('deleteNestButton_w1')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('confirmDeleteNestButton')));
+    expect(fakeService.lastDeletedId, null);
+    expect(find.text('Confirm?'), findsOneWidget);
+
+    // Second tap on the same row's delete action actually deletes.
+    await tester.tap(find.byKey(const Key('deleteNestButton_w1')));
     await tester.pumpAndSettle();
 
     expect(fakeService.lastDeletedId, 'w1');

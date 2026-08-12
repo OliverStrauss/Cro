@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../config.dart';
 import '../models/waypoint.dart';
@@ -78,6 +79,41 @@ class WaypointService {
       throw WaypointException(_errorMessage(response, 'Could not update nest'));
     }
     return Waypoint.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // Mirrors ProfileService.uploadProfilePicture's multipart pattern, pointed at the
+  // nest-scoped endpoint instead - a nest's picture is keyed by its own id (a user can have
+  // up to 5 nests), not the owner's id.
+  Future<String> uploadWaypointPicture(
+    String token,
+    String waypointId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async {
+    final request = http.MultipartRequest('PUT', Uri.parse('$apiBaseUrl/waypoints/$waypointId/picture'))
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: MediaType.parse(contentType),
+      ));
+
+    final http.StreamedResponse streamedResponse;
+    try {
+      streamedResponse = await request.send();
+    } catch (_) {
+      throw WaypointException('Could not reach the server');
+    }
+
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode != 200) {
+      throw WaypointException(_errorMessage(response, 'Could not upload nest picture'));
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['profilePictureUrl'] as String;
   }
 
   Future<void> deleteWaypoint(String token, String id) async {

@@ -81,6 +81,7 @@ builder.Services.AddScoped<IBirdRepository, CosmosBirdRepository>();
 builder.Services.AddScoped<IBirdService, BirdService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
+builder.Services.AddScoped<INestPictureService, NestPictureService>();
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
@@ -133,6 +134,10 @@ if (app.Environment.IsDevelopment())
     // pictures fetchable via a plain URL without SAS tokens - fine for local/dev, but a
     // real deployment needs real access control here before this container goes live.
     await blobClient.GetBlobContainerClient(blobOpts.ProfilePicturesContainerName)
+        .CreateIfNotExistsAsync(PublicAccessType.Blob);
+    // Same public-read, dev-only tradeoff as profile-pictures above - a nest's picture is
+    // shown to any friend who can already see that nest via /friends/waypoints.
+    await blobClient.GetBlobContainerClient(blobOpts.NestPicturesContainerName)
         .CreateIfNotExistsAsync(PublicAccessType.Blob);
 
     // Blob Storage CORS is entirely separate from ASP.NET Core's CORS middleware
@@ -192,6 +197,37 @@ app.MapGet("/users/{id}", async (string id, IUserRepository repo) =>
     await repo.GetByIdAsync(id) is { } user ? Results.Ok(user.ToResponse()) : Results.NotFound())
 .WithName("GetUserById");
 
+// Powers the Profile screen's live "Add Friends" suggestions as the caller types - unlike
+// GET /users/{id}, this is authenticated (it's a directory search over every user, not a
+// single already-known id) and deliberately returns only id/username/profilePictureUrl,
+// the same minimal shape as the friend-request endpoints below, never email or the friends
+// graph. The caller's own account is excluded so the search box can never suggest
+// friending yourself. Route ordering vs. GET /users/{id} above doesn't matter - ASP.NET
+// Core's endpoint routing prefers the literal "search" segment over the {id} parameter
+// regardless of registration order.
+app.MapGet("/users/search", async (string? q, ClaimsPrincipal principal, IUserRepository repo) =>
+{
+    var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (callerId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var prefix = q?.Trim() ?? "";
+    if (prefix.Length == 0)
+    {
+        return Results.Ok(Array.Empty<object>());
+    }
+
+    var matches = await repo.SearchByUsernamePrefixAsync(prefix, limit: 8);
+    var results = matches
+        .Where(u => u.Id != callerId)
+        .Select(u => new { u.Id, u.Username, u.ProfilePictureUrl });
+    return Results.Ok(results);
+})
+.RequireAuthorization()
+.WithName("SearchUsers");
+
 app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<JwtOptions> jwtOpts) =>
 {
     var user = await repo.GetByUsernameAsync(req.Username);
@@ -212,7 +248,7 @@ app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<Jw
 })
 .WithName("Login");
 
-app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService waypointService) =>
+app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService waypointService, IUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -220,7 +256,16 @@ app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService wayp
         return Results.Unauthorized();
     }
 
-    return Results.Ok(await waypointService.ListAsync(userId));
+    var waypoints = await waypointService.ListAsync(userId);
+    // A nest without its own picture falls back to its owner's profile picture - resolved
+    // here (not stored on the Waypoint document) so re-uploading a profile picture is
+    // instantly reflected on every nest that hasn't set its own, same fallback GET
+    // /friends/waypoints applies below.
+    var user = await userRepo.GetByIdAsync(userId);
+    var resolved = waypoints
+        .Select(w => w with { ProfilePictureUrl = w.ProfilePictureUrl ?? user?.ProfilePictureUrl })
+        .ToList();
+    return Results.Ok(resolved);
 })
 .RequireAuthorization()
 .WithName("ListWaypoints");
@@ -553,7 +598,7 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
             waypoint.Name,
             waypoint.Latitude,
             waypoint.Longitude,
-            friendUser?.ProfilePictureUrl
+            ProfilePictureUrl = waypoint.ProfilePictureUrl ?? friendUser?.ProfilePictureUrl
         });
     }
 
@@ -652,6 +697,29 @@ app.MapPut("/profile/picture", async (IFormFile file, ClaimsPrincipal principal,
 .RequireAuthorization()
 .DisableAntiforgery()
 .WithName("UploadProfilePicture");
+
+app.MapPut("/waypoints/{id}/picture", async (string id, IFormFile file, ClaimsPrincipal principal, INestPictureService pictureService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await using var stream = file.OpenReadStream();
+        var url = await pictureService.UploadAsync(userId, id, stream, file.ContentType, file.Length);
+        return Results.Ok(new { ProfilePictureUrl = url });
+    }
+    catch (NestPictureServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.DisableAntiforgery()
+.WithName("UploadNestPicture");
 
 var summaries = new[]
 {

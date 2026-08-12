@@ -6,6 +6,7 @@ import '../config.dart';
 import '../models/friend.dart';
 import '../models/friend_bird.dart';
 import '../models/friend_request.dart';
+import '../models/user_search_result.dart';
 import '../models/waypoint.dart';
 
 class FriendsException implements Exception {
@@ -25,16 +26,22 @@ class FriendsService {
   }
 
   Future<List<FriendRequest>> getIncomingRequests(String token) async {
-    final response =
-        await _get('/friends/requests/incoming', token, 'Could not load friend requests');
+    final response = await _get(
+      '/friends/requests/incoming',
+      token,
+      'Could not load friend requests',
+    );
     return (jsonDecode(response.body) as List<dynamic>)
         .map((e) => FriendRequest.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   Future<List<FriendRequest>> getOutgoingRequests(String token) async {
-    final response =
-        await _get('/friends/requests/outgoing', token, 'Could not load friend requests');
+    final response = await _get(
+      '/friends/requests/outgoing',
+      token,
+      'Could not load friend requests',
+    );
     return (jsonDecode(response.body) as List<dynamic>)
         .map((e) => FriendRequest.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -45,7 +52,10 @@ class FriendsService {
     try {
       response = await http.post(
         Uri.parse('$apiBaseUrl/friends/requests'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({'username': username}),
       );
     } catch (_) {
@@ -53,7 +63,9 @@ class FriendsService {
     }
 
     if (response.statusCode != 204) {
-      throw FriendsException(_errorMessage(response, 'Could not send friend request'));
+      throw FriendsException(
+        _errorMessage(response, 'Could not send friend request'),
+      );
     }
   }
 
@@ -69,7 +81,9 @@ class FriendsService {
     }
 
     if (response.statusCode != 204) {
-      throw FriendsException(_errorMessage(response, 'Could not accept friend request'));
+      throw FriendsException(
+        _errorMessage(response, 'Could not accept friend request'),
+      );
     }
   }
 
@@ -85,31 +99,73 @@ class FriendsService {
     }
 
     if (response.statusCode != 204) {
-      throw FriendsException(_errorMessage(response, 'Could not remove friend'));
+      throw FriendsException(
+        _errorMessage(response, 'Could not remove friend'),
+      );
     }
   }
 
   Future<List<Waypoint>> getFriendsWaypoints(String token) async {
-    final response =
-        await _get('/friends/waypoints', token, "Could not load friends' waypoints");
+    final response = await _get(
+      '/friends/waypoints',
+      token,
+      "Could not load friends' waypoints",
+    );
     return (jsonDecode(response.body) as List<dynamic>)
         .map((e) => Waypoint.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   Future<List<FriendBird>> getFriendsBirds(String token) async {
-    final response = await _get('/friends/birds', token, "Could not load friends' birds");
+    final response = await _get(
+      '/friends/birds',
+      token,
+      "Could not load friends' birds",
+    );
     return (jsonDecode(response.body) as List<dynamic>)
         .map((e) => FriendBird.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
-  Future<void> setFriendColor(String token, String friendId, String color) async {
+  // Powers the "Add Friends" live-suggestions dropdown - GET /users/search?q=, not a
+  // /friends/* route, but kept on this service rather than a new one since it only ever
+  // exists to feed that same add-a-friend flow.
+  Future<List<UserSearchResult>> searchUsers(String token, String query) async {
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse(
+          '$apiBaseUrl/users/search',
+        ).replace(queryParameters: {'q': query}),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw FriendsException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw FriendsException(
+        _errorMessage(response, 'Could not search for users'),
+      );
+    }
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => UserSearchResult.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> setFriendColor(
+    String token,
+    String friendId,
+    String color,
+  ) async {
     final http.Response response;
     try {
       response = await http.put(
         Uri.parse('$apiBaseUrl/friends/$friendId/color'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({'color': color}),
       );
     } catch (_) {
@@ -121,7 +177,11 @@ class FriendsService {
     }
   }
 
-  Future<http.Response> _get(String path, String token, String errorFallback) async {
+  Future<http.Response> _get(
+    String path,
+    String token,
+    String errorFallback,
+  ) async {
     final http.Response response;
     try {
       response = await http.get(
