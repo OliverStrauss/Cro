@@ -260,6 +260,7 @@ class MapScreenState extends State<MapScreen>
   void _showBirdDetails(_TravelingBird tb) {
     BirdDetailsSheet.show(
       context,
+      birdId: tb.id,
       name: tb.name,
       type: tb.type,
       senderLabel: tb.senderLabel,
@@ -267,6 +268,8 @@ class MapScreenState extends State<MapScreen>
       destinationName: tb.destination.name,
       departedAt: tb.departedAt,
       estimatedArrivalAt: tb.estimatedArrivalAt,
+      isPublic: tb.isPublic,
+      token: widget.authState.token!,
     );
   }
 
@@ -274,7 +277,7 @@ class MapScreenState extends State<MapScreen>
   // every accepted friend's (from _friendsBirds, via GET /friends/birds) - to the
   // origin/destination nests its from/to ids refer to. Drops any bird that can't
   // currently be placed on the map (not traveling, missing timing data, or pointing at
-  // a nest id that isn't in this user's own-plus-friends nest set - e.g. a stale race
+  // a nest id that isn't in this user's own-plus-friends-plus-Hubs set - e.g. a stale race
   // with a friend removing a nest mid-flight) rather than crashing. A bird's line/marker
   // color always follows whoever sent it - the theme's primary color for their own birds,
   // or that friend's assigned color for a friend's - never the destination, so two birds
@@ -282,6 +285,19 @@ class MapScreenState extends State<MapScreen>
   List<_TravelingBird> _resolveTravelingBirds() {
     final nestsById = <String, Waypoint>{
       for (final nest in [..._ownNests, ..._friendWaypoints]) nest.id: nest,
+      // A bird can depart from or land at a Hub (see ComposeAndSendAsync's destination
+      // resolution) - projected into a Waypoint-shaped record here purely so the existing
+      // curve/marker/bearing math (which only ever reads .latitude/.longitude/.name) keeps
+      // working without every one of those functions taking on a Hub-vs-Waypoint union type.
+      for (final hub in _hubs)
+        hub.id: Waypoint(
+          id: hub.id,
+          userId: hub.createdByUserId,
+          name: hub.name,
+          latitude: hub.latitude,
+          longitude: hub.longitude,
+          profilePictureUrl: hub.profilePictureUrl,
+        ),
     };
 
     final result = <_TravelingBird>[];
@@ -304,6 +320,7 @@ class MapScreenState extends State<MapScreen>
           destination: destination,
           departedAt: departedAt,
           estimatedArrivalAt: estimatedArrivalAt,
+          isPublic: bird.isPublic,
         ),
       );
     }
@@ -324,6 +341,7 @@ class MapScreenState extends State<MapScreen>
           destination: destination,
           departedAt: friendBird.departedAt,
           estimatedArrivalAt: friendBird.estimatedArrivalAt,
+          isPublic: friendBird.isPublic,
         ),
       );
     }
@@ -878,6 +896,7 @@ class _TravelingBird {
   final Waypoint destination;
   final DateTime departedAt;
   final DateTime estimatedArrivalAt;
+  final bool isPublic;
 
   const _TravelingBird({
     required this.id,
@@ -889,6 +908,7 @@ class _TravelingBird {
     required this.destination,
     required this.departedAt,
     required this.estimatedArrivalAt,
+    this.isPublic = false,
   });
 }
 

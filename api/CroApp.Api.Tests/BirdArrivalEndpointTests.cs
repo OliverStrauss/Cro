@@ -35,6 +35,7 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["CosmosDb:BirdsContainerName"] = "Birds",
                     // Huge multiplier so any test-fixture distance - up to half Earth's
                     // circumference (~20,000km, the max possible) - resolves to a

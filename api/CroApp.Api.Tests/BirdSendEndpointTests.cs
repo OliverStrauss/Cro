@@ -32,6 +32,7 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["CosmosDb:BirdsContainerName"] = "Birds",
                     // Deliberately left at the real default (1.0, from appsettings.json - not
                     // overridden here) so a just-sent bird reliably stays "traveling" for the
