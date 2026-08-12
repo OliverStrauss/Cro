@@ -159,6 +159,7 @@ class _FakeBirdService implements BirdService {
   String? lastSentBirdId;
   String? lastSentNestId;
   String? lastSentContent;
+  List<String> markedReadBirdIds = [];
 
   @override
   Future<List<Bird>> listBirds(String token) async {
@@ -174,6 +175,33 @@ class _FakeBirdService implements BirdService {
     lastSentNestId = nestId;
     lastSentContent = content;
     return Bird(id: birdId, userId: 'u1', name: 'Bird $birdId', isTraveling: true, type: 'Sparrow');
+  }
+
+  // Mirrors the real GET /waypoints/{id}/birds semantics: every idle bird currently parked
+  // at this nest, regardless of who sent it - not scoped to the caller's own birds the way
+  // listBirds is.
+  @override
+  Future<List<Bird>> getNestResidents(String token, String nestId) async {
+    if (errorToThrow != null) throw errorToThrow!;
+    return birdsToReturn.where((b) => b.currentNestId == nestId && !b.isTraveling).toList();
+  }
+
+  @override
+  Future<Bird> markBirdRead(String token, String birdId) async {
+    markedReadBirdIds.add(birdId);
+    final bird = birdsToReturn.firstWhere((b) => b.id == birdId);
+    return Bird(
+      id: bird.id,
+      userId: bird.userId,
+      name: bird.name,
+      currentNestId: bird.currentNestId,
+      isTraveling: bird.isTraveling,
+      type: bird.type,
+      content: bird.content,
+      audioUrl: bird.audioUrl,
+      imageUrl: bird.imageUrl,
+      isRead: true,
+    );
   }
 
   @override
@@ -660,6 +688,98 @@ void main() {
     expect(find.byKey(const Key('noBirdsAtNestMessage')), findsOneWidget);
   });
 
+  testWidgets('the own-nest sheet lists a friend\'s delivered bird separately from the caller\'s own',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        Bird(id: 'b1', userId: 'u1', name: 'Mine', currentNestId: 'w1', isTraveling: false, type: 'Sparrow'),
+        Bird(
+            id: 'b2',
+            userId: 'friend1',
+            name: 'From Friendo',
+            currentNestId: 'w1',
+            isTraveling: false,
+            type: 'Cro',
+            content: 'hey!',
+            isRead: false),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    // GetNestResidentsAsync is cross-partition - both the caller's own idle bird and the
+    // friend's delivered one come back from the same fetch, but only the caller's own shows
+    // under "Birds here" (resendable); the friend's shows under "Delivered to you" instead.
+    expect(find.text('Delivered to you'), findsOneWidget);
+    expect(find.byKey(const Key('birdTile_b1')), findsOneWidget);
+    expect(find.byKey(const Key('birdTile_b2')), findsNothing);
+    expect(find.byKey(const Key('deliveredBirdTile_b2')), findsOneWidget);
+    expect(find.byKey(const Key('deliveredBirdTile_b1')), findsNothing);
+    expect(find.text('New · Cro'), findsOneWidget);
+  });
+
+  testWidgets('tapping a delivered bird opens its message and marks it read', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        Bird(
+            id: 'b2',
+            userId: 'friend1',
+            name: 'From Friendo',
+            currentNestId: 'w1',
+            isTraveling: false,
+            type: 'Cro',
+            content: 'hey!',
+            isRead: false),
+      ];
+    final fakeProfileService = _FakeProfileService()
+      ..profileToReturn = UserProfile(id: 'friend1', username: 'friendo', email: 'friendo@example.com');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: fakeProfileService,
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('deliveredBirdTile_b2')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('receivedBirdSheet')), findsOneWidget);
+    expect(find.byKey(const Key('receivedBirdContent')), findsOneWidget);
+    expect(find.text('hey!'), findsOneWidget);
+    expect(find.text('Cro · From friendo'), findsOneWidget);
+    expect(fakeBirdService.markedReadBirdIds, contains('b2'));
+
+    await tester.tap(find.text('Close').last);
+    await tester.pumpAndSettle();
+
+    // Re-fetches or at least locally flips the tile's unread marker once its sheet has
+    // called markBirdRead, instead of leaving the dot/bold styling stuck as unread.
+    expect(find.text('New · Cro'), findsNothing);
+  });
+
   testWidgets('picking and uploading a nest picture from the sheet calls uploadWaypointPicture',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
@@ -910,6 +1030,40 @@ void main() {
     expect(find.text('Sparrow · Sent by You'), findsOneWidget);
     expect(find.text('Cabin', skipOffstage: false), findsWidgets);
     expect(tester.widget<Text>(find.byKey(const Key('birdDetailsDestination'))).data, 'Cabin');
+  });
+
+  testWidgets(
+      'tapping near but not exactly on a bird marker still opens its details sheet (hit target bigger than the painted circle)',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [_travelingBird('b1', nestFromId: 'w1', nestToId: 'w2')];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    // The marker's painted circle is only 18x18 (radius 9) - a real touch this far off dead
+    // center used to silently miss (HitTestBehavior.deferToChild). It should now land inside
+    // the enlarged kMinInteractiveDimension hit box.
+    final markerCenter = tester.getCenter(find.byKey(const Key('birdMarker_b1')));
+    await tester.tapAt(markerCenter + const Offset(15, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdDetailsSheet')), findsOneWidget);
   });
 
   testWidgets('tapping a friend\'s bird marker opens the bird details sheet, sent by their username',

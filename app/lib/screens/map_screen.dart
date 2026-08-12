@@ -682,9 +682,17 @@ class MapScreenState extends State<MapScreen>
                     estimatedArrivalAt: tb.estimatedArrivalAt,
                     now: now,
                   ),
-                  width: 22,
-                  height: 22,
+                  // Bigger than the painted 18x18 circle (kMinInteractiveDimension, same as
+                  // Material's own minimum touch target) - a bird marker moves every 3s and
+                  // bobs on top of that, so a tap-sized-to-the-pixels hit target is too easy
+                  // to miss on a real touchscreen even though it's precise enough for widget
+                  // tests, which tap dead-center.
+                  width: kMinInteractiveDimension,
+                  height: kMinInteractiveDimension,
                   child: GestureDetector(
+                    // Without this, the default HitTestBehavior.deferToChild means a tap only
+                    // registers on the painted circle itself, not the full marker box above.
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => _showBirdDetails(tb),
                     child: AnimatedBuilder(
                       animation: _birdBobController,
