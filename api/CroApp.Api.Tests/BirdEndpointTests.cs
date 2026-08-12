@@ -72,11 +72,44 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     private Task<HttpResponseMessage> ListBirdsAsync(string? token) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", token));
 
-    private Task<HttpResponseMessage> CreateWaypointAsync(string? token, string name, double lat = 42.0, double lng = -93.5) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token, new { Name = name, Latitude = lat, Longitude = lng }));
+    private async Task<WaypointDto> CreateWaypointAsync(string token, string name, double lat = 42.0, double lng = -93.5, bool isPublic = false)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token,
+            new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<WaypointDto>())!;
+    }
+
+    private Task<HttpResponseMessage> ComposeBirdAsync(
+        string? token,
+        string type,
+        string name,
+        string originNestId,
+        string destinationId,
+        string? content = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/birds/compose");
+        if (token is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent(type), "type" },
+            { new StringContent(name), "name" },
+            { new StringContent(originNestId), "originNestId" },
+            { new StringContent(destinationId), "destinationId" },
+        };
+        if (content is not null)
+        {
+            form.Add(new StringContent(content), "content");
+        }
+        request.Content = form;
+        return _client.SendAsync(request);
+    }
 
     [Fact]
-    public async Task ListBirds_ForNewUser_LazilyCreatesThreeBirds()
+    public async Task ListBirds_ForNewUser_ReturnsEmptyList()
     {
         var username = $"bird-user-{Guid.NewGuid():N}";
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
@@ -85,56 +118,7 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         response.EnsureSuccessStatusCode();
         var birds = await response.Content.ReadFromJsonAsync<List<BirdDto>>();
 
-        Assert.Equal(3, birds!.Count);
-        Assert.Equal(["Bird 1", "Bird 2", "Bird 3"], birds.Select(b => b.Name).OrderBy(n => n));
-        Assert.All(birds, b =>
-        {
-            Assert.Null(b.CurrentNestId);
-            Assert.False(b.IsTraveling);
-        });
-    }
-
-    [Fact]
-    public async Task ListBirds_CalledTwice_DoesNotCreateDuplicates()
-    {
-        var username = $"bird-user-{Guid.NewGuid():N}";
-        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
-
-        await ListBirdsAsync(token);
-        var secondResponse = await ListBirdsAsync(token);
-        var birds = await secondResponse.Content.ReadFromJsonAsync<List<BirdDto>>();
-
-        Assert.Equal(3, birds!.Count);
-    }
-
-    [Fact]
-    public async Task CreatingANest_AssignsUnassignedBirdsToIt()
-    {
-        var username = $"bird-user-{Guid.NewGuid():N}";
-        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
-        await ListBirdsAsync(token);
-
-        var created = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
-
-        var response = await ListBirdsAsync(token);
-        var birds = await response.Content.ReadFromJsonAsync<List<BirdDto>>();
-        Assert.Equal(3, birds!.Count);
-        Assert.All(birds, b => Assert.Equal(created!.Id, b.CurrentNestId));
-    }
-
-    [Fact]
-    public async Task CreatingASecondNest_DoesNotReassignAlreadyAssignedBirds()
-    {
-        var username = $"bird-user-{Guid.NewGuid():N}";
-        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
-        await ListBirdsAsync(token);
-        var first = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
-
-        await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6);
-
-        var response = await ListBirdsAsync(token);
-        var birds = await response.Content.ReadFromJsonAsync<List<BirdDto>>();
-        Assert.All(birds!, b => Assert.Equal(first!.Id, b.CurrentNestId));
+        Assert.Empty(birds!);
     }
 
     [Fact]
@@ -153,18 +137,19 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var tokenA = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
         var tokenB = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
 
+        var aOrigin = await CreateWaypointAsync(tokenA, "A's Nest", isPublic: false);
+        var aDest = await CreateWaypointAsync(tokenA, "A's Away", 43.0, -94.0, isPublic: true);
+        (await ComposeBirdAsync(tokenA, "Cro", "A's Bird", aOrigin.Id, aDest.Id, content: "hi")).EnsureSuccessStatusCode();
+
         var birdsA = await (await ListBirdsAsync(tokenA)).Content.ReadFromJsonAsync<List<BirdDto>>();
         var birdsB = await (await ListBirdsAsync(tokenB)).Content.ReadFromJsonAsync<List<BirdDto>>();
 
-        Assert.Equal(3, birdsA!.Count);
-        Assert.Equal(3, birdsB!.Count);
-        Assert.All(birdsA, b => Assert.All(birdsB, other => Assert.NotEqual(b.Id, other.Id)));
-        Assert.Single(birdsA.Select(b => b.UserId).Distinct());
-        Assert.NotEqual(birdsA[0].UserId, birdsB[0].UserId);
+        Assert.Single(birdsA!);
+        Assert.Empty(birdsB!);
     }
 
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
-    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt);
+    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
     private record BirdDto(
         string Id,
         string UserId,
@@ -179,5 +164,9 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         DateTimeOffset? DepartedAt,
         DateTimeOffset? EstimatedArrivalAt,
         bool IsRead,
-        DateTimeOffset UpdatedAt);
+        DateTimeOffset UpdatedAt,
+        string? AudioUrl,
+        string? ImageUrl,
+        string? ProfilePictureUrl,
+        bool IsPublic);
 }

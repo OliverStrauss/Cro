@@ -9,6 +9,7 @@ using CroApp.Api.Repositories;
 using CroApp.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -84,6 +85,8 @@ builder.Services.AddScoped<IHubService, HubService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
 builder.Services.AddScoped<INestPictureService, NestPictureService>();
+builder.Services.AddScoped<IBirdPictureService, BirdPictureService>();
+builder.Services.AddScoped<IBirdMediaService, BirdMediaService>();
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
@@ -172,6 +175,13 @@ if (app.Environment.IsDevelopment())
     // Same public-read, dev-only tradeoff as profile-pictures above - a nest's picture is
     // shown to any friend who can already see that nest via /friends/waypoints.
     await blobClient.GetBlobContainerClient(blobOpts.NestPicturesContainerName)
+        .CreateIfNotExistsAsync(PublicAccessType.Blob);
+    // Same tradeoff again - a bird's own avatar.
+    await blobClient.GetBlobContainerClient(blobOpts.BirdPicturesContainerName)
+        .CreateIfNotExistsAsync(PublicAccessType.Blob);
+    // A composed bird's payload media (Parrot audio, Pigeon/Raven image) - separate
+    // container from the avatar above so the two never collide.
+    await blobClient.GetBlobContainerClient(blobOpts.BirdMediaContainerName)
         .CreateIfNotExistsAsync(PublicAccessType.Blob);
 
     // Blob Storage CORS is entirely separate from ASP.NET Core's CORS middleware
@@ -304,7 +314,7 @@ app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService wayp
 .RequireAuthorization()
 .WithName("ListWaypoints");
 
-app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService, IBirdService birdService) =>
+app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -314,13 +324,7 @@ app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal princip
 
     try
     {
-        var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude);
-        // Any of the owner's birds with no current nest (a brand-new user's birds, or one
-        // who somehow ended up nestless again) get assigned to the nest they just created.
-        // This naturally covers "first nest ever" without a special case. Lives here rather
-        // than inside WaypointService so Waypoint doesn't take on a dependency on Bird - same
-        // composition-at-the-endpoint pattern as GET /friends/waypoints below.
-        await birdService.AssignUnassignedBirdsToNestAsync(userId, saved.Id);
+        var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude, req.IsPublic);
         return Results.Created($"/waypoints/{saved.Id}", saved);
     }
     catch (WaypointServiceException ex)
@@ -440,6 +444,111 @@ app.MapGet("/birds", async (ClaimsPrincipal principal, IBirdService birdService)
 })
 .RequireAuthorization()
 .WithName("ListBirds");
+
+app.MapPost("/birds/compose", async (
+    [FromForm] string type,
+    [FromForm] string name,
+    [FromForm] string originNestId,
+    [FromForm] string destinationId,
+    [FromForm] string? content,
+    IFormFile? file,
+    ClaimsPrincipal principal,
+    IBirdService birdService,
+    [FromForm] bool isPublic = false) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var mediaStream = file?.OpenReadStream();
+    try
+    {
+        var created = await birdService.ComposeAndSendAsync(
+            userId, type, name, originNestId, destinationId, content, isPublic,
+            mediaStream, file?.ContentType, file?.Length ?? 0);
+        return Results.Created($"/birds/{created.Id}", created);
+    }
+    catch (BirdServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+    finally
+    {
+        if (mediaStream is not null)
+        {
+            await mediaStream.DisposeAsync();
+        }
+    }
+})
+.RequireAuthorization()
+.DisableAntiforgery()
+.WithName("ComposeBird");
+
+app.MapPut("/birds/{id}", async (string id, RenameBirdRequest req, ClaimsPrincipal principal, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await birdService.RenameAsync(userId, id, req.Name));
+    }
+    catch (BirdServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("RenameBird");
+
+app.MapDelete("/birds/{id}", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await birdService.DeleteAsync(userId, id);
+        return Results.NoContent();
+    }
+    catch (BirdServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("DeleteBird");
+
+app.MapPut("/birds/{id}/picture", async (string id, IFormFile file, ClaimsPrincipal principal, IBirdPictureService pictureService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await using var stream = file.OpenReadStream();
+        var url = await pictureService.UploadAsync(userId, id, stream, file.ContentType, file.Length);
+        return Results.Ok(new { ProfilePictureUrl = url });
+    }
+    catch (BirdPictureServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.DisableAntiforgery()
+.WithName("UploadBirdPicture");
 
 app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPrincipal principal, IBirdService birdService) =>
 {
@@ -839,9 +948,12 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 record CreateUserRequest(string Username, string Email, string Password);
 record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
-record SetWaypointRequest(string Name, double Latitude, double Longitude);
+// IsPublic is only honored by CreateWaypoint - UpdateWaypoint reuses this same DTO but
+// ignores the field entirely, since a nest's kind is not editable after creation.
+record SetWaypointRequest(string Name, double Latitude, double Longitude, bool IsPublic = false);
 record SetHubRequest(string Name, double Latitude, double Longitude, string? Category);
 record SendBirdRequest(string NestId, string? Content);
+record RenameBirdRequest(string Name);
 record SendFriendRequestRequest(string Username);
 record SetFriendColorRequest(string Color);
 

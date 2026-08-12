@@ -358,6 +358,36 @@ class MapScreenState extends State<MapScreen>
     }
   }
 
+  // Mirrors MyNestsScreen's _resolveNestKindToAdd - only asks when both slots are open;
+  // otherwise the remaining kind is the only valid choice, and if neither is open there's
+  // nothing to add (handled by the caller before this is invoked).
+  Future<bool?> _resolveNestKindToAdd() async {
+    final hasPrivate = _ownNests.any((n) => !n.isPublic);
+    final hasPublic = _ownNests.any((n) => n.isPublic);
+    if (hasPrivate && !hasPublic) {
+      return true;
+    }
+    if (hasPublic && !hasPrivate) {
+      return false;
+    }
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Add which kind of nest?'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Private nest'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Public nest'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @visibleForTesting
   Future<void> handleMapTap(LatLng point) async {
     if (widget.pickLocationMode) {
@@ -370,9 +400,25 @@ class MapScreenState extends State<MapScreen>
       return;
     }
 
+    final hasBothNests =
+        _ownNests.any((n) => n.isPublic) && _ownNests.any((n) => !n.isPublic);
+    if (hasBothNests) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Both nest slots are full')),
+      );
+      return;
+    }
+
+    final isPublic = await _resolveNestKindToAdd();
+    if (isPublic == null || !mounted) {
+      return;
+    }
+
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => const WaypointNameDialog(),
+      builder: (context) => WaypointNameDialog(
+        kindLabel: isPublic ? 'Public nest' : 'Private nest',
+      ),
     );
     if (name == null || name.trim().isEmpty) {
       return;
@@ -384,6 +430,7 @@ class MapScreenState extends State<MapScreen>
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
+        isPublic: isPublic,
       );
       setState(() => _ownNests = [..._ownNests, saved]);
     } catch (e) {

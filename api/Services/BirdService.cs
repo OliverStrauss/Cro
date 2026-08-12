@@ -10,18 +10,14 @@ public class BirdService(
     IWaypointRepository waypointRepository,
     IUserRepository userRepository,
     IHubRepository hubRepository,
+    IBirdMediaService birdMediaService,
     IOptions<BirdTravelOptions> birdTravelOptions) : IBirdService
 {
-    private const int BirdsPerUser = 3;
+    private const int MaxBirdsPerUser = 5;
 
     public async Task<List<Bird>> ListAsync(string userId)
     {
         var existing = await birdRepository.ListByUserIdAsync(userId);
-        if (existing.Count == 0)
-        {
-            existing = await ProvisionBirdsAsync(userId);
-        }
-
         var resolved = new List<Bird>();
         foreach (var bird in existing)
         {
@@ -46,45 +42,97 @@ public class BirdService(
         return resolved.Where(b => b.IsTraveling).ToList();
     }
 
-    // Lazy provisioning: some users predate this feature and have zero birds, and every
-    // new registration also hits this path the first time it calls GET /birds - keeping
-    // creation here (not in POST /users) means there's exactly one place that ever
-    // creates a Bird document.
-    private async Task<List<Bird>> ProvisionBirdsAsync(string userId)
+    // Spawns a brand-new bird and sends it in one step - there's no reason left to keep a
+    // bird idle-and-unsent the way auto-provisioned birds used to be, since every bird is
+    // now deliberately created *in order to* go somewhere. The origin must be caller-owned
+    // (unlike SendAsync's resend flow, a new bird can't depart from a friend's nest or a
+    // Hub); the destination can be anywhere reachable (own, a friend's, or a Hub).
+    public async Task<Bird> ComposeAndSendAsync(
+        string userId,
+        string type,
+        string name,
+        string originNestId,
+        string destinationId,
+        string? content,
+        bool isPublic,
+        Stream? mediaStream,
+        string? mediaContentType,
+        long mediaContentLength)
     {
-        var created = new List<Bird>();
-        for (var i = 1; i <= BirdsPerUser; i++)
+        if (string.IsNullOrWhiteSpace(name))
         {
-            var bird = new Bird(
-                Guid.NewGuid().ToString(),
-                userId,
-                $"Bird {i}",
-                CurrentNestId: null,
-                IsTraveling: false,
-                NestFromId: null,
-                NestToId: null,
-                Speed: null,
-                Content: null,
-                Type: BirdTypeCatalog.PickForSlot(i - 1),
-                DepartedAt: null,
-                EstimatedArrivalAt: null,
-                IsRead: true,
-                DateTimeOffset.UtcNow);
-            created.Add(await birdRepository.CreateAsync(bird));
+            throw new BirdServiceException(400, "This bird needs a name.");
         }
-        return created;
+        if (!BirdTypeCatalog.IsValid(type))
+        {
+            throw new BirdServiceException(400, $"Unknown bird type '{type}'.");
+        }
+
+        var existing = await birdRepository.ListByUserIdAsync(userId);
+        if (existing.Count >= MaxBirdsPerUser)
+        {
+            throw new BirdServiceException(409, $"You can have at most {MaxBirdsPerUser} birds. Delete one (from your private nest) before spawning another.");
+        }
+
+        BirdPayloadValidator.Validate(type, content, mediaStream is not null);
+
+        var origin = await waypointRepository.GetAsync(userId, originNestId)
+            ?? throw new BirdServiceException(404, "Origin nest not found - a new bird can only depart from one of your own nests.");
+        var destination = await ResolveReachableNestAsync(userId, destinationId)
+            ?? throw new BirdServiceException(404, "Destination not found.");
+        if (origin.Id == destination.Id)
+        {
+            throw new BirdServiceException(400, "Pick a different destination than the origin nest.");
+        }
+
+        var birdId = Guid.NewGuid().ToString();
+        string? audioUrl = null;
+        string? imageUrl = null;
+        if (mediaStream is not null)
+        {
+            var mediaKind = BirdPayloadValidator.MediaKindForType(type);
+            var mediaUrl = await birdMediaService.UploadAsync(birdId, mediaKind, mediaStream, mediaContentType ?? "", mediaContentLength);
+            if (mediaKind == BirdMediaKind.Audio)
+            {
+                audioUrl = mediaUrl;
+            }
+            else
+            {
+                imageUrl = mediaUrl;
+            }
+        }
+
+        var distanceKm = GeoDistance.HaversineKm(origin.Latitude, origin.Longitude, destination.Latitude, destination.Longitude);
+        var effectiveSpeedKmh = BirdTypeCatalog.BaseSpeedKmh(type) * birdTravelOptions.Value.SpeedMultiplier;
+        var hours = effectiveSpeedKmh > 0 ? distanceKm / effectiveSpeedKmh : 0;
+
+        var now = DateTimeOffset.UtcNow;
+        var bird = new Bird(
+            birdId,
+            userId,
+            name.Trim(),
+            CurrentNestId: null,
+            IsTraveling: true,
+            NestFromId: origin.Id,
+            NestToId: destination.Id,
+            Speed: effectiveSpeedKmh,
+            Content: content,
+            Type: type,
+            DepartedAt: now,
+            EstimatedArrivalAt: now.AddHours(hours),
+            IsRead: true, // not delivered yet - nothing to read
+            UpdatedAt: now,
+            AudioUrl: audioUrl,
+            ImageUrl: imageUrl,
+            ProfilePictureUrl: null,
+            IsPublic: isPublic);
+        return await birdRepository.CreateAsync(bird);
     }
 
-    public async Task AssignUnassignedBirdsToNestAsync(string userId, string nestId)
-    {
-        var birds = await birdRepository.ListByUserIdAsync(userId);
-        foreach (var bird in birds.Where(b => b.CurrentNestId is null && !b.IsTraveling))
-        {
-            var updated = bird with { CurrentNestId = nestId, UpdatedAt = DateTimeOffset.UtcNow };
-            await birdRepository.UpdateAsync(updated);
-        }
-    }
-
+    // Resends an already-landed, caller-owned bird onward - distinct from ComposeAndSendAsync
+    // (spawning a brand-new bird). A bird can be resent from wherever it currently sits
+    // (its own nest, or a friend's/Hub's it previously arrived at), unlike a newly-composed
+    // bird's origin, which must be caller-owned.
     public async Task<Bird> SendAsync(string userId, string birdId, string destinationNestId, string? content)
     {
         var bird = await birdRepository.GetAsync(userId, birdId)
@@ -106,9 +154,9 @@ public class BirdService(
 
         var destination = await ResolveReachableNestAsync(userId, destinationNestId)
             ?? throw new BirdServiceException(404, "Destination nest not found.");
-        // Origin may be a friend's nest the bird previously arrived at, not necessarily one
-        // the caller owns - resolve the same way as the destination, not a plain owner-scoped
-        // lookup.
+        // Origin may be a friend's nest or a Hub the bird previously arrived at, not
+        // necessarily one the caller owns - resolve the same way as the destination, not a
+        // plain owner-scoped lookup.
         var origin = await ResolveReachableNestAsync(userId, bird.CurrentNestId)
             ?? throw new BirdServiceException(404, "Origin nest not found.");
 
@@ -131,6 +179,45 @@ public class BirdService(
             UpdatedAt = now,
         };
         return await birdRepository.UpdateAsync(updated);
+    }
+
+    public async Task<Bird> RenameAsync(string userId, string birdId, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new BirdServiceException(400, "This bird needs a name.");
+        }
+
+        var bird = await birdRepository.GetAsync(userId, birdId)
+            ?? throw new BirdServiceException(404, "Bird not found.");
+        var updated = bird with { Name = name.Trim(), UpdatedAt = DateTimeOffset.UtcNow };
+        return await birdRepository.UpdateAsync(updated);
+    }
+
+    // Only allowed once a bird is idle specifically at the owner's PRIVATE nest - not the
+    // public one, not a friend's, not a Hub. Frees a slot in the MaxBirdsPerUser cap.
+    public async Task DeleteAsync(string userId, string birdId)
+    {
+        var bird = await birdRepository.GetAsync(userId, birdId)
+            ?? throw new BirdServiceException(404, "Bird not found.");
+        bird = await ResolveArrivalIfDueAsync(bird);
+
+        if (bird.IsTraveling)
+        {
+            throw new BirdServiceException(409, "This bird is still traveling.");
+        }
+
+        var privateNest = (await waypointRepository.ListByUserIdAsync(userId)).FirstOrDefault(w => !w.IsPublic);
+        if (privateNest is null || bird.CurrentNestId != privateNest.Id)
+        {
+            throw new BirdServiceException(409, "This bird can only be deleted once it's home at your private nest.");
+        }
+
+        var deleted = await birdRepository.DeleteAsync(userId, birdId);
+        if (!deleted)
+        {
+            throw new BirdServiceException(404, "Bird not found.");
+        }
     }
 
     public async Task<List<Bird>> GetNestResidentsAsync(string userId, string nestId)
@@ -182,14 +269,18 @@ public class BirdService(
         return await birdRepository.UpdateAsync(updated);
     }
 
-    // A nest the caller can act on: their own (point read), or an accepted friend's - same
-    // lookup GET /friends/waypoints already does, reused here for send/origin validation.
-    private async Task<Waypoint?> ResolveReachableNestAsync(string userId, string nestId)
+    // A point the caller can act on as an origin/destination: their own nest (point read),
+    // an accepted friend's nest, or a Hub - projected to a common shape since Waypoint and
+    // Hub are different types and neither should take on a dependency on the other just for
+    // this. Reused for both SendAsync's origin/destination resolution and
+    // ComposeAndSendAsync's destination resolution (never its origin, which must be
+    // caller-owned).
+    private async Task<ReachablePoint?> ResolveReachableNestAsync(string userId, string nestId)
     {
         var own = await waypointRepository.GetAsync(userId, nestId);
         if (own is not null)
         {
-            return own;
+            return new ReachablePoint(own.Id, own.Latitude, own.Longitude);
         }
 
         var caller = await userRepository.GetByIdAsync(userId);
@@ -197,8 +288,17 @@ public class BirdService(
             .Where(f => f.Status == FriendStatus.Accepted)
             .Select(f => f.Id);
         var friendNests = await waypointRepository.GetManyByUserIdsAsync(friendIds);
-        return friendNests.FirstOrDefault(w => w.Id == nestId);
+        var friendNest = friendNests.FirstOrDefault(w => w.Id == nestId);
+        if (friendNest is not null)
+        {
+            return new ReachablePoint(friendNest.Id, friendNest.Latitude, friendNest.Longitude);
+        }
+
+        var hub = await hubRepository.GetAsync(nestId);
+        return hub is not null ? new ReachablePoint(hub.Id, hub.Latitude, hub.Longitude) : null;
     }
+
+    private record ReachablePoint(string Id, double Latitude, double Longitude);
 
     // Flips a bird from "traveling" to "arrived" if its ETA has passed, persisting the
     // change. This is the only place arrival is ever detected - there's no timer/background
