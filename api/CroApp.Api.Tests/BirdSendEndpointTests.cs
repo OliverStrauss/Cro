@@ -74,10 +74,10 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         return request;
     }
 
-    private async Task<WaypointDto> CreateNestAsync(string token, string name, double lat = 42.0, double lng = -93.5)
+    private async Task<WaypointDto> CreateNestAsync(string token, string name, double lat = 42.0, double lng = -93.5, bool isPublic = false)
     {
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token,
-            new { Name = name, Latitude = lat, Longitude = lng }));
+            new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<WaypointDto>())!;
     }
@@ -104,7 +104,7 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         var (_, token) = await RegisterAndLoginAsync($"bird-send-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         await ListBirdsAsync(token); // provisions 3 unassigned birds
         var nest1 = await CreateNestAsync(token, "Nest 1", 42.0, -93.5); // auto-assigns them here
-        var nest2 = await CreateNestAsync(token, "Nest 2", 42.1, -93.6);
+        var nest2 = await CreateNestAsync(token, "Nest 2", 42.1, -93.6, isPublic: true);
         var bird = (await ListBirdsAsync(token))[0];
 
         var response = await SendBirdAsync(token, bird.Id, nest2.Id, "Hello there");
@@ -127,7 +127,7 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         var (_, token) = await RegisterAndLoginAsync($"bird-send-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         await ListBirdsAsync(token);
         var nest1 = await CreateNestAsync(token, "Nest 1", 42.0, -93.5);
-        var nest2 = await CreateNestAsync(token, "Nest 2", 60.0, -93.6);
+        var nest2 = await CreateNestAsync(token, "Nest 2", 60.0, -93.6, isPublic: true);
         var bird = (await ListBirdsAsync(token))[0];
 
         var first = await SendBirdAsync(token, bird.Id, nest2.Id);

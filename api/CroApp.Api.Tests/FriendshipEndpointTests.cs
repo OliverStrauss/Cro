@@ -233,9 +233,9 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
 
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0 }));
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Work", Latitude = 11.0, Longitude = 21.0 }));
+            new { Name = "B's Work", Latitude = 11.0, Longitude = 21.0, IsPublic = true }));
 
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/waypoints", tokenA));
         response.EnsureSuccessStatusCode();
@@ -320,9 +320,9 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         // B needs two nests: creating the first auto-assigns B's 3 birds to it, the
         // second gives somewhere for one of them to be sent to.
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0 }));
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
         var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0 }));
+            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
         var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
 
         var birdsResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", tokenB));

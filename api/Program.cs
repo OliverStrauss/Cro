@@ -280,7 +280,7 @@ app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal princip
 
     try
     {
-        var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude);
+        var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude, req.IsPublic);
         // Any of the owner's birds with no current nest (a brand-new user's birds, or one
         // who somehow ended up nestless again) get assigned to the nest they just created.
         // This naturally covers "first nest ever" without a special case. Lives here rather
@@ -750,7 +750,9 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 record CreateUserRequest(string Username, string Email, string Password);
 record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
-record SetWaypointRequest(string Name, double Latitude, double Longitude);
+// IsPublic is only honored by CreateWaypoint - UpdateWaypoint reuses this same DTO but
+// ignores the field entirely, since a nest's kind is not editable after creation.
+record SetWaypointRequest(string Name, double Latitude, double Longitude, bool IsPublic = false);
 record SendBirdRequest(string NestId, string? Content);
 record SendFriendRequestRequest(string Username);
 record SetFriendColorRequest(string Color);

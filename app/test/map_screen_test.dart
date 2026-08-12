@@ -41,9 +41,16 @@ class _FakeWaypointService implements WaypointService {
     required String name,
     required double latitude,
     required double longitude,
+    required bool isPublic,
   }) async {
-    final created =
-        Waypoint(id: 'new-${_nextId++}', userId: 'u1', name: name, latitude: latitude, longitude: longitude);
+    final created = Waypoint(
+      id: 'new-${_nextId++}',
+      userId: 'u1',
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      isPublic: isPublic,
+    );
     lastCreatedWaypoint = created;
     return created;
   }
@@ -292,6 +299,11 @@ void main() {
     // tester.tap() in the widget test harness - call the tap handler directly instead.
     // Everything downstream (the real dialog, real save call) is still exercised for real.
     tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
+    await tester.pumpAndSettle();
+
+    // Neither slot is filled yet, so the kind picker appears before the name dialog.
+    expect(find.text('Add which kind of nest?'), findsOneWidget);
+    await tester.tap(find.text('Private nest'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('waypointNameField')), findsOneWidget);

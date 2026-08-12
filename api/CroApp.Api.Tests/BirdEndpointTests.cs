@@ -71,8 +71,8 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     private Task<HttpResponseMessage> ListBirdsAsync(string? token) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", token));
 
-    private Task<HttpResponseMessage> CreateWaypointAsync(string? token, string name, double lat = 42.0, double lng = -93.5) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token, new { Name = name, Latitude = lat, Longitude = lng }));
+    private Task<HttpResponseMessage> CreateWaypointAsync(string? token, string name, double lat = 42.0, double lng = -93.5, bool isPublic = false) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token, new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
 
     [Fact]
     public async Task ListBirds_ForNewUser_LazilyCreatesThreeBirds()
@@ -129,7 +129,7 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         await ListBirdsAsync(token);
         var first = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
 
-        await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6);
+        await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6, isPublic: true);
 
         var response = await ListBirdsAsync(token);
         var birds = await response.Content.ReadFromJsonAsync<List<BirdDto>>();

@@ -114,7 +114,44 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
     }
   }
 
+  bool get _hasPrivateNest => _nests.any((n) => !n.isPublic);
+  bool get _hasPublicNest => _nests.any((n) => n.isPublic);
+
+  // Resolves which kind the next "Add a nest" tap should create, without ever touching
+  // the server's 409 cap error for the common path: if a slot is already filled the other
+  // one is the only valid choice, so there's nothing to ask; only when both are empty does
+  // the user need to pick. Returns null if the user backs out of the picker.
+  Future<bool?> _resolveNestKindToAdd() async {
+    if (_hasPrivateNest && !_hasPublicNest) {
+      return true;
+    }
+    if (_hasPublicNest && !_hasPrivateNest) {
+      return false;
+    }
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Add which kind of nest?'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Private nest'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Public nest'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _addNest() async {
+    final isPublic = await _resolveNestKindToAdd();
+    if (isPublic == null || !mounted) {
+      return;
+    }
+
     final point = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute(
         builder: (_) => MapScreen(
@@ -130,7 +167,9 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
 
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => const WaypointNameDialog(),
+      builder: (context) => WaypointNameDialog(
+        kindLabel: isPublic ? 'Public nest' : 'Private nest',
+      ),
     );
     if (name == null || name.trim().isEmpty) {
       return;
@@ -142,6 +181,7 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
+        isPublic: isPublic,
       );
       await _loadNests();
     } catch (e) {
@@ -209,7 +249,19 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
           _buildNestRow(nest),
           const SizedBox(height: 12),
         ],
-        _buildAddNestRow(),
+        if (_hasPrivateNest && _hasPublicNest)
+          const Padding(
+            key: Key('bothNestSlotsFullMessage'),
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: Text(
+                'Both nest slots are full',
+                style: TextStyle(fontSize: 13.5, color: CroColors.fog),
+              ),
+            ),
+          )
+        else
+          _buildAddNestRow(),
       ],
     );
   }
@@ -264,13 +316,29 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    nest.name,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: CroColors.ink,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          nest.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: CroColors.ink,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        nest.isPublic ? 'Public' : 'Private',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: CroColors.fog,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -330,7 +398,9 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Add a nest',
+                _hasPrivateNest
+                    ? 'Add your public nest'
+                    : (_hasPublicNest ? 'Add your private nest' : 'Add a nest'),
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
