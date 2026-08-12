@@ -808,6 +808,90 @@ void main() {
     expect(polylineLayer.polylines.map((p) => p.hitValue), contains('b1'));
   });
 
+  testWidgets('tapping an own bird marker opens the bird details sheet, sent by "You"', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [_travelingBird('b1', nestFromId: 'w1', nestToId: 'w2')];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_b1')));
+    // Not pumpAndSettle(): the bob-animation controller is still repeating in the
+    // background while this sheet is open.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdDetailsSheet')), findsOneWidget);
+    expect(find.text('Bird b1'), findsOneWidget);
+    expect(find.text('Sparrow · Sent by You'), findsOneWidget);
+    expect(find.text('Cabin', skipOffstage: false), findsWidgets);
+    expect(tester.widget<Text>(find.byKey(const Key('birdDetailsDestination'))).data, 'Cabin');
+  });
+
+  testWidgets('tapping a friend\'s bird marker opens the bird details sheet, sent by their username',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            userId: 'friend1',
+            name: "Friend's Nest",
+            latitude: 1.002,
+            longitude: 2.002,
+            username: 'friendo',
+            color: '#1E88E5'),
+      ]
+      ..friendsBirdsToReturn = [
+        FriendBird(
+          id: 'fb1',
+          userId: 'friend1',
+          username: 'friendo',
+          color: '#1E88E5',
+          name: "Friendo's Bird",
+          type: 'Sparrow',
+          nestFromId: 'fw1',
+          nestToId: 'w1',
+          departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+        ),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_fb1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdDetailsSheet')), findsOneWidget);
+    expect(find.text("Friendo's Bird"), findsOneWidget);
+    expect(find.text('Sparrow · Sent by friendo'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('birdDetailsDestination'))).data, 'Home');
+  });
+
   testWidgets('renders a flight-path line and moving marker for a friend\'s in-flight bird, colored by sender',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
@@ -853,7 +937,7 @@ void main() {
 
     final markerLayer = tester.widget<MarkerLayer>(find.byType(MarkerLayer));
     final birdMarker = markerLayer.markers.firstWhere((m) => m.key == const Key('birdMarker_fb1'));
-    final animatedBuilder = birdMarker.child as AnimatedBuilder;
+    final animatedBuilder = (birdMarker.child as GestureDetector).child as AnimatedBuilder;
     final marker = animatedBuilder.child as BirdTravelMarker;
     expect(marker.color, hexToColor('#1E88E5'));
 
@@ -957,12 +1041,12 @@ void main() {
     final departedAt = DateTime(2026, 1, 1, 0, 0, 0);
     final estimatedArrivalAt = DateTime(2026, 1, 1, 1, 0, 0); // 1 hour flight
 
-    // Not the lat/lng midpoint (5.0, 10.0): the position is lerped in the same EPSG:3857
-    // projected space PolylineLayer draws its straight line in, so it lands wherever the
-    // 50%-by-projected-distance point on that line unprojects back to - Mercator's
-    // nonlinear north-south scale means that's a hair north of the naive lat midpoint,
-    // and this is what keeps the marker glued to the line at every latitude.
-    test('returns the point 50% along the projected flight line at 50% elapsed', () {
+    // Not the lat/lng midpoint (5.0, 10.0), and not the straight-line chord's midpoint
+    // either: the marker follows the same bowed curve PolylineLayer draws (see
+    // curvedFlightPathPoints), so at 50% elapsed it should land exactly on that curve's
+    // t=0.5 sample - which is what actually keeps the marker glued to the drawn line at
+    // every point along the flight, not just at the endpoints.
+    test('at 50% elapsed, lands exactly on the curved flight path, not the straight-line midpoint', () {
       final position = interpolatedBirdPosition(
         origin: origin,
         destination: destination,
@@ -970,8 +1054,10 @@ void main() {
         estimatedArrivalAt: estimatedArrivalAt,
         now: departedAt.add(const Duration(minutes: 30)),
       );
-      expect(position.latitude, closeTo(5.0191, 0.0001));
-      expect(position.longitude, closeTo(10.0, 0.0001));
+      final curveMidpoint = curvedFlightPathPoints(origin: origin, destination: destination)[10];
+      expect(position.latitude, closeTo(curveMidpoint.latitude, 1e-9));
+      expect(position.longitude, closeTo(curveMidpoint.longitude, 1e-9));
+      expect(position.latitude, isNot(closeTo(5.0, 0.01)));
     });
 
     test('clamps to the destination once now is past the ETA', () {
@@ -1079,6 +1165,49 @@ void main() {
       final destination = Waypoint(id: 'w2', userId: 'u1', name: 'West', latitude: 0.0, longitude: 0.0);
 
       expect(bearingDegrees(origin: origin, destination: destination), closeTo(270.0, 0.01));
+    });
+
+    test('at a given fraction, matches the curved path\'s tangent direction rather than the fixed chord bearing', () {
+      final origin = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 0.0, longitude: 0.0);
+      final destination = Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 5.0, longitude: 10.0);
+
+      final atStart = bearingDegrees(origin: origin, destination: destination, fraction: 0.0);
+      final atMidpoint = bearingDegrees(origin: origin, destination: destination); // default fraction: 0.5
+      final atEnd = bearingDegrees(origin: origin, destination: destination, fraction: 1.0);
+
+      // The path bows, so a bird following it turns over the course of the flight - the
+      // heading near the start and end shouldn't match the midpoint chord bearing.
+      expect(atStart, isNot(closeTo(atMidpoint, 0.01)));
+      expect(atEnd, isNot(closeTo(atMidpoint, 0.01)));
+    });
+  });
+
+  group('elapsedFraction', () {
+    final departedAt = DateTime(2026, 1, 1, 0, 0, 0);
+    final estimatedArrivalAt = DateTime(2026, 1, 1, 1, 0, 0);
+
+    test('returns 0.5 at the halfway point of the flight', () {
+      final fraction = elapsedFraction(
+        departedAt: departedAt,
+        estimatedArrivalAt: estimatedArrivalAt,
+        now: departedAt.add(const Duration(minutes: 30)),
+      );
+      expect(fraction, closeTo(0.5, 0.0001));
+    });
+
+    test('returns 1.0 when the flight duration is zero or negative', () {
+      expect(
+        elapsedFraction(departedAt: departedAt, estimatedArrivalAt: departedAt, now: departedAt),
+        1.0,
+      );
+      expect(
+        elapsedFraction(
+          departedAt: departedAt,
+          estimatedArrivalAt: departedAt.subtract(const Duration(minutes: 1)),
+          now: departedAt,
+        ),
+        1.0,
+      );
     });
   });
 

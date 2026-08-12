@@ -32,52 +32,57 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: IndexedStack(index: _selectedIndex, children: tabs),
-      bottomNavigationBar: NavigationBar(
-        key: const Key('homeNavBar'),
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) {
-          final wasOnMap = _selectedIndex == _mapTabIndex;
-          setState(() => _selectedIndex = i);
-          // IndexedStack never rebuilds MapScreen on its own - force a refresh whenever
-          // the user actually switches to it, so stale colors/waypoints don't linger.
-          if (i == _mapTabIndex) {
-            _mapKey.currentState?.refresh();
-            _mapKey.currentState?.startLiveUpdates();
-          } else if (wasOnMap) {
-            // Symmetric "switched away from map" hook - IndexedStack keeps MapScreen
-            // alive in the background rather than disposing it, so without this the
-            // live-update timer would keep polling every 3s even while another tab
-            // is showing.
-            _mapKey.currentState?.stopLiveUpdates();
-          }
-          // Same "IndexedStack never rebuilds a backgrounded tab" issue as the map: without
-          // this, birds assigned to a nest the user just created (or that arrived while
-          // another tab was open) wouldn't show up as tappable until some other state change
-          // happened to trigger a rebuild.
-          if (i == _birdsTabIndex) {
-            _birdsKey.currentState?.refresh();
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            key: Key('navProfile'),
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-          NavigationDestination(
-            key: Key('navMap'),
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          NavigationDestination(
-            key: Key('navBirds'),
-            icon: Icon(Icons.egg_outlined),
-            selectedIcon: Icon(Icons.egg),
-            label: 'Birds',
-          ),
-        ],
+      // The subtle 1px top border (in place of Material's default elevation shadow) isn't
+      // expressible via NavigationBarThemeData alone, so it's a plain Container wrapper here.
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0x142B2F33)))),
+        child: NavigationBar(
+          key: const Key('homeNavBar'),
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (i) {
+            final wasOnMap = _selectedIndex == _mapTabIndex;
+            setState(() => _selectedIndex = i);
+            // IndexedStack never rebuilds MapScreen on its own - force a refresh whenever
+            // the user actually switches to it, so stale colors/waypoints don't linger.
+            if (i == _mapTabIndex) {
+              _mapKey.currentState?.refresh();
+              _mapKey.currentState?.startLiveUpdates();
+            } else if (wasOnMap) {
+              // Symmetric "switched away from map" hook - IndexedStack keeps MapScreen
+              // alive in the background rather than disposing it, so without this the
+              // live-update timer would keep polling every 3s even while another tab
+              // is showing.
+              _mapKey.currentState?.stopLiveUpdates();
+            }
+            // Same "IndexedStack never rebuilds a backgrounded tab" issue as the map: without
+            // this, birds assigned to a nest the user just created (or that arrived while
+            // another tab was open) wouldn't show up as tappable until some other state change
+            // happened to trigger a rebuild.
+            if (i == _birdsTabIndex) {
+              _birdsKey.currentState?.refresh();
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+              key: Key('navProfile'),
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+            NavigationDestination(
+              key: Key('navMap'),
+              icon: Icon(Icons.map_outlined),
+              selectedIcon: Icon(Icons.map),
+              label: 'Map',
+            ),
+            NavigationDestination(
+              key: Key('navBirds'),
+              icon: Icon(Icons.egg_outlined),
+              selectedIcon: Icon(Icons.egg),
+              label: 'Birds',
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,29 +1,25 @@
 import 'package:flutter/material.dart';
 
 import '../models/friend.dart';
+import '../theme.dart';
 import '../utils/color_utils.dart';
 import 'avatar_with_fallback.dart';
 
 // A fixed-width vertical card - not a "tile" anymore, but kept the name to avoid
-// churning every import across the social screen and its tests.
-class FriendListTile extends StatefulWidget {
+// churning every import across the social screen and its tests. Stateless: every value
+// shown is derived straight from `friend`, nothing here is mutated locally.
+class FriendListTile extends StatelessWidget {
   final Friend friend;
   final ValueChanged<String>? onColorSelected;
 
   const FriendListTile({super.key, required this.friend, this.onColorSelected});
 
-  @override
-  State<FriendListTile> createState() => _FriendListTileState();
-}
-
-class _FriendListTileState extends State<FriendListTile> {
-  Friend get _friend => widget.friend;
-
-  Color get _backgroundColor => _friend.color != null ? hexToColor(_friend.color!) : Colors.grey;
-
-  // Palette colors span light and dark, so pick readable text per-tile rather than a
-  // single fixed color.
-  Color get _textColor => _backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  // The friend's assigned trail color rings their avatar - this is the one place in the
+  // app that shows a friend's color outside the map itself, so it should visibly match
+  // their flight-path color there. Falls back to fog for the (legacy/pre-color-picker)
+  // case of a friend with no color assigned yet.
+  Color get _ringColor =>
+      friend.color != null ? hexToColor(friend.color!) : CroColors.fog;
 
   Future<void> _pickColor(BuildContext context) async {
     final selected = await showDialog<String>(
@@ -41,7 +37,10 @@ class _FriendListTileState extends State<FriendListTile> {
                   InkWell(
                     key: Key('colorOption_$hex'),
                     onTap: () => Navigator.of(context).pop(hex),
-                    child: CircleAvatar(backgroundColor: hexToColor(hex), radius: 16),
+                    child: CircleAvatar(
+                      backgroundColor: hexToColor(hex),
+                      radius: 16,
+                    ),
                   ),
               ],
             ),
@@ -50,41 +49,41 @@ class _FriendListTileState extends State<FriendListTile> {
       ),
     );
     if (selected != null) {
-      widget.onColorSelected?.call(selected);
+      onColorSelected?.call(selected);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: _backgroundColor,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        key: Key('friendTile_${_friend.userId}'),
-        borderRadius: BorderRadius.circular(12),
-        onTap: widget.onColorSelected == null ? null : () => _pickColor(context),
-        child: Container(
-          width: 84,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AvatarWithFallback(
-                avatarKey: Key('friendAvatar_${_friend.userId}'),
-                imageUrl: _friend.profilePictureUrl,
-                initialsSource: _friend.username,
-                radius: 24,
+    return GestureDetector(
+      key: Key('friendTile_${friend.userId}'),
+      onTap: onColorSelected == null ? null : () => _pickColor(context),
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AvatarWithFallback(
+              avatarKey: Key('friendAvatar_${friend.userId}'),
+              imageUrl: friend.profilePictureUrl,
+              initialsSource: friend.username,
+              radius: 28,
+              hasBorder: true,
+              borderColor: _ringColor,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              friend.username,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: CroColors.ink,
               ),
-              const SizedBox(height: 8),
-              Text(
-                _friend.username,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: _textColor, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme.dart';
 import 'avatar_with_fallback.dart';
 
 // Sibling of FriendListTile - same fixed-width vertical card shape, but for a pending
@@ -24,11 +25,11 @@ class InviteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: Key('inviteCard_$userId'),
-      width: 92,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      width: 130,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        color: CroColors.surface,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -37,28 +38,58 @@ class InviteCard extends StatelessWidget {
             avatarKey: Key('inviteAvatar_$userId'),
             imageUrl: profilePictureUrl,
             initialsSource: username,
-            radius: 24,
+            radius: 22,
           ),
           const SizedBox(height: 8),
-          Text(username,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
+          Text(
+            username,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: CroColors.ink,
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               GestureDetector(
                 key: Key('acceptRequestButton_$userId'),
                 onTap: onAccept,
-                child: Icon(Icons.check, size: 18, color: Colors.green.shade700),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: CroColors.waypointBlue,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Accept',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: CroColors.surface,
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 6),
               GestureDetector(
                 key: Key('declineRequestButton_$userId'),
                 onTap: onDecline,
-                child: const Icon(Icons.close, size: 18),
+                child: const Text(
+                  '×',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: CroColors.fog,
+                  ),
+                ),
               ),
             ],
           ),
