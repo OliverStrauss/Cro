@@ -1,6 +1,7 @@
 using CroApp.Api.Data;
 using CroApp.Api.Models;
 using CroApp.Api.Repositories;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CroApp.Api.Services;
@@ -10,8 +11,10 @@ public class BirdService(
     IWaypointRepository waypointRepository,
     IUserRepository userRepository,
     IHubRepository hubRepository,
+    IHubMessageRepository hubMessageRepository,
     IBirdMediaService birdMediaService,
-    IOptions<BirdTravelOptions> birdTravelOptions) : IBirdService
+    IOptions<BirdTravelOptions> birdTravelOptions,
+    ILogger<BirdService> logger) : IBirdService
 {
     private const int MaxBirdsPerUser = 5;
 
@@ -125,7 +128,11 @@ public class BirdService(
             AudioUrl: audioUrl,
             ImageUrl: imageUrl,
             ProfilePictureUrl: null,
-            IsPublic: isPublic);
+            // Landing at a Hub is inherently public - a Hub-bound bird ignores whatever the
+            // compose form's toggle said, same "if you send it there, it's public" rule the
+            // Hub message board enforces.
+            IsPublic: destination.IsHub || isPublic,
+            NestFromName: origin.Name);
         return await birdRepository.CreateAsync(bird);
     }
 
@@ -177,6 +184,10 @@ public class BirdService(
             EstimatedArrivalAt = now.AddHours(hours),
             IsRead = true, // not delivered yet - nothing to read
             UpdatedAt = now,
+            // Same "landing at a Hub is inherently public" rule as ComposeAndSendAsync -
+            // once true, IsPublic never needs to flip back false on a later resend elsewhere.
+            IsPublic = destination.IsHub || bird.IsPublic,
+            NestFromName = origin.Name,
         };
         return await birdRepository.UpdateAsync(updated);
     }
@@ -280,7 +291,7 @@ public class BirdService(
         var own = await waypointRepository.GetAsync(userId, nestId);
         if (own is not null)
         {
-            return new ReachablePoint(own.Id, own.Latitude, own.Longitude);
+            return new ReachablePoint(own.Id, own.Latitude, own.Longitude, own.Name, IsHub: false);
         }
 
         var caller = await userRepository.GetByIdAsync(userId);
@@ -291,14 +302,14 @@ public class BirdService(
         var friendNest = friendNests.FirstOrDefault(w => w.Id == nestId);
         if (friendNest is not null)
         {
-            return new ReachablePoint(friendNest.Id, friendNest.Latitude, friendNest.Longitude);
+            return new ReachablePoint(friendNest.Id, friendNest.Latitude, friendNest.Longitude, friendNest.Name, IsHub: false);
         }
 
         var hub = await hubRepository.GetAsync(nestId);
-        return hub is not null ? new ReachablePoint(hub.Id, hub.Latitude, hub.Longitude) : null;
+        return hub is not null ? new ReachablePoint(hub.Id, hub.Latitude, hub.Longitude, hub.Name, IsHub: true) : null;
     }
 
-    private record ReachablePoint(string Id, double Latitude, double Longitude);
+    private record ReachablePoint(string Id, double Latitude, double Longitude, string Name, bool IsHub);
 
     // Flips a bird from "traveling" to "arrived" if its ETA has passed, persisting the
     // change. This is the only place arrival is ever detected - there's no timer/background
@@ -320,6 +331,38 @@ public class BirdService(
             IsRead = false, // any arrival is unread, no sender/recipient special-casing
             UpdatedAt = DateTimeOffset.UtcNow,
         };
-        return await birdRepository.UpdateAsync(arrived);
+        arrived = await birdRepository.UpdateAsync(arrived);
+
+        // ComposeAndSendAsync/SendAsync already force IsPublic=true for anything Hub-bound,
+        // so no separate public check is needed here - every arrival at a Hub is board-worthy.
+        // Best-effort: a failed board write must never fail the caller's actual query just
+        // because this secondary write hiccuped.
+        var landedHub = await hubRepository.GetAsync(arrived.NestToId ?? string.Empty);
+        if (landedHub is not null)
+        {
+            try
+            {
+                var sender = await userRepository.GetByIdAsync(arrived.UserId);
+                await hubMessageRepository.CreateAsync(new HubMessage(
+                    Guid.NewGuid().ToString(),
+                    landedHub.Id,
+                    arrived.Id,
+                    arrived.UserId,
+                    sender?.Username ?? "Unknown",
+                    arrived.Name,
+                    arrived.NestFromName,
+                    arrived.Type,
+                    arrived.Content,
+                    arrived.AudioUrl,
+                    arrived.ImageUrl,
+                    DateTimeOffset.UtcNow));
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to post HubMessage for bird {BirdId} landing at hub {HubId}", arrived.Id, landedHub.Id);
+            }
+        }
+
+        return arrived;
     }
 }

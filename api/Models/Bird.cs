@@ -19,7 +19,11 @@ namespace CroApp.Api.Models;
 // are null while idle; EstimatedArrivalAt is what BirdService's lazy arrival-resolution
 // compares against UtcNow. IsRead is true for idle/never-arrived birds and flips false the
 // moment any arrival is resolved (self-sent or from someone else - no special-casing),
-// flipping back to true via the read endpoint.
+// flipping back to true via the read endpoint. NestFromName is the same kind of snapshot as
+// Speed, taken at send time from the resolved origin nest's Name - by the time arrival
+// resolves and a HubMessage might get written, Waypoints (partitioned /userId) can no
+// longer be pointed at without knowing the owner, so the name is captured up front instead
+// of re-resolved later.
 public record Bird(
     [property: JsonPropertyName("id")] string Id,
     string UserId,
@@ -38,4 +42,5 @@ public record Bird(
     string? AudioUrl = null,
     string? ImageUrl = null,
     string? ProfilePictureUrl = null,
-    bool IsPublic = false);
+    bool IsPublic = false,
+    string? NestFromName = null);

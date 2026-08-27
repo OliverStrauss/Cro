@@ -86,6 +86,7 @@ builder.Services.AddScoped<IBirdRepository, CosmosBirdRepository>();
 builder.Services.AddScoped<IBirdService, BirdService>();
 builder.Services.AddScoped<IHubRepository, CosmosHubRepository>();
 builder.Services.AddScoped<IHubService, HubService>();
+builder.Services.AddScoped<IHubMessageRepository, CosmosHubMessageRepository>();
 builder.Services.AddScoped<IBirdReactionRepository, CosmosBirdReactionRepository>();
 builder.Services.AddScoped<IBirdReactionService, BirdReactionService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
@@ -145,6 +146,12 @@ if (app.Environment.IsDevelopment())
     // and a reaction from a different user needs its own single-partition read/write path
     // rather than a cross-partition write into the sender's partition (see BirdReaction.cs).
     await database.Database.CreateContainerIfNotExistsAsync(opts.ReactionsContainerName, "/birdId");
+    // /hubId, not the poster's userId - dominant query is "list every message posted to a
+    // given Hub, newest first", same reasoning as Reactions' /birdId (see HubMessage.cs).
+    // DefaultTimeToLive gives every row a native Cosmos TTL of 7 days, auto-expiring the
+    // board without a background cleanup job.
+    await database.Database.CreateContainerIfNotExistsAsync(
+        new ContainerProperties(opts.HubMessagesContainerName, "/hubId") { DefaultTimeToLive = 604800 });
 
     // Dev-only seed users: "Oliver 1" (regular) and "Admin 1" (IsAdmin) so there's always a
     // known admin account locally to place Hubs through the app's own "Add Hub" flow,
@@ -431,7 +438,23 @@ app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBir
 
     try
     {
-        return Results.Ok(await birdService.GetHubResidentsAsync(id));
+        var residents = await birdService.GetHubResidentsAsync(id);
+        // Mask payload behind IsPublic, same rule GET /friends/birds already applies -
+        // ComposeAndSendAsync/SendAsync force IsPublic=true for anything Hub-bound, but this
+        // keeps the endpoint honest for any bird that landed here before that rule existed.
+        var results = residents.Select(bird => new
+        {
+            bird.Id,
+            bird.UserId,
+            bird.Name,
+            bird.Type,
+            bird.CurrentNestId,
+            bird.IsPublic,
+            Content = bird.IsPublic ? bird.Content : null,
+            AudioUrl = bird.IsPublic ? bird.AudioUrl : null,
+            ImageUrl = bird.IsPublic ? bird.ImageUrl : null,
+        });
+        return Results.Ok(results);
     }
     catch (BirdServiceException ex)
     {
@@ -440,6 +463,53 @@ app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBir
 })
 .RequireAuthorization()
 .WithName("GetHubResidentBirds");
+
+// The Hub message board - durable history of everything that's ever landed at this Hub,
+// independent of GetHubResidentBirds' live "who's currently here" snapshot (see
+// HubMessage.cs). Every row is already public by construction (ComposeAndSendAsync/
+// SendAsync force IsPublic=true for anything Hub-bound before a HubMessage is ever
+// written), so no masking is needed here the way GetHubResidentBirds needs above.
+app.MapGet("/hubs/{id}/messages", async (string id, ClaimsPrincipal principal, IHubMessageRepository hubMessageRepository, IHubRepository hubRepository, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (await hubRepository.GetAsync(id) is null)
+    {
+        return Results.Json(new { error = "Hub not found." }, statusCode: 404);
+    }
+
+    var messages = await hubMessageRepository.ListByHubIdAsync(id);
+
+    // N+1 lookup for each sender's current ProfilePictureUrl - same accepted tradeoff as
+    // GET /friends and friends, deliberately not snapshotted onto HubMessage (see its
+    // comment) so an avatar update stays current even on old board posts.
+    var results = new List<object>();
+    foreach (var message in messages)
+    {
+        var sender = await userRepo.GetByIdAsync(message.SenderId);
+        results.Add(new
+        {
+            message.Id,
+            message.SenderId,
+            message.SenderUsername,
+            message.BirdName,
+            message.OriginNestName,
+            message.Type,
+            message.Content,
+            message.AudioUrl,
+            message.ImageUrl,
+            message.CreatedAt,
+            SenderProfilePictureUrl = sender?.ProfilePictureUrl,
+        });
+    }
+    return Results.Ok(results);
+})
+.RequireAuthorization()
+.WithName("GetHubMessages");
 
 app.MapGet("/birds", async (ClaimsPrincipal principal, IBirdService birdService) =>
 {

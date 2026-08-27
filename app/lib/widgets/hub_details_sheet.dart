@@ -1,46 +1,57 @@
 import 'package:flutter/material.dart';
 
+import '../screens/hub_board_screen.dart';
+import '../state/auth_state.dart';
 import '../theme.dart';
 import '../widgets/avatar_with_fallback.dart';
 
 // Bottom sheet shown when tapping a Hub marker on the map - read-only for everyone
 // (including admins, in this pass): a Hub has no rename/delete/picture-upload actions,
 // unlike NestDetailsSheet's own-nest branch, so this doesn't inherit that widget's
-// ownership-action machinery.
+// ownership-action machinery. "View Board" is the one action, pushing the full-screen
+// message board rather than cramming a scrollable list into this small sheet.
 class HubDetailsSheet extends StatelessWidget {
+  final String id;
   final String name;
   final String? category;
   final String? profilePictureUrl;
   final double latitude;
   final double longitude;
+  final AuthState authState;
 
   const HubDetailsSheet({
     super.key,
+    required this.id,
     required this.name,
     this.category,
     this.profilePictureUrl,
     required this.latitude,
     required this.longitude,
+    required this.authState,
   });
 
   static Future<void> show(
     BuildContext context, {
+    required String id,
     required String name,
     String? category,
     String? profilePictureUrl,
     required double latitude,
     required double longitude,
+    required AuthState authState,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => HubDetailsSheet(
+        id: id,
         name: name,
         category: category,
         profilePictureUrl: profilePictureUrl,
         latitude: latitude,
         longitude: longitude,
+        authState: authState,
       ),
     );
   }
@@ -131,6 +142,24 @@ class HubDetailsSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                key: const Key('viewHubBoardButton'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => HubBoardScreen(
+                      authState: authState,
+                      hubId: id,
+                      hubName: name,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.forum_outlined, size: 18),
+                label: const Text('View Board'),
+              ),
+            ),
+            const SizedBox(height: 10),
             GestureDetector(
               onTap: () => Navigator.of(context).pop(),
               child: const Text(
