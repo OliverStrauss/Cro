@@ -38,8 +38,12 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
                     ["CosmosDb:BirdsContainerName"] = "Birds",
                     // Left at the real default so a genuinely far send (used only by the
                     // still-traveling test) reliably stays in flight for the test's lifetime -
-                    // every other test here lands a bird via a near-zero-distance compose
-                    // instead of a cranked multiplier.
+                    // every other test here lands a bird via a zero-distance compose (same
+                    // origin/destination coordinates, different nest ids) instead of a cranked
+                    // multiplier. A merely-small (but nonzero) coordinate delta isn't safe here:
+                    // at Cro's realistic 60 km/h it's a fraction of a second of real flight time,
+                    // not reliably shorter than an HTTP round trip, so it flakes/fails instead of
+                    // landing before the next request checks it.
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
                     ["Jwt:Audience"] = "CroApp.Api.Tests"
@@ -143,7 +147,7 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
     {
         var (_, token) = await RegisterAndLoginAsync($"delete-user-{Guid.NewGuid():N}", SeedPassword);
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
-        var setupOrigin = await CreateNestAsync(token, "Setup", 42.0001, -93.5001, isPublic: true);
+        var setupOrigin = await CreateNestAsync(token, "Setup", 42.0, -93.5, isPublic: true);
         var bird = await ComposeAndLandAsync(token, setupOrigin.Id, home.Id);
         Assert.False(bird.IsTraveling);
         Assert.Equal(home.Id, bird.CurrentNestId);
@@ -177,7 +181,7 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
     {
         var (_, token) = await RegisterAndLoginAsync($"delete-user-{Guid.NewGuid():N}", SeedPassword);
         var setupOrigin = await CreateNestAsync(token, "Setup", 42.0, -93.5, isPublic: false);
-        var pub = await CreateNestAsync(token, "Public Spot", 42.0001, -93.5001, isPublic: true);
+        var pub = await CreateNestAsync(token, "Public Spot", 42.0, -93.5, isPublic: true);
         var bird = await ComposeAndLandAsync(token, setupOrigin.Id, pub.Id);
         Assert.False(bird.IsTraveling);
         Assert.Equal(pub.Id, bird.CurrentNestId);
@@ -197,7 +201,7 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
 
         var aHome = await CreateNestAsync(tokenA, "A's Home", 42.0, -93.5, isPublic: false);
-        var bNest = await CreateNestAsync(tokenB, "B's Nest", 42.0001, -93.5001, isPublic: false);
+        var bNest = await CreateNestAsync(tokenB, "B's Nest", 42.0, -93.5, isPublic: false);
 
         var bird = await ComposeAndLandAsync(tokenA, aHome.Id, bNest.Id);
         Assert.False(bird.IsTraveling);
@@ -214,7 +218,7 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
 
         var adminToken = await LoginAsync("Admin 1", SeedPassword);
-        var hub = await CreateHubAsync(adminToken, $"Test Hub {Guid.NewGuid():N}", 42.0001, -93.5001);
+        var hub = await CreateHubAsync(adminToken, $"Test Hub {Guid.NewGuid():N}", 42.0, -93.5);
 
         var bird = await ComposeAndLandAsync(token, home.Id, hub.Id);
         Assert.False(bird.IsTraveling);
@@ -230,7 +234,7 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var (_, tokenA) = await RegisterAndLoginAsync($"delete-a-{Guid.NewGuid():N}", SeedPassword);
         var (_, tokenB) = await RegisterAndLoginAsync($"delete-b-{Guid.NewGuid():N}", SeedPassword);
         var home = await CreateNestAsync(tokenA, "Home", 42.0, -93.5, isPublic: false);
-        var setupOrigin = await CreateNestAsync(tokenA, "Setup", 42.0001, -93.5001, isPublic: true);
+        var setupOrigin = await CreateNestAsync(tokenA, "Setup", 42.0, -93.5, isPublic: true);
         var bird = await ComposeAndLandAsync(tokenA, setupOrigin.Id, home.Id);
 
         var response = await DeleteBirdAsync(tokenB, bird.Id);
@@ -252,11 +256,17 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var away = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
 
         // Four genuinely in-flight birds (far distance, stay traveling for the test's
-        // lifetime) plus one landed-at-home bird (near-zero distance) fill the 5-bird cap.
+        // lifetime) plus one landed-at-home bird fill the 5-bird cap. The landed one still
+        // needs to depart from a caller-owned nest, but the 1-private/1-public cap leaves no
+        // room for a third nest to serve as a zero-distance origin - so instead, relocate
+        // `away` on top of `home` right before composing it (already-composed birds keep
+        // their originally-computed ETA; a waypoint move doesn't retroactively touch it).
         for (var i = 0; i < 4; i++)
         {
             (await ComposeBirdAsync(token, "Cro", $"Bird {i}", home.Id, away.Id, content: "hi")).EnsureSuccessStatusCode();
         }
+        (await _client.SendAsync(AuthedRequest(HttpMethod.Put, $"/waypoints/{away.Id}", token,
+            new { Name = "Away", Latitude = home.Latitude, Longitude = home.Longitude }))).EnsureSuccessStatusCode();
         var landed = await ComposeAndLandAsync(token, away.Id, home.Id);
         Assert.False(landed.IsTraveling);
 

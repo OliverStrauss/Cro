@@ -37,10 +37,13 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
                     // Deliberately left at the real default (1.0, from appsettings.json - not
                     // overridden here) so a just-sent bird reliably stays "traveling" for the
                     // lifetime of these tests (hours/days of simulated flight time). Getting a
-                    // bird "landed" for setup instead relies on a near-zero-distance compose
-                    // (see LandBirdAtHomeAsync below), not a cranked multiplier - arrival
-                    // resolution itself is covered separately in BirdArrivalEndpointTests.cs,
-                    // which cranks the multiplier up instead.
+                    // bird "landed" for setup instead relies on a zero-distance compose (same
+                    // origin/destination coordinates, different nest ids - see
+                    // LandBirdAtHomeAsync below), not a cranked multiplier - arrival resolution
+                    // itself is covered separately in BirdArrivalEndpointTests.cs, which cranks
+                    // the multiplier up instead. A merely-small delta isn't safe here: at Cro's
+                    // realistic 60 km/h it's a fraction of a second of real flight time, not
+                    // reliably shorter than an HTTP round trip.
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
                     ["Jwt:Audience"] = "CroApp.Api.Tests"
@@ -117,18 +120,18 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
     private Task<HttpResponseMessage> MarkReadAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/read", token));
 
-    // Composes a bird between two nearly-identical coordinates so its ETA is essentially
-    // zero, then reads it back via the nest-residents endpoint (which resolves arrival as a
-    // side effect) - lands the bird idle at `home` almost instantly without needing a
-    // cranked SpeedMultiplier, which would make the *real* send-under-test resolve instantly
-    // too and defeat "stays traveling" assertions. Deletes the throwaway setup-origin nest
-    // afterward so the caller's public slot (1 private + 1 public cap) is free for the real,
-    // deliberately-far nest an actual test needs.
+    // Composes a bird between identical coordinates (different nest ids, so it's still a
+    // valid origin/destination pair) so its ETA is exactly zero, then reads it back via the
+    // nest-residents endpoint (which resolves arrival as a side effect) - lands the bird idle
+    // at `home` instantly without needing a cranked SpeedMultiplier, which would make the
+    // *real* send-under-test resolve instantly too and defeat "stays traveling" assertions.
+    // Deletes the throwaway setup-origin nest afterward so the caller's public slot (1
+    // private + 1 public cap) is free for the real, deliberately-far nest an actual test needs.
     private async Task<(BirdDto Bird, WaypointDto Home, string UserId, string Token)> LandBirdAtHomeAsync(string usernamePrefix)
     {
         var (userId, token) = await RegisterAndLoginAsync($"{usernamePrefix}-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
-        var setupOrigin = await CreateNestAsync(token, "Setup Origin", 42.0001, -93.5001, isPublic: true);
+        var setupOrigin = await CreateNestAsync(token, "Setup Origin", 42.0, -93.5, isPublic: true);
 
         var composeResponse = await ComposeBirdAsync(token, "Cro", "Setup Bird", setupOrigin.Id, home.Id, content: "setup");
         composeResponse.EnsureSuccessStatusCode();
