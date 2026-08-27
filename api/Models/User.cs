@@ -9,6 +9,10 @@ namespace CroApp.Api.Models;
 // for the same reason - accounts created before this feature have no picture set. IsAdmin
 // gates Hub-placement (POST /hubs) - checked via a per-request repository lookup rather
 // than a JWT claim, so granting/revoking it doesn't require re-issuing tokens.
+// BlockedUserIds is nullable for the same pre-existing-document reason as Friends - every
+// read defends with user.BlockedUserIds ?? []. A block is one-directional (only the
+// blocker's list matters), checked from both sides in FriendService.SendRequestAsync so
+// neither party can request the other.
 public record User(
     [property: JsonPropertyName("id")] string Id,
     string Username,
@@ -17,4 +21,5 @@ public record User(
     string PasswordHash,
     List<FriendEntry>? Friends,
     string? ProfilePictureUrl = null,
-    bool IsAdmin = false);
+    bool IsAdmin = false,
+    List<string>? BlockedUserIds = null);

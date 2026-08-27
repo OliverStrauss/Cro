@@ -10,5 +10,6 @@ public class CosmosDbOptions
     public string HubsContainerName { get; set; } = string.Empty;
     public string ReactionsContainerName { get; set; } = string.Empty;
     public string HubMessagesContainerName { get; set; } = string.Empty;
+    public string HubReadStatesContainerName { get; set; } = string.Empty;
     public bool UseEmulator { get; set; }
 }

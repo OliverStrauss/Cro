@@ -87,6 +87,7 @@ builder.Services.AddScoped<IBirdService, BirdService>();
 builder.Services.AddScoped<IHubRepository, CosmosHubRepository>();
 builder.Services.AddScoped<IHubService, HubService>();
 builder.Services.AddScoped<IHubMessageRepository, CosmosHubMessageRepository>();
+builder.Services.AddScoped<IHubReadStateRepository, CosmosHubReadStateRepository>();
 builder.Services.AddScoped<IBirdReactionRepository, CosmosBirdReactionRepository>();
 builder.Services.AddScoped<IBirdReactionService, BirdReactionService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
@@ -152,6 +153,11 @@ if (app.Environment.IsDevelopment())
     // board without a background cleanup job.
     await database.Database.CreateContainerIfNotExistsAsync(
         new ContainerProperties(opts.HubMessagesContainerName, "/hubId") { DefaultTimeToLive = 604800 });
+    // /userId, not /hubId - the dominant query is "list every hub-read-state for this user"
+    // (used to compute every hub's unread badge in one round trip), same reasoning as
+    // Waypoints/Birds above. No TTL - a read state should persist indefinitely, unlike
+    // HubMessages' own 7-day board reset.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.HubReadStatesContainerName, "/userId");
 
     // Dev-only seed users: "Oliver 1" (regular) and "Admin 1" (IsAdmin) so there's always a
     // known admin account locally to place Hubs through the app's own "Add Hub" flow,
@@ -256,6 +262,35 @@ app.MapPost("/users", async (CreateUserRequest req, IUserRepository repo) =>
 app.MapGet("/users/{id}", async (string id, IUserRepository repo) =>
     await repo.GetByIdAsync(id) is { } user ? Results.Ok(user.ToResponse()) : Results.NotFound())
 .WithName("GetUserById");
+
+// Grant-only (no revoke endpoint - not needed yet). Same inline caller-lookup-then-IsAdmin
+// gate as POST /hubs, checked per-request rather than via a JWT claim so a freshly-granted
+// admin doesn't need to re-log-in for it to take effect.
+app.MapPost("/users/{id}/make-admin", async (string id, ClaimsPrincipal principal, IUserRepository userRepo) =>
+{
+    var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (callerId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var caller = await userRepo.GetByIdAsync(callerId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    var target = await userRepo.GetByIdAsync(id);
+    if (target is null)
+    {
+        return Results.NotFound();
+    }
+
+    var updated = await userRepo.UpdateAsync(target with { IsAdmin = true });
+    return Results.Ok(updated.ToResponse());
+})
+.RequireAuthorization()
+.WithName("MakeUserAdmin");
 
 // Powers the Profile screen's live "Add Friends" suggestions as the caller types - unlike
 // GET /users/{id}, this is authenticated (it's a directory search over every user, not a
@@ -428,6 +463,97 @@ app.MapPost("/hubs", async (SetHubRequest req, ClaimsPrincipal principal, IHubSe
 .RequireAuthorization()
 .WithName("CreateHub");
 
+// Any authenticated user can suggest a Hub location - unlike POST /hubs, there's no admin
+// gate here. The suggestion lands in the Pending partition and never appears on GET /hubs
+// (which only ever lists Approved) until an admin approves it below.
+app.MapPost("/hub-suggestions", async (SetHubRequest req, ClaimsPrincipal principal, IHubService hubService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var saved = await hubService.SuggestAsync(userId, req.Name, req.Latitude, req.Longitude, req.Category);
+    return Results.Created($"/hub-suggestions/{saved.Id}", saved);
+})
+.RequireAuthorization()
+.WithName("SuggestHub");
+
+// The admin moderation feed - same caller-lookup-then-IsAdmin gate as POST /hubs.
+app.MapGet("/hub-suggestions", async (ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var caller = await userRepo.GetByIdAsync(userId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    return Results.Ok(await hubService.ListPendingAsync());
+})
+.RequireAuthorization()
+.WithName("ListHubSuggestions");
+
+app.MapPost("/hub-suggestions/{id}/approve", async (string id, ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var caller = await userRepo.GetByIdAsync(userId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        var approved = await hubService.ApproveAsync(id);
+        return Results.Ok(approved);
+    }
+    catch (HubServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("ApproveHubSuggestion");
+
+app.MapDelete("/hub-suggestions/{id}", async (string id, ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var caller = await userRepo.GetByIdAsync(userId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        await hubService.RejectAsync(id);
+        return Results.NoContent();
+    }
+    catch (HubServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("RejectHubSuggestion");
+
 app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -510,6 +636,53 @@ app.MapGet("/hubs/{id}/messages", async (string id, ClaimsPrincipal principal, I
 })
 .RequireAuthorization()
 .WithName("GetHubMessages");
+
+// Powers the unread-count badge under each Hub marker on the map. Same accepted N+1-per-Hub
+// tradeoff category as GET /friends/waypoints ("fine at expected sizes") - fetches every
+// approved Hub's full message list to count how many postdate the caller's last-read
+// timestamp for that hub (MinValue, i.e. "everything," if they've never opened it).
+app.MapGet("/hubs/unread-counts", async (ClaimsPrincipal principal, IHubRepository hubRepository, IHubMessageRepository hubMessageRepository, IHubReadStateRepository readStateRepository) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var hubs = await hubRepository.ListApprovedAsync();
+    var readStates = (await readStateRepository.ListForUserAsync(userId))
+        .ToDictionary(r => r.HubId, r => r.LastReadAt);
+
+    var counts = new Dictionary<string, int>();
+    foreach (var hub in hubs)
+    {
+        var lastReadAt = readStates.TryGetValue(hub.Id, out var readAt) ? readAt : DateTimeOffset.MinValue;
+        var messages = await hubMessageRepository.ListByHubIdAsync(hub.Id);
+        counts[hub.Id] = messages.Count(m => m.CreatedAt > lastReadAt);
+    }
+    return Results.Ok(counts);
+})
+.RequireAuthorization()
+.WithName("GetHubUnreadCounts");
+
+app.MapPost("/hubs/{id}/read", async (string id, ClaimsPrincipal principal, IHubRepository hubRepository, IHubReadStateRepository readStateRepository) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (await hubRepository.GetAsync(id) is null)
+    {
+        return Results.Json(new { error = "Hub not found." }, statusCode: 404);
+    }
+
+    await readStateRepository.MarkReadAsync(userId, id, DateTimeOffset.UtcNow);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("MarkHubRead");
 
 app.MapGet("/birds", async (ClaimsPrincipal principal, IBirdService birdService) =>
 {
@@ -843,6 +1016,20 @@ app.MapPost("/friends/requests/{requesterId}/accept", async (string requesterId,
 .RequireAuthorization()
 .WithName("AcceptFriendRequest");
 
+app.MapPost("/friends/requests/{requesterId}/decline", async (string requesterId, ClaimsPrincipal principal, IFriendService friendService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    await friendService.DeclineAsync(userId, requesterId);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("DeclineFriendRequest");
+
 app.MapDelete("/friends/{userId}", async (string userId, ClaimsPrincipal principal, IFriendService friendService) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -856,6 +1043,67 @@ app.MapDelete("/friends/{userId}", async (string userId, ClaimsPrincipal princip
 })
 .RequireAuthorization()
 .WithName("RemoveFriend");
+
+app.MapPost("/friends/{userId}/block", async (string userId, ClaimsPrincipal principal, IFriendService friendService) =>
+{
+    var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (callerId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await friendService.BlockAsync(callerId, userId);
+        return Results.NoContent();
+    }
+    catch (FriendServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("BlockUser");
+
+app.MapDelete("/friends/{userId}/block", async (string userId, ClaimsPrincipal principal, IFriendService friendService) =>
+{
+    var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (callerId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    await friendService.UnblockAsync(callerId, userId);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("UnblockUser");
+
+app.MapGet("/friends/blocked", async (ClaimsPrincipal principal, IFriendService friendService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var blockedIds = await friendService.ListBlockedAsync(userId);
+
+    // Same N+1 username/avatar lookup pattern as GET /friends - fine at expected
+    // blocked-list sizes.
+    var blocked = new List<object>();
+    foreach (var blockedId in blockedIds)
+    {
+        var blockedUser = await userRepo.GetByIdAsync(blockedId);
+        if (blockedUser is not null)
+        {
+            blocked.Add(new { blockedUser.Id, blockedUser.Username, blockedUser.ProfilePictureUrl });
+        }
+    }
+    return Results.Ok(blocked);
+})
+.RequireAuthorization()
+.WithName("GetBlockedUsers");
 
 app.MapGet("/friends", async (ClaimsPrincipal principal, IUserRepository userRepo) =>
 {
@@ -879,7 +1127,7 @@ app.MapGet("/friends", async (ClaimsPrincipal principal, IUserRepository userRep
     foreach (var friend in acceptedFriends)
     {
         var friendUser = await userRepo.GetByIdAsync(friend.Id);
-        friends.Add(new { friend.Id, friend.Username, friend.Color, friendUser?.ProfilePictureUrl });
+        friends.Add(new { friend.Id, friend.Username, friend.Color, friendUser?.ProfilePictureUrl, IsAdmin = friendUser?.IsAdmin ?? false });
     }
 
     return Results.Ok(friends);

@@ -170,6 +170,121 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Empty(birds!);
     }
 
+    private Task<HttpResponseMessage> SuggestHubAsync(string token, string name, double lat = 42.3, double lng = -93.4) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hub-suggestions", token, new { Name = name, Latitude = lat, Longitude = lng, Category = "Park" }));
+
+    [Fact]
+    public async Task AnyUser_CanSuggestAHub_ButItDoesNotAppearOnListHubs()
+    {
+        var username = $"hub-suggester-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+        var suggestionName = $"Suggested Park {Guid.NewGuid():N}";
+
+        var response = await SuggestHubAsync(token, suggestionName);
+        response.EnsureSuccessStatusCode();
+        var suggestion = await response.Content.ReadFromJsonAsync<HubDto>();
+        Assert.Equal("Pending", suggestion!.Status);
+
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hubs", token));
+        listResponse.EnsureSuccessStatusCode();
+        var hubs = await listResponse.Content.ReadFromJsonAsync<List<HubDto>>();
+        Assert.DoesNotContain(hubs!, h => h.Id == suggestion.Id);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotListOrModerateSuggestions()
+    {
+        var username = $"hub-suggester-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hub-suggestions", token));
+        Assert.Equal(HttpStatusCode.Forbidden, listResponse.StatusCode);
+
+        var approveResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hub-suggestions/does-not-exist/approve", token));
+        Assert.Equal(HttpStatusCode.Forbidden, approveResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_CanApproveASuggestion_AndItThenAppearsOnListHubs()
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var username = $"hub-suggester-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+        var suggestionName = $"Approved Park {Guid.NewGuid():N}";
+        var suggestion = await (await SuggestHubAsync(token, suggestionName)).Content.ReadFromJsonAsync<HubDto>();
+
+        var pendingResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hub-suggestions", adminToken));
+        pendingResponse.EnsureSuccessStatusCode();
+        var pending = await pendingResponse.Content.ReadFromJsonAsync<List<HubDto>>();
+        Assert.Contains(pending!, h => h.Id == suggestion!.Id);
+
+        var approveResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/hub-suggestions/{suggestion!.Id}/approve", adminToken));
+        approveResponse.EnsureSuccessStatusCode();
+        var approved = await approveResponse.Content.ReadFromJsonAsync<HubDto>();
+        Assert.Equal("Approved", approved!.Status);
+
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hubs", token));
+        listResponse.EnsureSuccessStatusCode();
+        var hubs = await listResponse.Content.ReadFromJsonAsync<List<HubDto>>();
+        Assert.Contains(hubs!, h => h.Id == suggestion.Id);
+    }
+
+    [Fact]
+    public async Task Admin_CanRejectASuggestion_AndItIsGone()
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var username = $"hub-suggester-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+        var suggestion = await (await SuggestHubAsync(token, $"Rejected Park {Guid.NewGuid():N}")).Content.ReadFromJsonAsync<HubDto>();
+
+        var rejectResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/hub-suggestions/{suggestion!.Id}", adminToken));
+        Assert.Equal(HttpStatusCode.NoContent, rejectResponse.StatusCode);
+
+        var pendingResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hub-suggestions", adminToken));
+        pendingResponse.EnsureSuccessStatusCode();
+        var pending = await pendingResponse.Content.ReadFromJsonAsync<List<HubDto>>();
+        Assert.DoesNotContain(pending!, h => h.Id == suggestion.Id);
+    }
+
+    [Fact]
+    public async Task Admin_CanMakeAFriendAdmin()
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var username = $"future-admin-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var userResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/users/search?q=" + username, adminToken));
+        userResponse.EnsureSuccessStatusCode();
+        var matches = await userResponse.Content.ReadFromJsonAsync<List<UserSearchDto>>();
+        var userId = Assert.Single(matches!).Id;
+
+        var makeAdminResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/users/{userId}/make-admin", adminToken));
+        makeAdminResponse.EnsureSuccessStatusCode();
+        var updated = await makeAdminResponse.Content.ReadFromJsonAsync<UserResponseDto>();
+        Assert.True(updated!.IsAdmin);
+
+        _ = token; // only needed so the account exists to search for
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotMakeAnotherUserAdmin()
+    {
+        var usernameA = $"hub-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"hub-user-b-{Guid.NewGuid():N}";
+        var tokenA = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        var userResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/users/search?q=" + usernameB, tokenA));
+        var matches = await userResponse.Content.ReadFromJsonAsync<List<UserSearchDto>>();
+        var userId = Assert.Single(matches!).Id;
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/users/{userId}/make-admin", tokenA));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record HubDto(string Id, string Name, double Latitude, double Longitude, string Status, string CreatedByUserId, DateTimeOffset CreatedAt, string? Category, string? ProfilePictureUrl);
+    private record UserSearchDto(string Id, string Username, string? ProfilePictureUrl);
+    private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt, bool IsAdmin);
 }

@@ -270,6 +270,68 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     }
 
     [Fact]
+    public async Task Decline_ClearsPendingRequestFromBothSides()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+
+        var declineResponse = await _client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/decline", tokenB));
+        declineResponse.EnsureSuccessStatusCode();
+
+        var incomingResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/requests/incoming", tokenB));
+        var incoming = await incomingResponse.Content.ReadFromJsonAsync<List<FriendRequestDto>>();
+        Assert.DoesNotContain(incoming!, r => r.Id == idA);
+
+        var outgoingResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/requests/outgoing", tokenA));
+        var outgoing = await outgoingResponse.Content.ReadFromJsonAsync<List<FriendRequestDto>>();
+        Assert.DoesNotContain(outgoing!, r => r.Id == idB);
+    }
+
+    [Fact]
+    public async Task Block_PreventsTheBlockedUserFromSendingARequest()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        var blockResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/{idB}/block", tokenA));
+        blockResponse.EnsureSuccessStatusCode();
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenB,
+            new { Username = usernameA }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var blockedList = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/blocked", tokenA));
+        blockedList.EnsureSuccessStatusCode();
+        var blocked = await blockedList.Content.ReadFromJsonAsync<List<FriendRequestDto>>();
+        Assert.Contains(blocked!, b => b.Id == idB);
+    }
+
+    [Fact]
+    public async Task Unblock_AllowsARequestAgain()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/{idB}/block", tokenA));
+        await _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/friends/{idB}/block", tokenA));
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenB,
+            new { Username = usernameA }));
+
+        Assert.True(response.IsSuccessStatusCode);
+    }
+
+    [Fact]
     public async Task SetColor_WithInvalidColor_ReturnsBadRequest()
     {
         var usernameA = $"friend-user-a-{Guid.NewGuid():N}";

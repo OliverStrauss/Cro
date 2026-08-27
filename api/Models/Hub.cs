@@ -24,4 +24,9 @@ public record Hub(
 public static class HubStatus
 {
     public const string Approved = "Approved";
+    // A user-suggested Hub location, awaiting admin review via the hub-suggestions
+    // endpoints. Approving one deletes the Pending-partition doc and recreates it in the
+    // Approved partition (Status is the partition key, so it can't be changed in place) -
+    // rejecting one just deletes it outright.
+    public const string Pending = "Pending";
 }
