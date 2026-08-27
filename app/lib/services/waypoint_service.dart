@@ -39,13 +39,19 @@ class WaypointService {
     required String name,
     required double latitude,
     required double longitude,
+    required bool isPublic,
   }) async {
     final http.Response response;
     try {
       response = await http.post(
         Uri.parse('$apiBaseUrl/waypoints'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'name': name, 'latitude': latitude, 'longitude': longitude}),
+        body: jsonEncode({
+          'name': name,
+          'latitude': latitude,
+          'longitude': longitude,
+          'isPublic': isPublic,
+        }),
       );
     } catch (_) {
       throw WaypointException('Could not reach the server');
@@ -82,8 +88,8 @@ class WaypointService {
   }
 
   // Mirrors ProfileService.uploadProfilePicture's multipart pattern, pointed at the
-  // nest-scoped endpoint instead - a nest's picture is keyed by its own id (a user can have
-  // up to 5 nests), not the owner's id.
+  // nest-scoped endpoint instead - a nest's picture is keyed by its own id (a user has one
+  // private and one public nest), not the owner's id.
   Future<String> uploadWaypointPicture(
     String token,
     String waypointId,
@@ -133,7 +139,8 @@ class WaypointService {
   }
 
   // Waypoint error responses are {"error": "..."} - surface that message when present
-  // (e.g. the 5-nest cap) rather than a generic one, same pattern as FriendsService.
+  // (e.g. the one-private-one-public cap) rather than a generic one, same pattern as
+  // FriendsService.
   String _errorMessage(http.Response response, String fallback) {
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;

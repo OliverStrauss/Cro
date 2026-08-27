@@ -5,19 +5,18 @@ namespace CroApp.Api.Services;
 
 public class WaypointService(IWaypointRepository waypointRepository) : IWaypointService
 {
-    private const int MaxWaypointsPerUser = 5;
-
     public Task<List<Waypoint>> ListAsync(string userId) => waypointRepository.ListByUserIdAsync(userId);
 
-    public async Task<Waypoint> CreateAsync(string userId, string name, double latitude, double longitude)
+    public async Task<Waypoint> CreateAsync(string userId, string name, double latitude, double longitude, bool isPublic)
     {
         var existing = await waypointRepository.ListByUserIdAsync(userId);
-        if (existing.Count >= MaxWaypointsPerUser)
+        if (existing.Any(w => w.IsPublic == isPublic))
         {
-            throw new WaypointServiceException(409, $"You can have at most {MaxWaypointsPerUser} nests. Delete one before adding another.");
+            var kindLabel = isPublic ? "public" : "private";
+            throw new WaypointServiceException(409, $"You already have a {kindLabel} nest. Delete it before adding another.");
         }
 
-        var waypoint = new Waypoint(Guid.NewGuid().ToString(), userId, name, latitude, longitude, DateTimeOffset.UtcNow);
+        var waypoint = new Waypoint(Guid.NewGuid().ToString(), userId, name, latitude, longitude, DateTimeOffset.UtcNow, isPublic);
         return await waypointRepository.CreateAsync(waypoint);
     }
 

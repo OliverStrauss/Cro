@@ -35,6 +35,7 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["CosmosDb:BirdsContainerName"] = "Birds",
                     // Huge multiplier so any test-fixture distance - up to half Earth's
                     // circumference (~20,000km, the max possible) - resolves to a
@@ -78,23 +79,35 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
         return request;
     }
 
-    private async Task<WaypointDto> CreateNestAsync(string token, string name, double lat = 42.0, double lng = -93.5)
+    private async Task<WaypointDto> CreateNestAsync(string token, string name, double lat = 42.0, double lng = -93.5, bool isPublic = false)
     {
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token,
-            new { Name = name, Latitude = lat, Longitude = lng }));
+            new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<WaypointDto>())!;
     }
 
-    private async Task<List<BirdDto>> ListBirdsAsync(string token)
+    private Task<HttpResponseMessage> ComposeBirdAsync(
+        string token, string type, string name, string originNestId, string destinationId, string? content = null)
     {
-        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", token));
-        response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<List<BirdDto>>())!;
+        var request = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) }
+        };
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent(type), "type" },
+            { new StringContent(name), "name" },
+            { new StringContent(originNestId), "originNestId" },
+            { new StringContent(destinationId), "destinationId" },
+        };
+        if (content is not null)
+        {
+            form.Add(new StringContent(content), "content");
+        }
+        request.Content = form;
+        return _client.SendAsync(request);
     }
-
-    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/send", token, new { NestId = nestId, Content = content }));
 
     private Task<HttpResponseMessage> GetNestResidentsAsync(string? token, string nestId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/waypoints/{nestId}/birds", token));
@@ -102,7 +115,7 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
     private Task<HttpResponseMessage> MarkReadAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/read", token));
 
-    // Small pause after a send/read write, purely so the emulator's cross-partition query
+    // Small pause after a compose/read write, purely so the emulator's cross-partition query
     // index has caught up with the just-written document before a subsequent GET (a query,
     // not a point read) looks for it - unrelated to flight duration, which the huge
     // SpeedMultiplier already makes effectively instant.
@@ -119,14 +132,18 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA, new { Username = usernameB }));
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
 
-        await ListBirdsAsync(tokenA);
-        await ListBirdsAsync(tokenB);
-        await CreateNestAsync(tokenA, "A's Nest");
-        var bNest = await CreateNestAsync(tokenB, "B's Nest", 50.0, 50.0);
-        var ownBirdB = (await ListBirdsAsync(tokenB))[0];
-        var sentBird = (await ListBirdsAsync(tokenA))[0];
+        var aNest = await CreateNestAsync(tokenA, "A's Nest");
+        var bNest = await CreateNestAsync(tokenB, "B's Nest");
+        var bOrigin = await CreateNestAsync(tokenB, "B's Other Nest", 51.0, 51.0, isPublic: true);
 
-        (await SendBirdAsync(tokenA, sentBird.Id, bNest.Id, "For you!")).EnsureSuccessStatusCode();
+        var ownBirdResponse = await ComposeBirdAsync(tokenB, "Cro", "B's Own Bird", bOrigin.Id, bNest.Id, content: "B's own message");
+        ownBirdResponse.EnsureSuccessStatusCode();
+        var ownBirdB = (await ownBirdResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+
+        var sentResponse = await ComposeBirdAsync(tokenA, "Cro", "A's Bird", aNest.Id, bNest.Id, content: "For you!");
+        sentResponse.EnsureSuccessStatusCode();
+        var sentBird = (await sentResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+
         await WaitForIndexingAsync();
 
         var residentsResponse = await GetNestResidentsAsync(tokenB, bNest.Id);
@@ -148,12 +165,12 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA, new { Username = usernameB }));
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
 
-        await ListBirdsAsync(tokenA);
-        await ListBirdsAsync(tokenB);
-        await CreateNestAsync(tokenA, "A's Nest");
-        var bNest = await CreateNestAsync(tokenB, "B's Nest", 50.0, 50.0);
-        var sentBird = (await ListBirdsAsync(tokenA))[0];
-        (await SendBirdAsync(tokenA, sentBird.Id, bNest.Id)).EnsureSuccessStatusCode();
+        var aNest = await CreateNestAsync(tokenA, "A's Nest");
+        var bNest = await CreateNestAsync(tokenB, "B's Nest");
+
+        var sentResponse = await ComposeBirdAsync(tokenA, "Cro", "A's Bird", aNest.Id, bNest.Id, content: "Hi");
+        sentResponse.EnsureSuccessStatusCode();
+        var sentBird = (await sentResponse.Content.ReadFromJsonAsync<BirdDto>())!;
         await WaitForIndexingAsync();
 
         var beforeRead = await (await GetNestResidentsAsync(tokenB, bNest.Id)).Content.ReadFromJsonAsync<List<BirdDto>>();
@@ -170,7 +187,7 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
 
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
-    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt);
+    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
     private record BirdDto(
         string Id,
         string UserId,
@@ -185,5 +202,9 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
         DateTimeOffset? DepartedAt,
         DateTimeOffset? EstimatedArrivalAt,
         bool IsRead,
-        DateTimeOffset UpdatedAt);
+        DateTimeOffset UpdatedAt,
+        string? AudioUrl,
+        string? ImageUrl,
+        string? ProfilePictureUrl,
+        bool IsPublic);
 }

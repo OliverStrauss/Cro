@@ -34,6 +34,7 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
                     ["Jwt:Audience"] = "CroApp.Api.Tests"
@@ -70,8 +71,8 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
         return request;
     }
 
-    private Task<HttpResponseMessage> CreateWaypointAsync(string? token, string name, double lat = 42.0, double lng = -93.5) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token, new { Name = name, Latitude = lat, Longitude = lng }));
+    private Task<HttpResponseMessage> CreateWaypointAsync(string? token, string name, double lat = 42.0, double lng = -93.5, bool isPublic = false) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", token, new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
 
     private async Task<int> CountWaypointDocumentsAsync(string userId)
     {
@@ -167,7 +168,7 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
 
         var first = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
-        await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6);
+        await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6, isPublic: true);
 
         var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
         var waypoints = await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>();
@@ -178,19 +179,48 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
     }
 
     [Fact]
-    public async Task CreatingASixthWaypoint_ReturnsConflict()
+    public async Task CreatingOnePrivateAndOnePublicNest_Succeeds()
     {
         var username = $"waypoint-user-{Guid.NewGuid():N}";
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
 
-        for (var i = 0; i < 5; i++)
-        {
-            var response = await CreateWaypointAsync(token, $"Nest {i}", 42.0 + i, -93.5);
-            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        }
+        var privateResponse = await CreateWaypointAsync(token, "Backyard", isPublic: false);
+        Assert.Equal(HttpStatusCode.Created, privateResponse.StatusCode);
 
-        var sixth = await CreateWaypointAsync(token, "One Too Many");
-        Assert.Equal(HttpStatusCode.Conflict, sixth.StatusCode);
+        var publicResponse = await CreateWaypointAsync(token, "The Library", isPublic: true);
+        Assert.Equal(HttpStatusCode.Created, publicResponse.StatusCode);
+
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
+        var waypoints = await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>();
+        Assert.Equal(2, waypoints!.Count);
+        Assert.Contains(waypoints, w => !w.IsPublic);
+        Assert.Contains(waypoints, w => w.IsPublic);
+    }
+
+    [Fact]
+    public async Task CreatingASecondPrivateNest_ReturnsConflict()
+    {
+        var username = $"waypoint-user-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var first = await CreateWaypointAsync(token, "Backyard", isPublic: false);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var second = await CreateWaypointAsync(token, "Front Porch", isPublic: false);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreatingASecondPublicNest_ReturnsConflict()
+    {
+        var username = $"waypoint-user-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var first = await CreateWaypointAsync(token, "The Library", isPublic: true);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var second = await CreateWaypointAsync(token, "The Gym", isPublic: true);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
     [Fact]
@@ -275,5 +305,5 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
     }
 
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
-    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt);
+    private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
 }

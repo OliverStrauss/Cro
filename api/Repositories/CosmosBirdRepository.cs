@@ -92,4 +92,17 @@ public class CosmosBirdRepository : IBirdRepository
         var response = await _container.UpsertItemAsync(bird, new PartitionKey(bird.UserId));
         return response.Resource;
     }
+
+    public async Task<bool> DeleteAsync(string userId, string birdId)
+    {
+        try
+        {
+            await _container.DeleteItemAsync<Bird>(birdId, new PartitionKey(userId));
+            return true;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
 }

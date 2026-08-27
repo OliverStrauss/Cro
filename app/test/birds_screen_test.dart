@@ -1,11 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:cro_app/models/bird.dart';
+import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/birds_screen.dart';
 import 'package:cro_app/services/bird_service.dart';
 import 'package:cro_app/services/friends_service.dart';
+import 'package:cro_app/services/hub_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
 
@@ -35,12 +40,27 @@ class _FakeFriendsService implements FriendsService {
       throw UnimplementedError('${invocation.memberName} is not used here');
 }
 
+class _FakeHubService implements HubService {
+  List<Hub> hubsToReturn = [];
+
+  @override
+  Future<List<Hub>> listHubs(String token) async => hubsToReturn;
+
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used here');
+}
+
 class _FakeBirdService implements BirdService {
   List<Bird> birdsToReturn = [];
   Object? loadErrorToThrow;
   String? lastSentBirdId;
   String? lastSentNestId;
   String? lastSentContent;
+  String? lastRenamedBirdId;
+  String? lastRenamedTo;
+  String? lastDeletedBirdId;
+  String? lastUploadedBirdId;
 
   @override
   Future<List<Bird>> listBirds(String token) async {
@@ -69,6 +89,46 @@ class _FakeBirdService implements BirdService {
             : b)
         .toList();
     return sent;
+  }
+
+  @override
+  Future<Bird> renameBird(String token, String birdId, String name) async {
+    lastRenamedBirdId = birdId;
+    lastRenamedTo = name;
+    final renamed = birdsToReturn.firstWhere((b) => b.id == birdId);
+    final updated = Bird(
+      id: renamed.id,
+      userId: renamed.userId,
+      name: name,
+      currentNestId: renamed.currentNestId,
+      isTraveling: renamed.isTraveling,
+      nestToId: renamed.nestToId,
+      type: renamed.type,
+    );
+    birdsToReturn = birdsToReturn.map((b) => b.id == birdId ? updated : b).toList();
+    return updated;
+  }
+
+  @override
+  Future<void> deleteBird(String token, String birdId) async {
+    lastDeletedBirdId = birdId;
+    birdsToReturn = birdsToReturn.where((b) => b.id != birdId).toList();
+  }
+
+  @override
+  Future<XFile?> pickImage() async =>
+      XFile.fromData(Uint8List.fromList([1, 2, 3]), name: 'bird.png', mimeType: 'image/png');
+
+  @override
+  Future<String> uploadBirdPicture(
+    String token,
+    String birdId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async {
+    lastUploadedBirdId = birdId;
+    return 'https://example.com/bird-pictures/$birdId';
   }
 
   @override
@@ -104,6 +164,7 @@ void main() {
         waypointService: _FakeWaypointService(),
         birdService: _FakeBirdService(),
         friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
       ),
     ));
 
@@ -118,6 +179,7 @@ void main() {
         waypointService: _FakeWaypointService(),
         birdService: _FakeBirdService(),
         friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
       ),
     ));
     await tester.pumpAndSettle();
@@ -151,6 +213,7 @@ void main() {
         waypointService: fakeWaypoints,
         birdService: fakeBirds,
         friendsService: fakeFriends,
+        hubService: _FakeHubService(),
       ),
     ));
     await tester.pumpAndSettle();
@@ -175,9 +238,12 @@ void main() {
     final location4 = tester.widget<Text>(find.byKey(const Key('birdLocation_b4')));
     expect(location4.data, 'Unassigned');
 
-    // Every card gets the same placeholder bird icon (this screen only ever shows the
-    // caller's own birds, so there's a single fixed color to use).
-    expect(find.byIcon(Icons.flutter_dash), findsNWidgets(4));
+    // Every card gets an avatar (falling back to an initial when no picture is set) that
+    // can be tapped to upload a picture for that specific bird.
+    expect(find.byKey(const Key('birdAvatar_b1')), findsOneWidget);
+    expect(find.byKey(const Key('birdAvatar_b2')), findsOneWidget);
+    expect(find.byKey(const Key('birdAvatar_b3')), findsOneWidget);
+    expect(find.byKey(const Key('birdAvatar_b4')), findsOneWidget);
 
     // Only the traveling bird has an ETA line.
     final eta3 = tester.widget<Text>(find.byKey(const Key('birdEta_b3')));
@@ -202,6 +268,7 @@ void main() {
         waypointService: fakeWaypoints,
         birdService: fakeBirds,
         friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
       ),
     ));
     await tester.pumpAndSettle();
@@ -238,6 +305,7 @@ void main() {
         waypointService: fakeWaypoints,
         birdService: fakeBirds,
         friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
       ),
     ));
     await tester.pumpAndSettle();
@@ -258,11 +326,114 @@ void main() {
         waypointService: fakeWaypoints,
         birdService: fakeBirds,
         friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
       ),
     ));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('birdsErrorState')), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('tapping a bird avatar uploads a new picture for that bird', (WidgetTester tester) async {
+    final fakeWaypoints = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeBirds = _FakeBirdService()..birdsToReturn = [_bird('b1', nestId: 'w1')];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: BirdsScreen(
+        authState: authState,
+        waypointService: fakeWaypoints,
+        birdService: fakeBirds,
+        friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('birdAvatar_b1')));
+    await tester.pumpAndSettle();
+
+    expect(fakeBirds.lastUploadedBirdId, 'b1');
+  });
+
+  testWidgets('renaming a bird calls renameBird and refreshes', (WidgetTester tester) async {
+    final fakeWaypoints = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeBirds = _FakeBirdService()..birdsToReturn = [_bird('b1', nestId: 'w1')];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: BirdsScreen(
+        authState: authState,
+        waypointService: fakeWaypoints,
+        birdService: fakeBirds,
+        friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('renameBirdButton_b1')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('birdNameField')), 'Speedy');
+    await tester.tap(find.byKey(const Key('saveBirdNameButton')));
+    await tester.pumpAndSettle();
+
+    expect(fakeBirds.lastRenamedBirdId, 'b1');
+    expect(fakeBirds.lastRenamedTo, 'Speedy');
+    expect(find.text('Speedy'), findsOneWidget);
+  });
+
+  testWidgets('deleting a bird requires a second confirming tap', (WidgetTester tester) async {
+    final fakeWaypoints = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeBirds = _FakeBirdService()..birdsToReturn = [_bird('b1', nestId: 'w1')];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: BirdsScreen(
+        authState: authState,
+        waypointService: fakeWaypoints,
+        birdService: fakeBirds,
+        friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('deleteBirdButton_b1')));
+    await tester.pumpAndSettle();
+    expect(fakeBirds.lastDeletedBirdId, null);
+    expect(find.text('Confirm?'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('deleteBirdButton_b1')));
+    await tester.pumpAndSettle();
+
+    expect(fakeBirds.lastDeletedBirdId, 'b1');
+    expect(find.byKey(const Key('birdCard_b1')), findsNothing);
+  });
+
+  testWidgets('the spawn button shows a max-capacity message once 5 birds are owned',
+      (WidgetTester tester) async {
+    final fakeWaypoints = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeBirds = _FakeBirdService()
+      ..birdsToReturn = List.generate(5, (i) => _bird('b$i', nestId: 'w1'));
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: BirdsScreen(
+        authState: authState,
+        waypointService: fakeWaypoints,
+        birdService: fakeBirds,
+        friendsService: _FakeFriendsService(),
+        hubService: _FakeHubService(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('spawnBirdButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('max 5 birds'), findsOneWidget);
   });
 }

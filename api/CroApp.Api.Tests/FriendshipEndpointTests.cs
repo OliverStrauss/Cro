@@ -32,6 +32,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
                     ["Jwt:Audience"] = "CroApp.Api.Tests"
@@ -234,9 +235,9 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
 
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0 }));
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Work", Latitude = 11.0, Longitude = 21.0 }));
+            new { Name = "B's Work", Latitude = 11.0, Longitude = 21.0, IsPublic = true }));
 
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/waypoints", tokenA));
         response.EnsureSuccessStatusCode();
@@ -314,25 +315,28 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         await SendRequestAsync(tokenA, usernameC);
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenC));
 
-        // B's birds are only lazily provisioned on first GET /birds - trigger that before
-        // creating a nest, otherwise AssignUnassignedBirdsToNestAsync has nothing to assign.
-        await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", tokenB));
-
-        // B needs two nests: creating the first auto-assigns B's 3 birds to it, the
-        // second gives somewhere for one of them to be sent to.
-        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0 }));
+        var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
+        var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
         var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0 }));
+            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
         var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
 
-        var birdsResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", tokenB));
-        var birds = await birdsResponse.Content.ReadFromJsonAsync<List<BirdDto>>();
-        var birdToSend = birds!.First();
-
-        var sendResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdToSend.Id}/send", tokenB,
-            new { NestId = away!.Id }));
-        sendResponse.EnsureSuccessStatusCode();
+        var composeRequest = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", tokenB) },
+            Content = new MultipartFormDataContent
+            {
+                { new StringContent("Cro"), "type" },
+                { new StringContent("B's Bird"), "name" },
+                { new StringContent(home!.Id), "originNestId" },
+                { new StringContent(away!.Id), "destinationId" },
+                { new StringContent("On my way"), "content" },
+            }
+        };
+        var composeResponse = await _client.SendAsync(composeRequest);
+        composeResponse.EnsureSuccessStatusCode();
+        var birdToSend = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
 
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/birds", tokenA));
         response.EnsureSuccessStatusCode();
