@@ -249,11 +249,13 @@ class MapScreenState extends State<MapScreen>
   void _showHubDetails(Hub hub) {
     HubDetailsSheet.show(
       context,
+      id: hub.id,
       name: hub.name,
       category: hub.category,
       profilePictureUrl: hub.profilePictureUrl,
       latitude: hub.latitude,
       longitude: hub.longitude,
+      authState: widget.authState,
     );
   }
 

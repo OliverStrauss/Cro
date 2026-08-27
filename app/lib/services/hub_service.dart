@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import '../models/hub.dart';
+import '../models/hub_message.dart';
 
 class HubException implements Exception {
   final String message;
@@ -63,6 +64,27 @@ class HubService {
       throw HubException(_errorMessage(response, 'Could not create hub'));
     }
     return Hub.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // The Hub's message board - durable history of everything that's ever landed there,
+  // newest first, unlike the live "who's currently here" residents endpoint.
+  Future<List<HubMessage>> listMessages(String token, String hubId) async {
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse('$apiBaseUrl/hubs/$hubId/messages'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw HubException(_errorMessage(response, 'Could not load messages'));
+    }
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => HubMessage.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   String _errorMessage(http.Response response, String fallback) {

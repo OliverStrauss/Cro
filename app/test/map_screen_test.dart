@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/hub.dart';
+import 'package:cro_app/models/hub_message.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
@@ -120,12 +121,16 @@ class _FakeProfileService implements ProfileService {
 
 class _FakeHubService implements HubService {
   List<Hub> hubsToReturn = [];
+  List<HubMessage> messagesToReturn = [];
   Hub? lastCreatedHub;
   String? lastCreatedName;
   String? lastCreatedCategory;
 
   @override
   Future<List<Hub>> listHubs(String token) async => hubsToReturn;
+
+  @override
+  Future<List<HubMessage>> listMessages(String token, String hubId) async => messagesToReturn;
 
   @override
   Future<Hub> createHub(
