@@ -17,13 +17,18 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
 
-  <!-- CroApp.Api.Tests lives under this project's directory; without this, its files and
-       generated obj/ output get glob-included into this project's own compile. -->
+  <!-- CroApp.Api.Tests and Tools/* projects live under this project's directory; without
+       this, their files and generated obj/ output get glob-included into this project's
+       own compile. -->
   <ItemGroup>
     <Compile Remove="CroApp.Api.Tests/**" />
     <Content Remove="CroApp.Api.Tests/**" />
     <EmbeddedResource Remove="CroApp.Api.Tests/**" />
     <None Remove="CroApp.Api.Tests/**" />
+    <Compile Remove="Tools/**" />
+    <Content Remove="Tools/**" />
+    <EmbeddedResource Remove="Tools/**" />
+    <None Remove="Tools/**" />
   </ItemGroup>
 
 </Project>

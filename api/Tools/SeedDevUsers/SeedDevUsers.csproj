@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- Console SDK (not Sdk.Web), so PasswordHasher<T> needs this explicit framework
+       reference - CroApp.Api.csproj gets it for free via Sdk="Microsoft.NET.Sdk.Web". -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.62.0" />
+  </ItemGroup>
+
+  <!-- Reuses CroApp.Api's own User/FriendEntry/FriendStatus/FriendColorPalette types so
+       this script can never drift from the API's actual schema - same ProjectReference
+       pattern CroApp.Api.Tests already uses. -->
+  <ItemGroup>
+    <ProjectReference Include="../../CroApp.Api.csproj" />
+  </ItemGroup>
+
+</Project>
