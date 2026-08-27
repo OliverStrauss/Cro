@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/friend.dart';
@@ -79,6 +81,10 @@ class _HubBoardScreenState extends State<HubBoardScreen> {
         _excludedSenderIds = excludedSenderIds;
         _isLoading = false;
       });
+
+      // Clears this hub's unread badge on the map - same "mark read on open" pattern as a
+      // received bird sheet. Best-effort: a failure here shouldn't block viewing the board.
+      unawaited(widget.hubService.markHubRead(token, widget.hubId));
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();

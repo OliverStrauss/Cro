@@ -14,11 +14,17 @@ import 'package:cro_app/state/auth_state.dart';
 class _FakeHubService implements HubService {
   List<HubMessage> messagesToReturn = [];
   Object? loadErrorToThrow;
+  String? lastMarkedReadHubId;
 
   @override
   Future<List<HubMessage>> listMessages(String token, String hubId) async {
     if (loadErrorToThrow != null) throw loadErrorToThrow!;
     return messagesToReturn;
+  }
+
+  @override
+  Future<void> markHubRead(String token, String hubId) async {
+    lastMarkedReadHubId = hubId;
   }
 
   @override

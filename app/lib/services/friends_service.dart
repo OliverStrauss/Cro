@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import '../models/blocked_user.dart';
 import '../models/friend.dart';
 import '../models/friend_bird.dart';
 import '../models/friend_request.dart';
@@ -102,6 +103,88 @@ class FriendsService {
       throw FriendsException(
         _errorMessage(response, 'Could not remove friend'),
       );
+    }
+  }
+
+  // A distinct action from removeFriend, even though the underlying server-side effect on a
+  // pending request is identical - keeps client intent explicit (decline vs. remove an
+  // existing friend vs. cancel my own outgoing request, which still goes through
+  // removeFriend).
+  Future<void> declineFriendRequest(String token, String requesterId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/friends/requests/$requesterId/decline'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw FriendsException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw FriendsException(
+        _errorMessage(response, 'Could not decline friend request'),
+      );
+    }
+  }
+
+  Future<void> blockUser(String token, String userId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/friends/$userId/block'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw FriendsException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw FriendsException(_errorMessage(response, 'Could not block user'));
+    }
+  }
+
+  Future<void> unblockUser(String token, String userId) async {
+    final http.Response response;
+    try {
+      response = await http.delete(
+        Uri.parse('$apiBaseUrl/friends/$userId/block'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw FriendsException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw FriendsException(_errorMessage(response, 'Could not unblock user'));
+    }
+  }
+
+  Future<List<BlockedUser>> getBlockedUsers(String token) async {
+    final response = await _get(
+      '/friends/blocked',
+      token,
+      'Could not load blocked users',
+    );
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => BlockedUser.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // Grant-only - server rejects if the caller isn't already an admin.
+  Future<void> makeAdmin(String token, String userId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/users/$userId/make-admin'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw FriendsException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw FriendsException(_errorMessage(response, 'Could not make user admin'));
     }
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/blocked_user.dart';
 import '../models/friend.dart';
 import '../models/friend_request.dart';
 import '../models/user_profile.dart';
@@ -222,10 +223,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _declineRequest(String requesterId) async {
     try {
-      await widget.friendsService.removeFriend(
+      await widget.friendsService.declineFriendRequest(
         widget.authState.token!,
         requesterId,
       );
+      await _loadAll();
+    } catch (e) {
+      _showToast(e.toString(), isError: true);
+    }
+  }
+
+  Future<void> _blockUser(String userId) async {
+    try {
+      await widget.friendsService.blockUser(widget.authState.token!, userId);
+      _showToast('User blocked');
       await _loadAll();
     } catch (e) {
       _showToast(e.toString(), isError: true);
@@ -267,6 +278,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       _showToast(e.toString(), isError: true);
     }
+  }
+
+  bool get _isCallerAdmin => _profile?.isAdmin ?? false;
+
+  // The app's first modal confirm dialog - everywhere else uses an inline two-tap
+  // "Confirm?" pattern, but granting admin is high-stakes enough to warrant an explicit
+  // "are you sure" the user has to read and dismiss.
+  Future<void> _confirmMakeAdmin(Friend friend) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Make admin?'),
+        content: Text('Make ${friend.username} an admin? Are you sure?'),
+        actions: [
+          TextButton(
+            key: const Key('cancelMakeAdminButton'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('confirmMakeAdminButton'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await widget.friendsService.makeAdmin(widget.authState.token!, friend.userId);
+      _showToast('${friend.username} is now an admin');
+      await _loadAll();
+    } catch (e) {
+      _showToast(e.toString(), isError: true);
+    }
+  }
+
+  Future<void> _showBlockedUsers() async {
+    List<BlockedUser> blocked;
+    try {
+      blocked = await widget.friendsService.getBlockedUsers(widget.authState.token!);
+    } catch (e) {
+      _showToast(e.toString(), isError: true);
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Blocked users'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: blocked.isEmpty
+                ? const Text('No blocked users')
+                : ListView(
+                    key: const Key('blockedUsersList'),
+                    shrinkWrap: true,
+                    children: [
+                      for (final user in blocked)
+                        ListTile(
+                          key: Key('blockedUser_${user.userId}'),
+                          title: Text(user.username),
+                          trailing: TextButton(
+                            key: Key('unblockButton_${user.userId}'),
+                            onPressed: () async {
+                              try {
+                                await widget.friendsService.unblockUser(
+                                  widget.authState.token!,
+                                  user.userId,
+                                );
+                                setDialogState(() => blocked.remove(user));
+                              } catch (e) {
+                                _showToast(e.toString(), isError: true);
+                              }
+                            },
+                            child: const Text('Unblock'),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // "Toast" here is a SnackBar - Flutter has no separate toast widget, and SnackBar is
@@ -349,7 +457,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Center(child: _buildAvatarSection()),
         const SizedBox(height: 24),
-        Text('Your Friends', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Your Friends', style: Theme.of(context).textTheme.titleMedium),
+            TextButton(
+              key: const Key('blockedUsersButton'),
+              onPressed: _showBlockedUsers,
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Blocked', style: TextStyle(fontSize: 11.5)),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         _buildFriendsRow(),
         const SizedBox(height: 24),
@@ -529,6 +652,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
+              if (_isCallerAdmin && !friend.isAdmin)
+                Positioned(
+                  bottom: -4,
+                  right: -4,
+                  child: GestureDetector(
+                    key: Key('makeAdminButton_${friend.userId}'),
+                    onTap: () => _confirmMakeAdmin(friend),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: CroColors.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: CroColors.ink.withValues(alpha: 0.15),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.shield_outlined,
+                        size: 12,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         },
@@ -639,7 +788,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildInvitesRow() {
     return SizedBox(
       key: const Key('incomingRequestsSection'),
-      height: 144,
+      height: 156,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _incomingRequests.length,
@@ -652,6 +801,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             profilePictureUrl: request.profilePictureUrl,
             onAccept: () => _acceptRequest(request.userId),
             onDecline: () => _declineRequest(request.userId),
+            onBlock: () => _blockUser(request.userId),
           );
         },
       ),

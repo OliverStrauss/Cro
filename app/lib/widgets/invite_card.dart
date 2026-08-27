@@ -11,6 +11,7 @@ class InviteCard extends StatelessWidget {
   final String? profilePictureUrl;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
+  final VoidCallback? onBlock;
 
   const InviteCard({
     super.key,
@@ -19,6 +20,7 @@ class InviteCard extends StatelessWidget {
     required this.profilePictureUrl,
     required this.onAccept,
     required this.onDecline,
+    this.onBlock,
   });
 
   @override
@@ -93,6 +95,21 @@ class InviteCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onBlock != null) ...[
+            const SizedBox(height: 3),
+            GestureDetector(
+              key: Key('blockRequestButton_$userId'),
+              onTap: onBlock,
+              child: const Text(
+                'Block',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: CroColors.fog,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

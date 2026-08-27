@@ -25,6 +25,7 @@ import '../widgets/hub_details_sheet.dart';
 import '../widgets/hub_name_dialog.dart';
 import '../widgets/nest_details_sheet.dart';
 import '../widgets/waypoint_name_dialog.dart';
+import 'hub_suggestions_screen.dart';
 import 'my_nests_screen.dart';
 
 // Ames, IA - the map's default view when a brand-new user has no nests of their own yet.
@@ -78,11 +79,18 @@ class MapScreenState extends State<MapScreen>
   List<Bird> _birds = [];
   List<FriendBird> _friendsBirds = [];
   List<Hub> _hubs = [];
+  // Unread HubMessage count per hub, keyed by hubId - drives the badge under each Hub
+  // marker's label. Absent/zero for a hub with nothing new since the caller last opened
+  // its board.
+  Map<String, int> _hubUnreadCounts = {};
   bool _isAdmin = false;
   // Armed by the admin-only "Add Hub" button - the next map tap places a Hub instead of a
   // nest, then disarms itself. Kept as a simple toggle rather than a separate screen/mode
   // so it doesn't disturb the existing tap-to-add-nest flow at all.
   bool _addHubArmed = false;
+  // Same arming pattern as _addHubArmed, for non-admins: the next map tap submits a Hub
+  // suggestion instead of placing a live Hub.
+  bool _suggestHubArmed = false;
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _liveUpdateTimer;
@@ -146,11 +154,13 @@ class MapScreenState extends State<MapScreen>
       final results = await Future.wait([
         widget.birdService.listBirds(token),
         widget.friendsService.getFriendsBirds(token),
+        widget.hubService.getUnreadCounts(token),
       ]);
       if (!mounted) return;
       setState(() {
         _birds = results[0] as List<Bird>;
         _friendsBirds = results[1] as List<FriendBird>;
+        _hubUnreadCounts = results[2] as Map<String, int>;
       });
       _syncBirdBobAnimation();
     } catch (_) {
@@ -183,6 +193,7 @@ class MapScreenState extends State<MapScreen>
         widget.birdService.listBirds(token),
         widget.friendsService.getFriendsBirds(token),
         widget.hubService.listHubs(token),
+        widget.hubService.getUnreadCounts(token),
         if (userId != null) widget.profileService.getUser(userId),
       ]);
       setState(() {
@@ -191,7 +202,8 @@ class MapScreenState extends State<MapScreen>
         _birds = results[2] as List<Bird>;
         _friendsBirds = results[3] as List<FriendBird>;
         _hubs = results[4] as List<Hub>;
-        _isAdmin = results.length > 5 ? (results[5] as UserProfile).isAdmin : false;
+        _hubUnreadCounts = results[5] as Map<String, int>;
+        _isAdmin = results.length > 6 ? (results[6] as UserProfile).isAdmin : false;
         _isLoading = false;
       });
       _syncBirdBobAnimation();
@@ -387,6 +399,40 @@ class MapScreenState extends State<MapScreen>
     }
   }
 
+  // Non-admin counterpart to _placeHub - submits a suggestion instead of a live Hub, so it
+  // never appears as a marker until an admin approves it elsewhere.
+  Future<void> _placeSuggestion(LatLng point) async {
+    setState(() => _suggestHubArmed = false);
+    final result = await showDialog<HubNameDialogResult>(
+      context: context,
+      builder: (context) => const HubNameDialog(),
+    );
+    if (result == null || result.name.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await widget.hubService.suggestHub(
+        widget.authState.token!,
+        name: result.name.trim(),
+        latitude: point.latitude,
+        longitude: point.longitude,
+        category: result.category,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sent to admins for review')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
   // Mirrors MyNestsScreen's _resolveNestKindToAdd - only asks when both slots are open;
   // otherwise the remaining kind is the only valid choice, and if neither is open there's
   // nothing to add (handled by the caller before this is invoked).
@@ -426,6 +472,11 @@ class MapScreenState extends State<MapScreen>
 
     if (_addHubArmed) {
       await _placeHub(point);
+      return;
+    }
+
+    if (_suggestHubArmed) {
+      await _placeSuggestion(point);
       return;
     }
 
@@ -495,6 +546,35 @@ class MapScreenState extends State<MapScreen>
                         : 'Add Hub',
                     onPressed: () =>
                         setState(() => _addHubArmed = !_addHubArmed),
+                  )
+                else
+                  IconButton(
+                    key: const Key('suggestHubButton'),
+                    icon: Icon(
+                      Icons.add_location_alt_outlined,
+                      color: _suggestHubArmed
+                          ? Theme.of(context).colorScheme.tertiary
+                          : null,
+                    ),
+                    tooltip: _suggestHubArmed
+                        ? 'Tap the map to suggest a Hub'
+                        : 'Suggest Hub',
+                    onPressed: () =>
+                        setState(() => _suggestHubArmed = !_suggestHubArmed),
+                  ),
+                if (_isAdmin)
+                  IconButton(
+                    key: const Key('viewSuggestionsButton'),
+                    icon: const Icon(Icons.rate_review_outlined),
+                    tooltip: 'Hub Suggestions',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => HubSuggestionsScreen(
+                          authState: widget.authState,
+                          hubService: widget.hubService,
+                        ),
+                      ),
+                    ),
                   ),
                 IconButton(
                   key: const Key('myNestsButton'),
@@ -605,23 +685,39 @@ class MapScreenState extends State<MapScreen>
                   key: Key('hubMarker_${hub.id}'),
                   point: LatLng(hub.latitude, hub.longitude),
                   width: 72,
-                  height: 62,
+                  // Tall enough for the optional unread badge below the label. The
+                  // GestureDetector below fills this exact box (rather than
+                  // shrink-wrapping its shorter badge-less content) so a center-point tap
+                  // on the marker keeps hitting it regardless of whether the badge is
+                  // showing this frame.
+                  height: 78,
                   child: GestureDetector(
                     onTap: () => _showHubDetails(hub),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AvatarWithFallback(
-                          avatarKey: Key('hubAvatar_${hub.id}'),
-                          imageUrl: hub.profilePictureUrl,
-                          initialsSource: hub.name,
-                          radius: 14,
-                          hasBorder: true,
-                          borderColor: Theme.of(context).colorScheme.tertiary,
-                        ),
-                        const SizedBox(height: 4),
-                        _NestLabel(name: hub.name),
-                      ],
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox(
+                      width: 72,
+                      height: 78,
+                      child: Column(
+                        children: [
+                          AvatarWithFallback(
+                            avatarKey: Key('hubAvatar_${hub.id}'),
+                            imageUrl: hub.profilePictureUrl,
+                            initialsSource: hub.name,
+                            radius: 14,
+                            hasBorder: true,
+                            borderColor: Theme.of(context).colorScheme.tertiary,
+                          ),
+                          const SizedBox(height: 4),
+                          _NestLabel(name: hub.name),
+                          if ((_hubUnreadCounts[hub.id] ?? 0) > 0) ...[
+                            const SizedBox(height: 2),
+                            _UnreadBadge(
+                              key: Key('hubUnreadBadge_${hub.id}'),
+                              count: _hubUnreadCounts[hub.id]!,
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -833,6 +929,33 @@ class _NestLabel extends StatelessWidget {
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
+          color: CroColors.ink,
+        ),
+      ),
+    );
+  }
+}
+
+// The unread-message-count badge shown below a Hub marker's label - Hub boards only, own/
+// friend nests never carry one since there's no per-message read state for those.
+class _UnreadBadge extends StatelessWidget {
+  final int count;
+
+  const _UnreadBadge({super.key, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.tertiary,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
           color: CroColors.ink,
         ),
       ),
