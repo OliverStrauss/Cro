@@ -35,6 +35,7 @@ public class ProfilePictureEndpointTests : IClassFixture<WebApplicationFactory<P
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["BlobStorage:ConnectionString"] = blobConnectionString,
                     ["BlobStorage:ProfilePicturesContainerName"] = "profile-pictures",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,

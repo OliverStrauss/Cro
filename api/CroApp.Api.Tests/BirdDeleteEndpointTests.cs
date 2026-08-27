@@ -34,6 +34,7 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["CosmosDb:BirdsContainerName"] = "Birds",
                     // Left at the real default so a genuinely far send (used only by the
                     // still-traveling test) reliably stays in flight for the test's lifetime -

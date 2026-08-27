@@ -82,6 +82,8 @@ builder.Services.AddScoped<IBirdRepository, CosmosBirdRepository>();
 builder.Services.AddScoped<IBirdService, BirdService>();
 builder.Services.AddScoped<IHubRepository, CosmosHubRepository>();
 builder.Services.AddScoped<IHubService, HubService>();
+builder.Services.AddScoped<IBirdReactionRepository, CosmosBirdReactionRepository>();
+builder.Services.AddScoped<IBirdReactionService, BirdReactionService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
 builder.Services.AddScoped<INestPictureService, NestPictureService>();
@@ -128,14 +130,17 @@ if (app.Environment.IsDevelopment())
     // manual drop (see CLAUDE.md's Local Cosmos DB Emulator section) - CI is unaffected since
     // its emulator container is fresh every run.
     await database.Database.CreateContainerIfNotExistsAsync(opts.WaypointsContainerName, "/userId");
-    // Same /userId partition-key reasoning as Waypoints: every user has a fixed set of
-    // birds, so scoping by owner keeps GET /birds' lazy-provisioning check and the
-    // nest-assignment update both single-partition operations.
+    // Same /userId partition-key reasoning as Waypoints: a user's birds are scoped by
+    // owner, keeping "list my birds" and per-bird point ops single-partition.
     await database.Database.CreateContainerIfNotExistsAsync(opts.BirdsContainerName, "/userId");
     // /status, not /userId - a Hub has no single user-owner, and the dominant query is
     // "list every approved Hub" (see Hub.cs), which a /status partition keeps
     // single-partition.
     await database.Database.CreateContainerIfNotExistsAsync(opts.HubsContainerName, "/status");
+    // /birdId, not the reacting user's id - Bird is partitioned by its *sender's* userId,
+    // and a reaction from a different user needs its own single-partition read/write path
+    // rather than a cross-partition write into the sender's partition (see BirdReaction.cs).
+    await database.Database.CreateContainerIfNotExistsAsync(opts.ReactionsContainerName, "/birdId");
 
     // Dev-only seed users: "Oliver 1" (regular) and "Admin 1" (IsAdmin) so there's always a
     // known admin account locally to place Hubs through the app's own "Add Hub" flow,
@@ -610,6 +615,61 @@ app.MapPost("/birds/{id}/read", async (string id, ClaimsPrincipal principal, IBi
 .RequireAuthorization()
 .WithName("MarkBirdRead");
 
+app.MapGet("/birds/{id}/reactions", async (string id, ClaimsPrincipal principal, IBirdReactionService reactionService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await reactionService.GetSummaryAsync(userId, id));
+    }
+    catch (BirdReactionServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("GetBirdReactions");
+
+app.MapPut("/birds/{id}/reactions/{emoji}", async (string id, string emoji, ClaimsPrincipal principal, IBirdReactionService reactionService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await reactionService.AddAsync(userId, id, emoji);
+        return Results.Ok(await reactionService.GetSummaryAsync(userId, id));
+    }
+    catch (BirdReactionServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("AddBirdReaction");
+
+app.MapDelete("/birds/{id}/reactions/{emoji}", async (string id, string emoji, ClaimsPrincipal principal, IBirdReactionService reactionService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    await reactionService.RemoveAsync(userId, id, emoji);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("RemoveBirdReaction");
+
 app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -843,6 +903,7 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository u
                 bird.NestToId,
                 bird.DepartedAt,
                 bird.EstimatedArrivalAt,
+                bird.IsPublic,
             });
         }
     }

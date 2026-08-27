@@ -11,6 +11,7 @@ class FriendBird {
   final String? nestToId;
   final DateTime departedAt;
   final DateTime estimatedArrivalAt;
+  final bool isPublic;
 
   FriendBird({
     required this.id,
@@ -23,6 +24,7 @@ class FriendBird {
     this.nestToId,
     required this.departedAt,
     required this.estimatedArrivalAt,
+    this.isPublic = false,
   });
 
   factory FriendBird.fromJson(Map<String, dynamic> json) => FriendBird(
@@ -36,5 +38,6 @@ class FriendBird {
         nestToId: json['nestToId'] as String?,
         departedAt: DateTime.parse(json['departedAt'] as String),
         estimatedArrivalAt: DateTime.parse(json['estimatedArrivalAt'] as String),
+        isPublic: json['isPublic'] as bool? ?? false,
       );
 }

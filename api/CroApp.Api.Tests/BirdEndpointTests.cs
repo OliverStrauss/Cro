@@ -32,6 +32,7 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
                     ["CosmosDb:UsersContainerName"] = "Users",
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["CosmosDb:BirdsContainerName"] = "Birds",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
