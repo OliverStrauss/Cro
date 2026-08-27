@@ -7,19 +7,30 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/bird.dart';
 import '../models/friend_bird.dart';
+import '../models/hub.dart';
+import '../models/user_profile.dart';
 import '../models/waypoint.dart';
 import '../services/bird_service.dart';
 import '../services/friends_service.dart';
+import '../services/hub_service.dart';
 import '../services/profile_service.dart';
 import '../services/waypoint_service.dart';
 import '../state/auth_state.dart';
 import '../theme.dart';
 import '../utils/color_utils.dart';
+import '../utils/jwt_utils.dart';
 import '../widgets/avatar_with_fallback.dart';
 import '../widgets/bird_details_sheet.dart';
+import '../widgets/hub_details_sheet.dart';
+import '../widgets/hub_name_dialog.dart';
 import '../widgets/nest_details_sheet.dart';
 import '../widgets/waypoint_name_dialog.dart';
 import 'my_nests_screen.dart';
+
+// Ames, IA - the map's default view when a brand-new user has no nests of their own yet.
+// Deliberately local rather than a world view, matching the app's "local social" scope for
+// Hubs (curated Ames landmarks).
+const _amesCenter = LatLng(42.0308, -93.6319);
 
 class MapScreen extends StatefulWidget {
   final AuthState authState;
@@ -27,6 +38,7 @@ class MapScreen extends StatefulWidget {
   final FriendsService friendsService;
   final ProfileService profileService;
   final BirdService birdService;
+  final HubService hubService;
   // When true, this screen is a location-picker pushed from My Nests: tapping the map pops
   // the tapped LatLng back to the caller instead of opening the name-and-save flow itself.
   final bool pickLocationMode;
@@ -42,12 +54,14 @@ class MapScreen extends StatefulWidget {
     FriendsService? friendsService,
     ProfileService? profileService,
     BirdService? birdService,
+    HubService? hubService,
     this.pickLocationMode = false,
     this.focusPoint,
   }) : waypointService = waypointService ?? WaypointService(),
        friendsService = friendsService ?? FriendsService(),
        profileService = profileService ?? ProfileService(),
-       birdService = birdService ?? BirdService();
+       birdService = birdService ?? BirdService(),
+       hubService = hubService ?? HubService();
 
   @override
   State<MapScreen> createState() => MapScreenState();
@@ -63,6 +77,12 @@ class MapScreenState extends State<MapScreen>
   List<Waypoint> _friendWaypoints = [];
   List<Bird> _birds = [];
   List<FriendBird> _friendsBirds = [];
+  List<Hub> _hubs = [];
+  bool _isAdmin = false;
+  // Armed by the admin-only "Add Hub" button - the next map tap places a Hub instead of a
+  // nest, then disarms itself. Kept as a simple toggle rather than a separate screen/mode
+  // so it doesn't disturb the existing tap-to-add-nest flow at all.
+  bool _addHubArmed = false;
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _liveUpdateTimer;
@@ -156,17 +176,22 @@ class MapScreenState extends State<MapScreen>
 
     try {
       final token = widget.authState.token!;
+      final userId = jwtSubject(token);
       final results = await Future.wait([
         widget.waypointService.listWaypoints(token),
         widget.friendsService.getFriendsWaypoints(token),
         widget.birdService.listBirds(token),
         widget.friendsService.getFriendsBirds(token),
+        widget.hubService.listHubs(token),
+        if (userId != null) widget.profileService.getUser(userId),
       ]);
       setState(() {
         _ownNests = results[0] as List<Waypoint>;
         _friendWaypoints = results[1] as List<Waypoint>;
         _birds = results[2] as List<Bird>;
         _friendsBirds = results[3] as List<FriendBird>;
+        _hubs = results[4] as List<Hub>;
+        _isAdmin = results.length > 5 ? (results[5] as UserProfile).isAdmin : false;
         _isLoading = false;
       });
       _syncBirdBobAnimation();
@@ -221,9 +246,23 @@ class MapScreenState extends State<MapScreen>
     );
   }
 
+  void _showHubDetails(Hub hub) {
+    HubDetailsSheet.show(
+      context,
+      id: hub.id,
+      name: hub.name,
+      category: hub.category,
+      profilePictureUrl: hub.profilePictureUrl,
+      latitude: hub.latitude,
+      longitude: hub.longitude,
+      authState: widget.authState,
+    );
+  }
+
   void _showBirdDetails(_TravelingBird tb) {
     BirdDetailsSheet.show(
       context,
+      birdId: tb.id,
       name: tb.name,
       type: tb.type,
       senderLabel: tb.senderLabel,
@@ -231,6 +270,11 @@ class MapScreenState extends State<MapScreen>
       destinationName: tb.destination.name,
       departedAt: tb.departedAt,
       estimatedArrivalAt: tb.estimatedArrivalAt,
+      isPublic: tb.isPublic,
+      token: widget.authState.token!,
+      content: tb.content,
+      audioUrl: tb.audioUrl,
+      imageUrl: tb.imageUrl,
     );
   }
 
@@ -238,7 +282,7 @@ class MapScreenState extends State<MapScreen>
   // every accepted friend's (from _friendsBirds, via GET /friends/birds) - to the
   // origin/destination nests its from/to ids refer to. Drops any bird that can't
   // currently be placed on the map (not traveling, missing timing data, or pointing at
-  // a nest id that isn't in this user's own-plus-friends nest set - e.g. a stale race
+  // a nest id that isn't in this user's own-plus-friends-plus-Hubs set - e.g. a stale race
   // with a friend removing a nest mid-flight) rather than crashing. A bird's line/marker
   // color always follows whoever sent it - the theme's primary color for their own birds,
   // or that friend's assigned color for a friend's - never the destination, so two birds
@@ -246,6 +290,19 @@ class MapScreenState extends State<MapScreen>
   List<_TravelingBird> _resolveTravelingBirds() {
     final nestsById = <String, Waypoint>{
       for (final nest in [..._ownNests, ..._friendWaypoints]) nest.id: nest,
+      // A bird can depart from or land at a Hub (see ComposeAndSendAsync's destination
+      // resolution) - projected into a Waypoint-shaped record here purely so the existing
+      // curve/marker/bearing math (which only ever reads .latitude/.longitude/.name) keeps
+      // working without every one of those functions taking on a Hub-vs-Waypoint union type.
+      for (final hub in _hubs)
+        hub.id: Waypoint(
+          id: hub.id,
+          userId: hub.createdByUserId,
+          name: hub.name,
+          latitude: hub.latitude,
+          longitude: hub.longitude,
+          profilePictureUrl: hub.profilePictureUrl,
+        ),
     };
 
     final result = <_TravelingBird>[];
@@ -268,6 +325,10 @@ class MapScreenState extends State<MapScreen>
           destination: destination,
           departedAt: departedAt,
           estimatedArrivalAt: estimatedArrivalAt,
+          isPublic: bird.isPublic,
+          content: bird.content,
+          audioUrl: bird.audioUrl,
+          imageUrl: bird.imageUrl,
         ),
       );
     }
@@ -288,10 +349,72 @@ class MapScreenState extends State<MapScreen>
           destination: destination,
           departedAt: friendBird.departedAt,
           estimatedArrivalAt: friendBird.estimatedArrivalAt,
+          isPublic: friendBird.isPublic,
+          content: friendBird.content,
+          audioUrl: friendBird.audioUrl,
+          imageUrl: friendBird.imageUrl,
         ),
       );
     }
     return result;
+  }
+
+  Future<void> _placeHub(LatLng point) async {
+    setState(() => _addHubArmed = false);
+    final result = await showDialog<HubNameDialogResult>(
+      context: context,
+      builder: (context) => const HubNameDialog(),
+    );
+    if (result == null || result.name.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      final saved = await widget.hubService.createHub(
+        widget.authState.token!,
+        name: result.name.trim(),
+        latitude: point.latitude,
+        longitude: point.longitude,
+        category: result.category,
+      );
+      setState(() => _hubs = [..._hubs, saved]);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  // Mirrors MyNestsScreen's _resolveNestKindToAdd - only asks when both slots are open;
+  // otherwise the remaining kind is the only valid choice, and if neither is open there's
+  // nothing to add (handled by the caller before this is invoked).
+  Future<bool?> _resolveNestKindToAdd() async {
+    final hasPrivate = _ownNests.any((n) => !n.isPublic);
+    final hasPublic = _ownNests.any((n) => n.isPublic);
+    if (hasPrivate && !hasPublic) {
+      return true;
+    }
+    if (hasPublic && !hasPrivate) {
+      return false;
+    }
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Add which kind of nest?'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Private nest'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Public nest'),
+          ),
+        ],
+      ),
+    );
   }
 
   @visibleForTesting
@@ -301,9 +424,30 @@ class MapScreenState extends State<MapScreen>
       return;
     }
 
+    if (_addHubArmed) {
+      await _placeHub(point);
+      return;
+    }
+
+    final hasBothNests =
+        _ownNests.any((n) => n.isPublic) && _ownNests.any((n) => !n.isPublic);
+    if (hasBothNests) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Both nest slots are full')),
+      );
+      return;
+    }
+
+    final isPublic = await _resolveNestKindToAdd();
+    if (isPublic == null || !mounted) {
+      return;
+    }
+
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => const WaypointNameDialog(),
+      builder: (context) => WaypointNameDialog(
+        kindLabel: isPublic ? 'Public nest' : 'Private nest',
+      ),
     );
     if (name == null || name.trim().isEmpty) {
       return;
@@ -315,6 +459,7 @@ class MapScreenState extends State<MapScreen>
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
+        isPublic: isPublic,
       );
       setState(() => _ownNests = [..._ownNests, saved]);
     } catch (e) {
@@ -336,6 +481,21 @@ class MapScreenState extends State<MapScreen>
         actions: widget.pickLocationMode
             ? null
             : [
+                if (_isAdmin)
+                  IconButton(
+                    key: const Key('addHubButton'),
+                    icon: Icon(
+                      Icons.add_location_alt,
+                      color: _addHubArmed
+                          ? Theme.of(context).colorScheme.tertiary
+                          : null,
+                    ),
+                    tooltip: _addHubArmed
+                        ? 'Tap the map to place your Hub'
+                        : 'Add Hub',
+                    onPressed: () =>
+                        setState(() => _addHubArmed = !_addHubArmed),
+                  ),
                 IconButton(
                   key: const Key('myNestsButton'),
                   icon: const Icon(Icons.add_home),
@@ -386,7 +546,7 @@ class MapScreenState extends State<MapScreen>
             widget.focusPoint ??
             (hasOwnNests
                 ? LatLng(_ownNests.first.latitude, _ownNests.first.longitude)
-                : const LatLng(0, 0)),
+                : _amesCenter),
         // Floor of 3 keeps a whole-country/continent view available while stopping
         // short of the near-zoom-0 world-repeat view that caused "weird behavior"
         // when zoomed all the way out. initialZoom isn't clamped against minZoom on
@@ -394,7 +554,9 @@ class MapScreenState extends State<MapScreen>
         // needs to match the floor directly rather than relying on clamping.
         // A focused nest gets a closer zoom than the general "show all my nests" default -
         // the point is to land the user right on top of the specific nest they tapped.
-        initialZoom: widget.focusPoint != null ? 16 : (hasOwnNests ? 13 : 3),
+        // A brand-new user with no nests yet lands on Ames at a local zoom (12), not the
+        // old world view - this app is meant to feel local, not global.
+        initialZoom: widget.focusPoint != null ? 16 : (hasOwnNests ? 13 : 12),
         minZoom: 3,
         // Prevents panning past the poles into the background-color void.
         cameraConstraint: const CameraConstraint.containLatitude(),
@@ -434,9 +596,35 @@ class MapScreenState extends State<MapScreen>
           ),
         if (hasOwnNests ||
             _friendWaypoints.isNotEmpty ||
-            travelingBirds.isNotEmpty)
+            travelingBirds.isNotEmpty ||
+            _hubs.isNotEmpty)
           MarkerLayer(
             markers: [
+              for (final hub in _hubs)
+                Marker(
+                  key: Key('hubMarker_${hub.id}'),
+                  point: LatLng(hub.latitude, hub.longitude),
+                  width: 72,
+                  height: 62,
+                  child: GestureDetector(
+                    onTap: () => _showHubDetails(hub),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AvatarWithFallback(
+                          avatarKey: Key('hubAvatar_${hub.id}'),
+                          imageUrl: hub.profilePictureUrl,
+                          initialsSource: hub.name,
+                          radius: 14,
+                          hasBorder: true,
+                          borderColor: Theme.of(context).colorScheme.tertiary,
+                        ),
+                        const SizedBox(height: 4),
+                        _NestLabel(name: hub.name),
+                      ],
+                    ),
+                  ),
+                ),
               for (final nest in _ownNests)
                 Marker(
                   key: Key('ownNestMarker_${nest.id}'),
@@ -505,9 +693,17 @@ class MapScreenState extends State<MapScreen>
                     estimatedArrivalAt: tb.estimatedArrivalAt,
                     now: now,
                   ),
-                  width: 22,
-                  height: 22,
+                  // Bigger than the painted 18x18 circle (kMinInteractiveDimension, same as
+                  // Material's own minimum touch target) - a bird marker moves every 3s and
+                  // bobs on top of that, so a tap-sized-to-the-pixels hit target is too easy
+                  // to miss on a real touchscreen even though it's precise enough for widget
+                  // tests, which tap dead-center.
+                  width: kMinInteractiveDimension,
+                  height: kMinInteractiveDimension,
                   child: GestureDetector(
+                    // Without this, the default HitTestBehavior.deferToChild means a tap only
+                    // registers on the painted circle itself, not the full marker box above.
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => _showBirdDetails(tb),
                     child: AnimatedBuilder(
                       animation: _birdBobController,
@@ -719,6 +915,12 @@ class _TravelingBird {
   final Waypoint destination;
   final DateTime departedAt;
   final DateTime estimatedArrivalAt;
+  final bool isPublic;
+  // Only ever populated when isPublic - a private bird's message stays a surprise until
+  // it's delivered, same rule GET /birds and GET /friends/birds already enforce server-side.
+  final String? content;
+  final String? audioUrl;
+  final String? imageUrl;
 
   const _TravelingBird({
     required this.id,
@@ -730,6 +932,10 @@ class _TravelingBird {
     required this.destination,
     required this.departedAt,
     required this.estimatedArrivalAt,
+    this.isPublic = false,
+    this.content,
+    this.audioUrl,
+    this.imageUrl,
   });
 }
 

@@ -10,4 +10,5 @@ public interface IBirdRepository
     Task<List<Bird>> GetByNestIdAsync(string nestId);
     Task<Bird> CreateAsync(Bird bird);
     Task<Bird> UpdateAsync(Bird bird);
+    Task<bool> DeleteAsync(string userId, string birdId);
 }

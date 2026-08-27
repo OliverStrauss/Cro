@@ -9,11 +9,14 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/friend_bird.dart';
+import 'package:cro_app/models/hub.dart';
+import 'package:cro_app/models/hub_message.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
 import 'package:cro_app/services/bird_service.dart';
 import 'package:cro_app/services/friends_service.dart';
+import 'package:cro_app/services/hub_service.dart';
 import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
@@ -41,9 +44,16 @@ class _FakeWaypointService implements WaypointService {
     required String name,
     required double latitude,
     required double longitude,
+    required bool isPublic,
   }) async {
-    final created =
-        Waypoint(id: 'new-${_nextId++}', userId: 'u1', name: name, latitude: latitude, longitude: longitude);
+    final created = Waypoint(
+      id: 'new-${_nextId++}',
+      userId: 'u1',
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      isPublic: isPublic,
+    );
     lastCreatedWaypoint = created;
     return created;
   }
@@ -109,6 +119,44 @@ class _FakeProfileService implements ProfileService {
       throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
 }
 
+class _FakeHubService implements HubService {
+  List<Hub> hubsToReturn = [];
+  List<HubMessage> messagesToReturn = [];
+  Hub? lastCreatedHub;
+  String? lastCreatedName;
+  String? lastCreatedCategory;
+
+  @override
+  Future<List<Hub>> listHubs(String token) async => hubsToReturn;
+
+  @override
+  Future<List<HubMessage>> listMessages(String token, String hubId) async => messagesToReturn;
+
+  @override
+  Future<Hub> createHub(
+    String token, {
+    required String name,
+    required double latitude,
+    required double longitude,
+    String? category,
+  }) async {
+    lastCreatedName = name;
+    lastCreatedCategory = category;
+    final created = Hub(
+      id: 'new-hub-${hubsToReturn.length + 1}',
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      status: 'Approved',
+      createdByUserId: 'u1',
+      category: category,
+    );
+    lastCreatedHub = created;
+    hubsToReturn = [...hubsToReturn, created];
+    return created;
+  }
+}
+
 class _FakeBirdService implements BirdService {
   List<Bird> birdsToReturn = [];
   Object? errorToThrow;
@@ -116,6 +164,7 @@ class _FakeBirdService implements BirdService {
   String? lastSentBirdId;
   String? lastSentNestId;
   String? lastSentContent;
+  List<String> markedReadBirdIds = [];
 
   @override
   Future<List<Bird>> listBirds(String token) async {
@@ -133,6 +182,33 @@ class _FakeBirdService implements BirdService {
     return Bird(id: birdId, userId: 'u1', name: 'Bird $birdId', isTraveling: true, type: 'Sparrow');
   }
 
+  // Mirrors the real GET /waypoints/{id}/birds semantics: every idle bird currently parked
+  // at this nest, regardless of who sent it - not scoped to the caller's own birds the way
+  // listBirds is.
+  @override
+  Future<List<Bird>> getNestResidents(String token, String nestId) async {
+    if (errorToThrow != null) throw errorToThrow!;
+    return birdsToReturn.where((b) => b.currentNestId == nestId && !b.isTraveling).toList();
+  }
+
+  @override
+  Future<Bird> markBirdRead(String token, String birdId) async {
+    markedReadBirdIds.add(birdId);
+    final bird = birdsToReturn.firstWhere((b) => b.id == birdId);
+    return Bird(
+      id: bird.id,
+      userId: bird.userId,
+      name: bird.name,
+      currentNestId: bird.currentNestId,
+      isTraveling: bird.isTraveling,
+      type: bird.type,
+      content: bird.content,
+      audioUrl: bird.audioUrl,
+      imageUrl: bird.imageUrl,
+      isRead: true,
+    );
+  }
+
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName} is not used by MapScreen');
@@ -144,6 +220,8 @@ Bird _travelingBird(
   required String nestToId,
   DateTime? departedAt,
   DateTime? estimatedArrivalAt,
+  bool isPublic = false,
+  String? content,
 }) =>
     Bird(
       id: id,
@@ -155,6 +233,8 @@ Bird _travelingBird(
       type: 'Sparrow',
       departedAt: departedAt ?? DateTime.now().subtract(const Duration(minutes: 1)),
       estimatedArrivalAt: estimatedArrivalAt ?? DateTime.now().add(const Duration(minutes: 1)),
+      isPublic: isPublic,
+      content: content,
     );
 
 // A syntactically valid (unsigned) JWT with the given subject - MapScreen decodes this
@@ -179,6 +259,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
 
@@ -195,6 +276,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -215,6 +297,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -233,6 +316,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -250,6 +334,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -267,6 +352,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -284,6 +370,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -292,6 +379,11 @@ void main() {
     // tester.tap() in the widget test harness - call the tap handler directly instead.
     // Everything downstream (the real dialog, real save call) is still exercised for real.
     tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
+    await tester.pumpAndSettle();
+
+    // Neither slot is filled yet, so the kind picker appears before the name dialog.
+    expect(find.text('Add which kind of nest?'), findsOneWidget);
+    await tester.tap(find.text('Private nest'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('waypointNameField')), findsOneWidget);
@@ -313,6 +405,7 @@ void main() {
           waypointService: fakeService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -362,6 +455,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -381,16 +475,16 @@ void main() {
             userId: 'f1',
             username: 'alice',
             color: '#E53935',
-            latitude: 1.001,
-            longitude: 2.001),
+            latitude: 42.031,
+            longitude: -93.631),
         Waypoint(
             id: 'fw2',
             name: "Alice's Work",
             userId: 'f1',
             username: 'alice',
             color: '#E53935',
-            latitude: 1.002,
-            longitude: 2.002),
+            latitude: 42.032,
+            longitude: -93.632),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
     await tester.pumpWidget(MaterialApp(
@@ -399,6 +493,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -427,6 +522,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -448,8 +544,8 @@ void main() {
             userId: 'f1',
             username: 'alice',
             color: '#E53935',
-            latitude: 1.001,
-            longitude: 2.001,
+            latitude: 42.031,
+            longitude: -93.631,
             profilePictureUrl: 'https://example.com/alice.png'),
       ];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
@@ -459,6 +555,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -474,7 +571,7 @@ void main() {
       find.descendant(of: find.byKey(const Key('nestDetailsSheet')), matching: find.text("Alice's Yard")),
       findsOneWidget,
     );
-    expect(find.text('(1.0010, 2.0010)'), findsOneWidget);
+    expect(find.text('(42.0310, -93.6310)'), findsOneWidget);
     // No edit action for a friend's nest.
     expect(find.byKey(const Key('editNestFromDialogButton')), findsNothing);
     // The picture fetch fails in the test harness (all HTTP is stubbed), so the avatar
@@ -498,6 +595,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -537,6 +635,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     // Not pumpAndSettle(): b3 is traveling, which keeps the bob-animation controller
@@ -573,6 +672,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     await tester.pumpAndSettle();
@@ -597,6 +697,98 @@ void main() {
     expect(find.byKey(const Key('noBirdsAtNestMessage')), findsOneWidget);
   });
 
+  testWidgets('the own-nest sheet lists a friend\'s delivered bird separately from the caller\'s own',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        Bird(id: 'b1', userId: 'u1', name: 'Mine', currentNestId: 'w1', isTraveling: false, type: 'Sparrow'),
+        Bird(
+            id: 'b2',
+            userId: 'friend1',
+            name: 'From Friendo',
+            currentNestId: 'w1',
+            isTraveling: false,
+            type: 'Cro',
+            content: 'hey!',
+            isRead: false),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    // GetNestResidentsAsync is cross-partition - both the caller's own idle bird and the
+    // friend's delivered one come back from the same fetch, but only the caller's own shows
+    // under "Birds here" (resendable); the friend's shows under "Delivered to you" instead.
+    expect(find.text('Delivered to you'), findsOneWidget);
+    expect(find.byKey(const Key('birdTile_b1')), findsOneWidget);
+    expect(find.byKey(const Key('birdTile_b2')), findsNothing);
+    expect(find.byKey(const Key('deliveredBirdTile_b2')), findsOneWidget);
+    expect(find.byKey(const Key('deliveredBirdTile_b1')), findsNothing);
+    expect(find.text('New · Cro'), findsOneWidget);
+  });
+
+  testWidgets('tapping a delivered bird opens its message and marks it read', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1.0, longitude: 2.0)];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        Bird(
+            id: 'b2',
+            userId: 'friend1',
+            name: 'From Friendo',
+            currentNestId: 'w1',
+            isTraveling: false,
+            type: 'Cro',
+            content: 'hey!',
+            isRead: false),
+      ];
+    final fakeProfileService = _FakeProfileService()
+      ..profileToReturn = UserProfile(id: 'friend1', username: 'friendo', email: 'friendo@example.com');
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: fakeProfileService,
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ownNestMarker_w1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('deliveredBirdTile_b2')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('receivedBirdSheet')), findsOneWidget);
+    expect(find.byKey(const Key('birdPayloadContent')), findsOneWidget);
+    expect(find.text('hey!'), findsOneWidget);
+    expect(find.text('Cro · From friendo'), findsOneWidget);
+    expect(fakeBirdService.markedReadBirdIds, contains('b2'));
+
+    await tester.tap(find.text('Close').last);
+    await tester.pumpAndSettle();
+
+    // Re-fetches or at least locally flips the tile's unread marker once its sheet has
+    // called markBirdRead, instead of leaving the dot/bold styling stuck as unread.
+    expect(find.text('New · Cro'), findsNothing);
+  });
+
   testWidgets('picking and uploading a nest picture from the sheet calls uploadWaypointPicture',
       (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
@@ -610,6 +802,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: fakeProfileService,
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -635,6 +828,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -659,8 +853,8 @@ void main() {
             id: 'fw1',
             userId: 'friend1',
             name: "Friend's Nest",
-            latitude: 1.002,
-            longitude: 2.002,
+            latitude: 42.032,
+            longitude: -93.632,
             username: 'friendo',
             color: '#1E88E5'),
       ];
@@ -671,6 +865,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -697,6 +892,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -719,6 +915,7 @@ void main() {
                   waypointService: _FakeWaypointService(),
                   friendsService: _FakeFriendsService(),
                   profileService: _FakeProfileService(),
+                  hubService: _FakeHubService(),
                   birdService: _FakeBirdService(),
                   pickLocationMode: true,
                 ),
@@ -755,6 +952,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -791,6 +989,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
@@ -823,6 +1022,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     await tester.pump();
@@ -839,6 +1039,40 @@ void main() {
     expect(find.text('Sparrow · Sent by You'), findsOneWidget);
     expect(find.text('Cabin', skipOffstage: false), findsWidgets);
     expect(tester.widget<Text>(find.byKey(const Key('birdDetailsDestination'))).data, 'Cabin');
+  });
+
+  testWidgets(
+      'tapping near but not exactly on a bird marker still opens its details sheet (hit target bigger than the painted circle)',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [_travelingBird('b1', nestFromId: 'w1', nestToId: 'w2')];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    // The marker's painted circle is only 18x18 (radius 9) - a real touch this far off dead
+    // center used to silently miss (HitTestBehavior.deferToChild). It should now land inside
+    // the enlarged kMinInteractiveDimension hit box.
+    final markerCenter = tester.getCenter(find.byKey(const Key('birdMarker_b1')));
+    await tester.tapAt(markerCenter + const Offset(15, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdDetailsSheet')), findsOneWidget);
   });
 
   testWidgets('tapping a friend\'s bird marker opens the bird details sheet, sent by their username',
@@ -877,6 +1111,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pump();
@@ -890,6 +1125,120 @@ void main() {
     expect(find.text("Friendo's Bird"), findsOneWidget);
     expect(find.text('Sparrow · Sent by friendo'), findsOneWidget);
     expect(tester.widget<Text>(find.byKey(const Key('birdDetailsDestination'))).data, 'Home');
+  });
+
+  testWidgets('an own public in-flight bird\'s message can be read from the details sheet', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        _travelingBird('b1', nestFromId: 'w1', nestToId: 'w2', isPublic: true, content: 'hello world'),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_b1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdPayloadContent')), findsOneWidget);
+    expect(find.text('hello world'), findsOneWidget);
+  });
+
+  testWidgets('an own private in-flight bird\'s message is not shown in the details sheet', (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
+        Waypoint(id: 'w2', userId: 'u1', name: 'Cabin', latitude: 1.001, longitude: 2.001),
+      ];
+    final fakeBirdService = _FakeBirdService()
+      ..birdsToReturn = [
+        _travelingBird('b1', nestFromId: 'w1', nestToId: 'w2', isPublic: false, content: 'top secret'),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: _FakeFriendsService(),
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: fakeBirdService),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_b1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdPayloadContent')), findsNothing);
+    expect(find.text('top secret'), findsNothing);
+  });
+
+  testWidgets('a friend\'s public in-flight bird\'s message can be read from the details sheet',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            userId: 'friend1',
+            name: "Friend's Nest",
+            latitude: 1.002,
+            longitude: 2.002,
+            username: 'friendo',
+            color: '#1E88E5'),
+      ]
+      ..friendsBirdsToReturn = [
+        FriendBird(
+          id: 'fb1',
+          userId: 'friend1',
+          username: 'friendo',
+          color: '#1E88E5',
+          name: "Friendo's Bird",
+          type: 'Sparrow',
+          nestFromId: 'fw1',
+          nestToId: 'w1',
+          departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+          isPublic: true,
+          content: 'hi from friendo',
+        ),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_fb1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdPayloadContent')), findsOneWidget);
+    expect(find.text('hi from friendo'), findsOneWidget);
   });
 
   testWidgets('renders a flight-path line and moving marker for a friend\'s in-flight bird, colored by sender',
@@ -928,6 +1277,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
@@ -961,6 +1311,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: fakeBirdService),
     ));
     await tester.pumpAndSettle();
@@ -990,6 +1341,7 @@ void main() {
           waypointService: fakeWaypointService,
           friendsService: fakeFriendsService,
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -1007,6 +1359,7 @@ void main() {
           waypointService: _FakeWaypointService(),
           friendsService: _FakeFriendsService(),
           profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
           birdService: _FakeBirdService()),
     ));
     await tester.pumpAndSettle();
@@ -1222,6 +1575,7 @@ void main() {
             waypointService: _FakeWaypointService(),
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       await tester.pumpAndSettle();
@@ -1243,6 +1597,7 @@ void main() {
             waypointService: _FakeWaypointService(),
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       await tester.pumpAndSettle();
@@ -1278,6 +1633,7 @@ void main() {
             waypointService: fakeWaypointService,
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       // Not pumpAndSettle(): a traveling bird keeps the bob-animation controller
@@ -1310,6 +1666,7 @@ void main() {
             waypointService: _FakeWaypointService(),
             friendsService: _FakeFriendsService(),
             profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
             birdService: fakeBirdService),
       ));
       await tester.pumpAndSettle();
@@ -1321,6 +1678,123 @@ void main() {
       // teardown with a "Timer is still pending" error.
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await tester.pumpAndSettle();
+    });
+  });
+
+  group('Hub support', () {
+    testWidgets('non-admin users do not see the Add Hub button', (WidgetTester tester) async {
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('addHubButton')), findsNothing);
+    });
+
+    testWidgets('admin users see the Add Hub button, arm-then-tap places a Hub', (WidgetTester tester) async {
+      final fakeProfileService = _FakeProfileService()
+        ..profileToReturn = UserProfile(id: 'u1', username: 'admin', email: 'admin@example.com', isAdmin: true);
+      final fakeHubService = _FakeHubService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: fakeProfileService,
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('addHubButton')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('addHubButton')));
+      await tester.pumpAndSettle();
+
+      tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(42.03, -93.63));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hubNameField')), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('hubNameField')), 'Ames Public Library');
+      await tester.tap(find.byKey(const Key('saveHubButton')));
+      await tester.pumpAndSettle();
+
+      expect(fakeHubService.lastCreatedName, 'Ames Public Library');
+      expect(find.byKey(Key('hubMarker_${fakeHubService.lastCreatedHub!.id}')), findsOneWidget);
+    });
+
+    testWidgets('a plain map tap (Add Hub not armed) still creates a nest, not a Hub', (WidgetTester tester) async {
+      final fakeProfileService = _FakeProfileService()
+        ..profileToReturn = UserProfile(id: 'u1', username: 'admin', email: 'admin@example.com', isAdmin: true);
+      final fakeWaypointService = _FakeWaypointService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: fakeWaypointService,
+            friendsService: _FakeFriendsService(),
+            profileService: fakeProfileService,
+            hubService: _FakeHubService(),
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
+      await tester.pumpAndSettle();
+
+      // Neither nest slot is filled yet, so the kind picker appears before the name dialog.
+      expect(find.text('Add which kind of nest?'), findsOneWidget);
+      await tester.tap(find.text('Private nest'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('waypointNameField')), findsOneWidget);
+      expect(find.byKey(const Key('hubNameField')), findsNothing);
+    });
+
+    testWidgets('tapping a Hub marker shows its details sheet', (WidgetTester tester) async {
+      final fakeHubService = _FakeHubService()
+        ..hubsToReturn = [
+          Hub(
+            id: 'h1',
+            name: 'Mucky Duck Pub',
+            latitude: 42.03,
+            longitude: -93.63,
+            status: 'Approved',
+            createdByUserId: 'admin1',
+            category: 'Pub',
+          ),
+        ];
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('hubMarker_h1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hubDetailsSheet')), findsOneWidget);
+      // Scoped to the sheet since the Hub's map marker (labeled with its own name pill) is
+      // still visible behind the sheet and would also match "Mucky Duck Pub".
+      expect(
+        find.descendant(of: find.byKey(const Key('hubDetailsSheet')), matching: find.text('Mucky Duck Pub')),
+        findsOneWidget,
+      );
+      expect(find.text('Pub'), findsOneWidget);
     });
   });
 }

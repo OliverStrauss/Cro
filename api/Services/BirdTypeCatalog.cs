@@ -1,23 +1,30 @@
 namespace CroApp.Api.Services;
 
-// Placeholder species roster for the send/travel mechanic. Base speeds are tunable game-
-// pacing numbers (km/h, as if flown continuously) chosen so that a few-hundred-km journey
-// takes hours and a multi-thousand-km one takes multiple physical days at the default
+// The four bird types a user can compose, each with a distinct required payload (see
+// BirdPayloadValidator) and speed tier. Base speeds are tunable game-pacing numbers (km/h,
+// as if flown continuously) chosen so that a few-hundred-km journey takes hours and a
+// multi-thousand-km one takes multiple physical days at the default
 // BirdTravelOptions.SpeedMultiplier of 1.0 - not real bird biology, not precision-critical,
-// safe to retune later.
+// safe to retune later. This is a full replacement of the old placeholder species roster
+// (Sparrow/Pigeon/Falcon) rather than a rename - the old roster's "Pigeon" was a different
+// (mid) speed tier than this one's (slowest), so keeping old bird documents' Type values
+// around unmapped would be ambiguous; there's no migration path for pre-existing values.
 public static class BirdTypeCatalog
 {
+    public const string Cro = "Cro";
+    public const string Parrot = "Parrot";
+    public const string Raven = "Raven";
+    public const string Pigeon = "Pigeon";
+
     public static readonly (string Name, double BaseSpeedKmh)[] Types =
     [
-        ("Sparrow", 20.0),
-        ("Pigeon", 35.0),
-        ("Falcon", 60.0),
+        (Cro, 60.0),
+        (Parrot, 40.0),
+        (Raven, 25.0),
+        (Pigeon, 15.0),
     ];
 
-    // Deterministic by creation-slot index (0-based) - same "no randomness" preference as
-    // FriendColorPalette.PickNext. Wraps around via modulo if BirdsPerUser ever exceeds
-    // Types.Length.
-    public static string PickForSlot(int slotIndex) => Types[slotIndex % Types.Length].Name;
+    public static bool IsValid(string type) => Types.Any(t => t.Name == type);
 
     public static double BaseSpeedKmh(string type)
     {
@@ -30,6 +37,6 @@ public static class BirdTypeCatalog
         }
 
         // Unrecognized/legacy type value - fall back to the slowest rather than throw.
-        return Types[0].BaseSpeedKmh;
+        return Types[^1].BaseSpeedKmh;
     }
 }
