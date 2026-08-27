@@ -5,8 +5,10 @@ using Microsoft.Azure.Cosmos;
 using User = CroApp.Api.Models.User;
 
 // Resets the Users container to a fixed, known-good set of dev accounts, all already
-// friends with each other. Only the Users container is touched - Hubs, Waypoints, Birds,
-// and Reactions are left exactly as they are, so locally-placed Hubs survive a re-run.
+// friends with each other, each with one private "Home Base" nest around Ames. Only the
+// Users and Waypoints containers are touched (Waypoints only ever gets new rows added,
+// never wiped) - Hubs, Birds, and Reactions are left exactly as they are, so locally-placed
+// Hubs survive a re-run.
 //
 // Talks directly to the Cosmos emulator (same TLS-bypass/Gateway-mode setup Program.cs
 // uses) rather than through the running API, so it works whether or not `dotnet run` is
@@ -14,6 +16,7 @@ using User = CroApp.Api.Models.User;
 
 const string DatabaseName = "CroApp";
 const string UsersContainerName = "Users";
+const string WaypointsContainerName = "Waypoints";
 const string Password = "1";
 
 // Same well-known, publicly-documented emulator key as CLAUDE.md's setup instructions -
@@ -41,7 +44,9 @@ var cosmosClientOptions = new CosmosClientOptions
 };
 
 using var client = new CosmosClient(connectionString, cosmosClientOptions);
-var usersContainer = client.GetDatabase(DatabaseName).GetContainer(UsersContainerName);
+var database = client.GetDatabase(DatabaseName);
+var usersContainer = database.GetContainer(UsersContainerName);
+var waypointsContainer = database.GetContainer(WaypointsContainerName);
 
 Console.WriteLine("Wiping existing Users (Hubs, Waypoints, Birds, and Reactions are untouched)...");
 var existingIds = new List<string>();
@@ -102,4 +107,32 @@ foreach (var username in usernames)
     Console.WriteLine($"Created {username} (password: {Password}, id: {user.Id})");
 }
 
-Console.WriteLine("Done - all 5 users are friends with each other.");
+// One private "Home Base" nest per user, spread across real Ames landmarks so they don't
+// all stack on the same map pin. Coordinates match the map's Ames-scoped default view.
+// A user can have at most one private and one public nest (see Waypoint.cs) - this is the
+// private slot, leaving the public slot open for manual testing.
+(string Username, double Latitude, double Longitude)[] homeBases =
+[
+    ("Admin", 42.0305, -93.6188),  // Ames City Hall
+    ("Test1", 42.0181, -93.6423),  // Reiman Gardens
+    ("Test2", 42.0141, -93.6358),  // Jack Trice Stadium
+    ("Oliver", 42.0266, -93.6465), // Iowa State Campanile
+    ("Annie", 42.0572, -93.6404),  // Ada Hayden Heritage Park
+];
+
+foreach (var (username, latitude, longitude) in homeBases)
+{
+    var user = users[username];
+    var waypoint = new Waypoint(
+        Guid.NewGuid().ToString(),
+        user.Id,
+        "Home Base",
+        latitude,
+        longitude,
+        DateTimeOffset.UtcNow,
+        IsPublic: false);
+    await waypointsContainer.CreateItemAsync(waypoint, new PartitionKey(waypoint.UserId));
+    Console.WriteLine($"  + {username}'s Home Base at ({latitude}, {longitude})");
+}
+
+Console.WriteLine("Done - all 5 users are friends with each other, each with a Home Base nest around Ames.");
