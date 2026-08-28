@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:cro_app/models/blocked_user.dart';
 import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/friend_request.dart';
@@ -61,6 +62,11 @@ class _FakeFriendsService implements FriendsService {
   String? lastSentUsername;
   String? lastAcceptedRequesterId;
   String? lastRemovedUserId;
+  String? lastDeclinedRequesterId;
+  String? lastBlockedUserId;
+  String? lastUnblockedUserId;
+  String? lastMadeAdminUserId;
+  List<BlockedUser> blockedUsersToReturn = [];
   String? lastColoredFriendId;
   String? lastSetColor;
   String? lastSearchQuery;
@@ -113,6 +119,49 @@ class _FakeFriendsService implements FriendsService {
         .toList();
     outgoingToReturn = outgoingToReturn
         .where((r) => r.userId != userId)
+        .toList();
+  }
+
+  @override
+  Future<void> declineFriendRequest(String token, String requesterId) async {
+    lastDeclinedRequesterId = requesterId;
+    incomingToReturn = incomingToReturn
+        .where((r) => r.userId != requesterId)
+        .toList();
+  }
+
+  @override
+  Future<void> blockUser(String token, String userId) async {
+    lastBlockedUserId = userId;
+    incomingToReturn = incomingToReturn.where((r) => r.userId != userId).toList();
+  }
+
+  @override
+  Future<void> unblockUser(String token, String userId) async {
+    lastUnblockedUserId = userId;
+    blockedUsersToReturn = blockedUsersToReturn
+        .where((b) => b.userId != userId)
+        .toList();
+  }
+
+  @override
+  Future<List<BlockedUser>> getBlockedUsers(String token) async => blockedUsersToReturn;
+
+  @override
+  Future<void> makeAdmin(String token, String userId) async {
+    lastMadeAdminUserId = userId;
+    friendsToReturn = friendsToReturn
+        .map(
+          (f) => f.userId == userId
+              ? Friend(
+                  userId: f.userId,
+                  username: f.username,
+                  color: f.color,
+                  profilePictureUrl: f.profilePictureUrl,
+                  isAdmin: true,
+                )
+              : f,
+        )
         .toList();
   }
 
@@ -846,4 +895,181 @@ void main() {
       expect(fakeFriends.lastSetColor, friendColorPalette[1]);
     },
   );
+
+  testWidgets('declining a request calls declineFriendRequest, not removeFriend', (
+    WidgetTester tester,
+  ) async {
+    // Same reasoning as the "accepting a request" test above - the invite card's decline
+    // control needs a taller surface to be reachable without scrolling.
+    await tester.binding.setSurfaceSize(const Size(400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final fakeProfile = _FakeProfileService()
+      ..profileToReturn = UserProfile(
+        id: 'me',
+        username: 'me',
+        email: 'me@example.com',
+      );
+    final fakeFriends = _FakeFriendsService()
+      ..incomingToReturn = [FriendRequest(userId: 'u2', username: 'bob')];
+    final authState = AuthState()..login(_fakeJwtFor('me'));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          authState: authState,
+          profileService: fakeProfile,
+          friendsService: fakeFriends,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('declineRequestButton_u2')));
+    await tester.pumpAndSettle();
+
+    expect(fakeFriends.lastDeclinedRequesterId, 'u2');
+    expect(fakeFriends.lastRemovedUserId, isNull);
+    expect(find.byKey(const Key('incomingRequestsSection')), findsNothing);
+  });
+
+  testWidgets('blocking a request calls blockUser and removes it from incoming', (
+    WidgetTester tester,
+  ) async {
+    // Same reasoning as the "accepting a request" test above - the invite card's block
+    // control needs a taller surface to be reachable without scrolling.
+    await tester.binding.setSurfaceSize(const Size(400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final fakeProfile = _FakeProfileService()
+      ..profileToReturn = UserProfile(
+        id: 'me',
+        username: 'me',
+        email: 'me@example.com',
+      );
+    final fakeFriends = _FakeFriendsService()
+      ..incomingToReturn = [FriendRequest(userId: 'u2', username: 'bob')];
+    final authState = AuthState()..login(_fakeJwtFor('me'));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          authState: authState,
+          profileService: fakeProfile,
+          friendsService: fakeFriends,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('blockRequestButton_u2')));
+    await tester.pumpAndSettle();
+
+    expect(fakeFriends.lastBlockedUserId, 'u2');
+    expect(find.byKey(const Key('incomingRequestsSection')), findsNothing);
+  });
+
+  testWidgets('Make Admin button is hidden when the caller is not an admin', (
+    WidgetTester tester,
+  ) async {
+    final fakeProfile = _FakeProfileService()
+      ..profileToReturn = UserProfile(
+        id: 'me',
+        username: 'me',
+        email: 'me@example.com',
+        isAdmin: false,
+      );
+    final fakeFriends = _FakeFriendsService()
+      ..friendsToReturn = [Friend(userId: 'u1', username: 'alice')];
+    final authState = AuthState()..login(_fakeJwtFor('me'));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          authState: authState,
+          profileService: fakeProfile,
+          friendsService: fakeFriends,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('makeAdminButton_u1')), findsNothing);
+  });
+
+  testWidgets(
+    'Make Admin button shows for an admin caller, and confirming promotes the friend',
+    (WidgetTester tester) async {
+      final fakeProfile = _FakeProfileService()
+        ..profileToReturn = UserProfile(
+          id: 'me',
+          username: 'me',
+          email: 'me@example.com',
+          isAdmin: true,
+        );
+      final fakeFriends = _FakeFriendsService()
+        ..friendsToReturn = [Friend(userId: 'u1', username: 'alice')];
+      final authState = AuthState()..login(_fakeJwtFor('me'));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProfileScreen(
+            authState: authState,
+            profileService: fakeProfile,
+            friendsService: fakeFriends,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('makeAdminButton_u1')));
+      await tester.pumpAndSettle();
+
+      // The confirmation modal - cancel first, should not promote.
+      await tester.tap(find.byKey(const Key('cancelMakeAdminButton')));
+      await tester.pumpAndSettle();
+      expect(fakeFriends.lastMadeAdminUserId, isNull);
+
+      await tester.tap(find.byKey(const Key('makeAdminButton_u1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirmMakeAdminButton')));
+      await tester.pumpAndSettle();
+
+      expect(fakeFriends.lastMadeAdminUserId, 'u1');
+    },
+  );
+
+  testWidgets('Blocked users dialog lists blocked users and unblocking removes them', (
+    WidgetTester tester,
+  ) async {
+    final fakeProfile = _FakeProfileService()
+      ..profileToReturn = UserProfile(
+        id: 'me',
+        username: 'me',
+        email: 'me@example.com',
+      );
+    final fakeFriends = _FakeFriendsService()
+      ..blockedUsersToReturn = [
+        BlockedUser(userId: 'u5', username: 'eve'),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('me'));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          authState: authState,
+          profileService: fakeProfile,
+          friendsService: fakeFriends,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('blockedUsersButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('eve'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('unblockButton_u5')));
+    await tester.pumpAndSettle();
+
+    expect(fakeFriends.lastUnblockedUserId, 'u5');
+    expect(find.text('eve'), findsNothing);
+    expect(find.text('No blocked users'), findsOneWidget);
+  });
 }

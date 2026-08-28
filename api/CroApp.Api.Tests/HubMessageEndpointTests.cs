@@ -39,6 +39,7 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
                     ["CosmosDb:HubsContainerName"] = "Hubs",
                     ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["CosmosDb:HubMessagesContainerName"] = "HubMessages",
+                    ["CosmosDb:HubReadStatesContainerName"] = "HubReadStates",
                     ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
                     ["Jwt:Issuer"] = "CroApp.Api.Tests",
                     ["Jwt:Audience"] = "CroApp.Api.Tests"
@@ -207,6 +208,46 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var messages = await response.Content.ReadFromJsonAsync<List<HubMessageDto>>();
 
         Assert.Empty(messages!);
+    }
+
+    [Fact]
+    public async Task UnreadCounts_CountsUntilMarkedRead()
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var hub = await CreateHubAsync(adminToken, $"Unread Plaza {Guid.NewGuid():N}", 42.2, -93.7);
+
+        var posterUsername = $"hub-unread-poster-{Guid.NewGuid():N}";
+        var (_, posterToken) = await RegisterAndLoginAsync(posterUsername, SeedPassword);
+        var origin = await CreateWaypointAsync(posterToken, "Poster Nest", 42.2, -93.7);
+        (await ComposeBirdAsync(posterToken, "Unread Bird", origin.Id, hub.Id, "hey")).EnsureSuccessStatusCode();
+        await ListOwnBirdsAsync(posterToken); // resolves the lazy arrival, same as the board test above
+
+        var viewerUsername = $"hub-unread-viewer-{Guid.NewGuid():N}";
+        var (_, viewerToken) = await RegisterAndLoginAsync(viewerUsername, SeedPassword);
+
+        var countsResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hubs/unread-counts", viewerToken));
+        countsResponse.EnsureSuccessStatusCode();
+        var counts = await countsResponse.Content.ReadFromJsonAsync<Dictionary<string, int>>();
+        Assert.Equal(1, counts![hub.Id]);
+
+        var readResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/hubs/{hub.Id}/read", viewerToken));
+        readResponse.EnsureSuccessStatusCode();
+
+        var countsAfterResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hubs/unread-counts", viewerToken));
+        countsAfterResponse.EnsureSuccessStatusCode();
+        var countsAfter = await countsAfterResponse.Content.ReadFromJsonAsync<Dictionary<string, int>>();
+        Assert.Equal(0, countsAfter![hub.Id]);
+    }
+
+    [Fact]
+    public async Task MarkHubRead_ForNonexistentHub_ReturnsNotFound()
+    {
+        var username = $"hub-unread-user-{Guid.NewGuid():N}";
+        var (_, token) = await RegisterAndLoginAsync(username, SeedPassword);
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs/does-not-exist/read", token));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);

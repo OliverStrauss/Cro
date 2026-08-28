@@ -32,6 +32,24 @@ public class CosmosHubRepository : IHubRepository
         return results;
     }
 
+    public async Task<List<Hub>> ListByStatusAsync(string status)
+    {
+        // Single-partition - same shape as ListApprovedAsync, generalized to any status
+        // (currently just Approved and Pending).
+        var query = _container.GetItemQueryIterator<Hub>(
+            new QueryDefinition("SELECT * FROM c WHERE c.status = @status")
+                .WithParameter("@status", status),
+            requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(status) });
+
+        var results = new List<Hub>();
+        while (query.HasMoreResults)
+        {
+            var page = await query.ReadNextAsync();
+            results.AddRange(page);
+        }
+        return results;
+    }
+
     public async Task<Hub?> GetAsync(string hubId)
     {
         // Cross-partition - a caller resolving a bird's destination-by-id doesn't know the
@@ -56,5 +74,10 @@ public class CosmosHubRepository : IHubRepository
     {
         var response = await _container.CreateItemAsync(hub, new PartitionKey(hub.Status));
         return response.Resource;
+    }
+
+    public async Task DeleteAsync(string hubId, string status)
+    {
+        await _container.DeleteItemAsync<Hub>(hubId, new PartitionKey(status));
     }
 }

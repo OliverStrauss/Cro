@@ -122,9 +122,15 @@ class _FakeProfileService implements ProfileService {
 class _FakeHubService implements HubService {
   List<Hub> hubsToReturn = [];
   List<HubMessage> messagesToReturn = [];
+  Map<String, int> unreadCountsToReturn = {};
+  List<Hub> suggestionsToReturn = [];
   Hub? lastCreatedHub;
   String? lastCreatedName;
   String? lastCreatedCategory;
+  String? lastSuggestedName;
+  String? lastMarkedReadHubId;
+  String? lastApprovedSuggestionId;
+  String? lastRejectedSuggestionId;
 
   @override
   Future<List<Hub>> listHubs(String token) async => hubsToReturn;
@@ -154,6 +160,64 @@ class _FakeHubService implements HubService {
     lastCreatedHub = created;
     hubsToReturn = [...hubsToReturn, created];
     return created;
+  }
+
+  @override
+  Future<Map<String, int>> getUnreadCounts(String token) async => unreadCountsToReturn;
+
+  @override
+  Future<void> markHubRead(String token, String hubId) async {
+    lastMarkedReadHubId = hubId;
+    unreadCountsToReturn = {...unreadCountsToReturn, hubId: 0};
+  }
+
+  @override
+  Future<Hub> suggestHub(
+    String token, {
+    required String name,
+    required double latitude,
+    required double longitude,
+    String? category,
+  }) async {
+    lastSuggestedName = name;
+    final created = Hub(
+      id: 'new-suggestion-${suggestionsToReturn.length + 1}',
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      status: 'Pending',
+      createdByUserId: 'u1',
+      category: category,
+    );
+    suggestionsToReturn = [...suggestionsToReturn, created];
+    return created;
+  }
+
+  @override
+  Future<List<Hub>> listSuggestions(String token) async => suggestionsToReturn;
+
+  @override
+  Future<Hub> approveSuggestion(String token, String hubId) async {
+    lastApprovedSuggestionId = hubId;
+    final suggestion = suggestionsToReturn.firstWhere((s) => s.id == hubId);
+    final approved = Hub(
+      id: suggestion.id,
+      name: suggestion.name,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+      status: 'Approved',
+      createdByUserId: suggestion.createdByUserId,
+      category: suggestion.category,
+    );
+    suggestionsToReturn = suggestionsToReturn.where((s) => s.id != hubId).toList();
+    hubsToReturn = [...hubsToReturn, approved];
+    return approved;
+  }
+
+  @override
+  Future<void> rejectSuggestion(String token, String hubId) async {
+    lastRejectedSuggestionId = hubId;
+    suggestionsToReturn = suggestionsToReturn.where((s) => s.id != hubId).toList();
   }
 }
 
@@ -1795,6 +1859,109 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Pub'), findsOneWidget);
+    });
+
+    testWidgets('shows an unread badge under a Hub marker with unread messages', (WidgetTester tester) async {
+      final fakeHubService = _FakeHubService()
+        ..hubsToReturn = [
+          Hub(
+            id: 'h1',
+            name: 'Mucky Duck Pub',
+            latitude: 42.03,
+            longitude: -93.63,
+            status: 'Approved',
+            createdByUserId: 'admin1',
+          ),
+        ]
+        ..unreadCountsToReturn = {'h1': 3};
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hubUnreadBadge_h1')), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+    });
+
+    testWidgets('a Hub with no unread messages shows no badge', (WidgetTester tester) async {
+      final fakeHubService = _FakeHubService()
+        ..hubsToReturn = [
+          Hub(
+            id: 'h1',
+            name: 'Mucky Duck Pub',
+            latitude: 42.03,
+            longitude: -93.63,
+            status: 'Approved',
+            createdByUserId: 'admin1',
+          ),
+        ];
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hubUnreadBadge_h1')), findsNothing);
+    });
+
+    testWidgets('non-admin users see a Suggest Hub button instead of Add Hub', (WidgetTester tester) async {
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: _FakeHubService(),
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('addHubButton')), findsNothing);
+      expect(find.byKey(const Key('suggestHubButton')), findsOneWidget);
+    });
+
+    testWidgets('arming Suggest Hub then tapping the map submits a suggestion, not a live Hub', (WidgetTester tester) async {
+      final fakeHubService = _FakeHubService();
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: _FakeProfileService(),
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('suggestHubButton')));
+      await tester.pumpAndSettle();
+
+      tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(42.03, -93.63));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hubNameField')), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('hubNameField')), 'Suggested Park');
+      await tester.tap(find.byKey(const Key('saveHubButton')));
+      await tester.pumpAndSettle();
+
+      expect(fakeHubService.lastSuggestedName, 'Suggested Park');
+      // A suggestion never becomes a live marker on this screen - only an approved Hub does.
+      expect(find.byKey(const Key('hubMarker_new-suggestion-1')), findsNothing);
     });
   });
 }

@@ -29,6 +29,11 @@ public class FriendService(IUserRepository userRepository) : IFriendService
             throw new FriendServiceException(409, "A relationship with this user already exists.");
         }
 
+        if ((requester.BlockedUserIds ?? []).Contains(target.Id) || (target.BlockedUserIds ?? []).Contains(requester.Id))
+        {
+            throw new FriendServiceException(403, "Cannot send a request to this user.");
+        }
+
         var targetFriends = target.Friends ?? [];
 
         var updatedRequester = requester with
@@ -93,6 +98,51 @@ public class FriendService(IUserRepository userRepository) : IFriendService
             var updatedOtherFriends = (other.Friends ?? []).Where(f => f.Id != userId).ToList();
             await userRepository.UpdateAsync(other with { Friends = updatedOtherFriends });
         }
+    }
+
+    // A distinct first-class action rather than reusing RemoveAsync directly - the
+    // underlying removal is identical (declining a pending request just deletes the entry
+    // from both sides, same as removing an accepted friend), but a separate endpoint/method
+    // keeps client intent explicit and gives declining its own hook, independent from
+    // "remove an existing friend" or "cancel my own outgoing request".
+    public Task DeclineAsync(string userId, string requesterId) => RemoveAsync(userId, requesterId);
+
+    public async Task BlockAsync(string userId, string targetId)
+    {
+        var user = await userRepository.GetByIdAsync(userId)
+            ?? throw new FriendServiceException(404, "User not found.");
+
+        if (userId == targetId)
+        {
+            throw new FriendServiceException(400, "Cannot block yourself.");
+        }
+
+        var blocked = user.BlockedUserIds ?? [];
+        if (!blocked.Contains(targetId))
+        {
+            await userRepository.UpdateAsync(user with { BlockedUserIds = [.. blocked, targetId] });
+        }
+
+        // Blocking also clears any existing/pending relationship, same as RemoveAsync -
+        // there's no reason a block should coexist with a stale friend entry either side.
+        await RemoveAsync(userId, targetId);
+    }
+
+    public async Task UnblockAsync(string userId, string targetId)
+    {
+        var user = await userRepository.GetByIdAsync(userId)
+            ?? throw new FriendServiceException(404, "User not found.");
+
+        var updatedBlocked = (user.BlockedUserIds ?? []).Where(id => id != targetId).ToList();
+        await userRepository.UpdateAsync(user with { BlockedUserIds = updatedBlocked });
+    }
+
+    public async Task<List<string>> ListBlockedAsync(string userId)
+    {
+        var user = await userRepository.GetByIdAsync(userId)
+            ?? throw new FriendServiceException(404, "User not found.");
+
+        return user.BlockedUserIds ?? [];
     }
 
     public async Task SetColorAsync(string userId, string friendId, string color)

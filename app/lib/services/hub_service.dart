@@ -87,6 +87,127 @@ class HubService {
         .toList();
   }
 
+  // Powers the unread-count badge under each Hub marker on the map - one round trip for
+  // every hub the caller can see, keyed by hubId.
+  Future<Map<String, int>> getUnreadCounts(String token) async {
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse('$apiBaseUrl/hubs/unread-counts'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw HubException(_errorMessage(response, 'Could not load unread counts'));
+    }
+    return (jsonDecode(response.body) as Map<String, dynamic>)
+        .map((key, value) => MapEntry(key, value as int));
+  }
+
+  // Called when a Hub's board is opened - clears that hub's badge on the next refresh.
+  Future<void> markHubRead(String token, String hubId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/hubs/$hubId/read'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw HubException(_errorMessage(response, 'Could not mark hub read'));
+    }
+  }
+
+  // Any authenticated user can suggest a Hub location - the server enforces no admin gate
+  // here, unlike createHub above.
+  Future<Hub> suggestHub(
+    String token, {
+    required String name,
+    required double latitude,
+    required double longitude,
+    String? category,
+  }) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/hub-suggestions'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({
+          'name': name,
+          'latitude': latitude,
+          'longitude': longitude,
+          'category': category,
+        }),
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 201) {
+      throw HubException(_errorMessage(response, 'Could not suggest hub'));
+    }
+    return Hub.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // Admin-only moderation feed - the server returns 403 for a non-admin caller.
+  Future<List<Hub>> listSuggestions(String token) async {
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse('$apiBaseUrl/hub-suggestions'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw HubException(_errorMessage(response, 'Could not load suggestions'));
+    }
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => Hub.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Hub> approveSuggestion(String token, String hubId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/hub-suggestions/$hubId/approve'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw HubException(_errorMessage(response, 'Could not approve suggestion'));
+    }
+    return Hub.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> rejectSuggestion(String token, String hubId) async {
+    final http.Response response;
+    try {
+      response = await http.delete(
+        Uri.parse('$apiBaseUrl/hub-suggestions/$hubId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw HubException(_errorMessage(response, 'Could not reject suggestion'));
+    }
+  }
+
   String _errorMessage(http.Response response, String fallback) {
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
