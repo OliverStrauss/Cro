@@ -23,7 +23,9 @@ namespace CroApp.Api.Models;
 // Speed, taken at send time from the resolved origin nest's Name - by the time arrival
 // resolves and a HubMessage might get written, Waypoints (partitioned /userId) can no
 // longer be pointed at without knowing the owner, so the name is captured up front instead
-// of re-resolved later.
+// of re-resolved later. NestToName is the same kind of snapshot, taken from the resolved
+// destination - EventService uses both names to render permanent, dangling-reference-free
+// journey-log/notification text at departure/arrival time without an extra lookup.
 public record Bird(
     [property: JsonPropertyName("id")] string Id,
     string UserId,
@@ -43,4 +45,5 @@ public record Bird(
     string? ImageUrl = null,
     string? ProfilePictureUrl = null,
     bool IsPublic = false,
-    string? NestFromName = null);
+    string? NestFromName = null,
+    string? NestToName = null);
