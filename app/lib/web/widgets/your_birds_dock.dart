@@ -7,9 +7,29 @@ import '../../theme.dart';
 import '../state/web_shell_controller.dart';
 import 'dock_bird_card.dart';
 
+// Home, then away at a friend's nest, then at a hub, then flying to a nest, then flying to
+// a hub - a bird settled somewhere reads before one still in the air, and within "still in
+// the air" a nest-bound one reads before a hub-bound one. A manual bucket pass rather than
+// List.sort: Dart's sort isn't guaranteed stable, and this keeps each bucket's own relative
+// order (whatever _views/the API returned it in) instead of reshuffling it on every rebuild.
+List<DockBirdView> _sortedForDock(List<DockBirdView> views) {
+  int rank(DockBirdView v) => switch (v.state) {
+    BirdDockState.home => 0,
+    BirdDockState.away => 1,
+    BirdDockState.hub => 2,
+    BirdDockState.flight => v.hostIsHub ? 4 : 3,
+  };
+  final buckets = List.generate(5, (_) => <DockBirdView>[]);
+  for (final v in views) {
+    buckets[rank(v)].add(v);
+  }
+  return buckets.expand((b) => b).toList();
+}
+
 /// The persistent "Your birds" dock, overlaid on the content column (never the right
 /// panel) on every screen. Every bird in the caller's flock shows here regardless of
-/// state - a fixed roster, not a feed (see 01_web_shell_and_dock.md).
+/// state - a fixed roster, not a feed (see 01_web_shell_and_dock.md). Sorted home → away →
+/// hub → flying-to-a-nest → flying-to-a-hub (see _sortedForDock).
 class YourBirdsDock extends StatelessWidget {
   final List<Bird> birds;
   final List<Waypoint> ownNests;
@@ -48,7 +68,7 @@ class YourBirdsDock extends StatelessWidget {
     final flightCount = views.where((v) => v.state == BirdDockState.flight).length;
     final awayCount = views.length - homeCount - flightCount;
 
-    final filtered = views.where((v) {
+    final filtered = _sortedForDock(views.where((v) {
       switch (filter) {
         case DockFilter.all:
           return true;
@@ -57,7 +77,7 @@ class YourBirdsDock extends StatelessWidget {
         case DockFilter.away:
           return v.state != BirdDockState.home;
       }
-    }).toList();
+    }).toList());
 
     return Container(
       key: const Key('yourBirdsDock'),

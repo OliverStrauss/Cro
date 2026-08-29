@@ -81,6 +81,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   bool _selectedNestIsOwn = false;
   Hub? _selectedHub;
   Bird? _selectedBird;
+  FriendBird? _selectedFriendBird;
 
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
@@ -218,6 +219,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedNestIsOwn = _ownNests.any((n) => n.id == nest.id);
       _selectedHub = null;
       _selectedBird = null;
+      _selectedFriendBird = null;
     });
   }
 
@@ -227,6 +229,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedHub = hub;
       _selectedNest = null;
       _selectedBird = null;
+      _selectedFriendBird = null;
     });
   }
 
@@ -236,8 +239,54 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedBird = bird;
       _selectedNest = null;
       _selectedHub = null;
+      _selectedFriendBird = null;
     });
   }
+
+  void _selectFriendBird(FriendBird bird) {
+    setState(() {
+      _panelMode = PanelMode.friendBird;
+      _selectedFriendBird = bird;
+      _selectedNest = null;
+      _selectedHub = null;
+      _selectedBird = null;
+    });
+    // Only a public bird's marker is tappable at all (see WebMapScreen), so this is never
+    // called for a private one - no guard needed here.
+    if (!bird.hasViewed) _markFriendBirdViewed(bird);
+  }
+
+  Future<void> _markFriendBirdViewed(FriendBird bird) async {
+    try {
+      await _birdService.markBirdViewed(widget.authState.token!, bird.id);
+      if (!mounted) return;
+      setState(() {
+        _friendsBirds = [for (final b in _friendsBirds) b.id == bird.id ? _asViewed(b) : b];
+        if (_selectedFriendBird?.id == bird.id) _selectedFriendBird = _asViewed(_selectedFriendBird!);
+      });
+    } catch (_) {
+      // Best-effort, same "not worth surfacing an error state over" reasoning as
+      // _markAllNotificationsRead - the next full reload reconciles it anyway.
+    }
+  }
+
+  FriendBird _asViewed(FriendBird b) => FriendBird(
+    id: b.id,
+    userId: b.userId,
+    username: b.username,
+    color: b.color,
+    name: b.name,
+    type: b.type,
+    nestFromId: b.nestFromId,
+    nestToId: b.nestToId,
+    departedAt: b.departedAt,
+    estimatedArrivalAt: b.estimatedArrivalAt,
+    isPublic: b.isPublic,
+    content: b.content,
+    audioUrl: b.audioUrl,
+    imageUrl: b.imageUrl,
+    hasViewed: true,
+  );
 
   void _closePanel() {
     setState(() {
@@ -245,6 +294,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedNest = null;
       _selectedHub = null;
       _selectedBird = null;
+      _selectedFriendBird = null;
     });
   }
 
@@ -480,6 +530,7 @@ class WebShellScreenState extends State<WebShellScreen> {
               selectedNestIsOwn: _selectedNestIsOwn,
               selectedHub: _selectedHub,
               selectedBird: _selectedBird,
+              selectedFriendBird: _selectedFriendBird,
               ownNests: _ownNests,
               friendWaypoints: _friendWaypoints,
               hubs: _hubs,
@@ -511,12 +562,14 @@ class WebShellScreenState extends State<WebShellScreen> {
           hubs: _hubs,
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
+          selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id,
           bottomInset: _dockHeight,
           filter: _mapFilter,
           onFilterChanged: (f) => setState(() => _mapFilter = f),
           onSelectNest: _selectNest,
           onSelectHub: _selectHub,
           onSelectBird: _selectBird,
+          onSelectFriendBird: _selectFriendBird,
           addingNest: _addingNest,
           onPlaceNest: _placeNest,
           onCancelAddNest: _cancelAddNest,

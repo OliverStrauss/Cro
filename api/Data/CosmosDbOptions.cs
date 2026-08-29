@@ -11,6 +11,7 @@ public class CosmosDbOptions
     public string ReactionsContainerName { get; set; } = string.Empty;
     public string HubMessagesContainerName { get; set; } = string.Empty;
     public string HubReadStatesContainerName { get; set; } = string.Empty;
+    public string BirdReadStatesContainerName { get; set; } = string.Empty;
     public string EventsContainerName { get; set; } = string.Empty;
     public bool UseEmulator { get; set; }
 }
