@@ -13,8 +13,6 @@ import '../widgets/map_marker_pill.dart';
 
 const _amesCenter = LatLng(42.0308, -93.6319);
 
-enum MapFilter { all, away, hubs }
-
 /// The web Map screen: same flutter_map/OSM foundation and flight-path math as the phone
 /// MapScreen (see utils/flight_path_math.dart), restyled per the web design spec. Data is
 /// owned by WebShellScreen (not fetched here) so the dock/journey log/nav badges all see the
@@ -36,8 +34,6 @@ class WebMapScreen extends StatefulWidget {
   // CameraFit.padding for explicit bounds fits), so this doesn't shift the map/markers
   // themselves the way the design doc's own coordinate-rescaling prototype hack did.
   final double bottomInset;
-  final MapFilter filter;
-  final ValueChanged<MapFilter> onFilterChanged;
   final ValueChanged<Waypoint> onSelectNest;
   final ValueChanged<Hub> onSelectHub;
   final ValueChanged<Bird> onSelectBird;
@@ -61,8 +57,6 @@ class WebMapScreen extends StatefulWidget {
     required this.selectedHubId,
     this.selectedBirdId,
     required this.bottomInset,
-    required this.filter,
-    required this.onFilterChanged,
     required this.onSelectNest,
     required this.onSelectHub,
     this.addingNest = false,
@@ -153,14 +147,6 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
     final flights = _resolveFlights();
     final now = DateTime.now();
     final hasOwnNests = widget.ownNests.isNotEmpty;
-    final homeCount = widget.birds.where((b) => !b.isTraveling).length;
-    final flyingCount = widget.birds.where((b) => b.isTraveling).length;
-    final awayCount = widget.birds.length - homeCount - flyingCount;
-
-    // "Away from home" doesn't currently narrow anything further than "All" - idle birds
-    // aren't individually plotted (they're folded into each nest's resident count), so
-    // there's nothing else on the map itself to filter by that state yet.
-    final showNests = widget.filter != MapFilter.hubs;
 
     return Stack(
       children: [
@@ -217,52 +203,50 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                         subtitle: hub.category ?? 'Landmark',
                       ),
                     ),
-                if (showNests)
-                  for (final nest in widget.ownNests)
-                    Marker(
-                      key: Key('webOwnNestMarker_${nest.id}'),
-                      point: LatLng(nest.latitude, nest.longitude),
-                      width: 180,
-                      height: 60,
-                      child: MapMarkerPill(
-                        selected: widget.selectedNestId == nest.id,
-                        selectionColor: CroColors.waypointBlue,
-                        onTap: () => widget.onSelectNest(nest),
-                        avatar: CircleAvatar(
-                          radius: 19,
-                          backgroundColor: CroColors.waypointBlue,
-                          child: Text(
-                            nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
-                          ),
+                for (final nest in widget.ownNests)
+                  Marker(
+                    key: Key('webOwnNestMarker_${nest.id}'),
+                    point: LatLng(nest.latitude, nest.longitude),
+                    width: 180,
+                    height: 60,
+                    child: MapMarkerPill(
+                      selected: widget.selectedNestId == nest.id,
+                      selectionColor: CroColors.waypointBlue,
+                      onTap: () => widget.onSelectNest(nest),
+                      avatar: CircleAvatar(
+                        radius: 19,
+                        backgroundColor: CroColors.waypointBlue,
+                        child: Text(
+                          nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
-                        name: nest.name,
-                        subtitle: '${widget.birds.where((b) => !b.isTraveling && b.currentNestId == nest.id).length} of yours here',
                       ),
+                      name: nest.name,
+                      subtitle: '${widget.birds.where((b) => !b.isTraveling && b.currentNestId == nest.id).length} of yours here',
                     ),
-                if (showNests)
-                  for (final fw in widget.friendWaypoints)
-                    Marker(
-                      key: Key('webFriendNestMarker_${fw.id}'),
-                      point: LatLng(fw.latitude, fw.longitude),
-                      width: 180,
-                      height: 60,
-                      child: MapMarkerPill(
-                        selected: widget.selectedNestId == fw.id,
-                        selectionColor: hexToColor(fw.color ?? '#6B7280'),
-                        onTap: () => widget.onSelectNest(fw),
-                        avatar: CircleAvatar(
-                          radius: 19,
-                          backgroundColor: hexToColor(fw.color ?? '#6B7280'),
-                          child: Text(
-                            fw.name.isEmpty ? '?' : fw.name[0].toUpperCase(),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
-                          ),
+                  ),
+                for (final fw in widget.friendWaypoints)
+                  Marker(
+                    key: Key('webFriendNestMarker_${fw.id}'),
+                    point: LatLng(fw.latitude, fw.longitude),
+                    width: 180,
+                    height: 60,
+                    child: MapMarkerPill(
+                      selected: widget.selectedNestId == fw.id,
+                      selectionColor: hexToColor(fw.color ?? '#6B7280'),
+                      onTap: () => widget.onSelectNest(fw),
+                      avatar: CircleAvatar(
+                        radius: 19,
+                        backgroundColor: hexToColor(fw.color ?? '#6B7280'),
+                        child: Text(
+                          fw.name.isEmpty ? '?' : fw.name[0].toUpperCase(),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
-                        name: fw.name,
-                        subtitle: "${fw.username}'s nest",
                       ),
+                      name: fw.name,
+                      subtitle: "${fw.username}'s nest",
                     ),
+                  ),
                 for (final f in flights)
                   Marker(
                     key: Key('webBirdMarker_${f.id}'),
@@ -335,40 +319,6 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
             ),
           ),
       ],
-    );
-  }
-}
-
-class _MapFilterChip extends StatelessWidget {
-  final MapFilter filter;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _MapFilterChip({required this.filter, required this.active, required this.onTap});
-
-  String get _label => switch (filter) {
-    MapFilter.all => 'All birds',
-    MapFilter.away => 'Away from home',
-    MapFilter.hubs => 'Hubs',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      key: Key('webMapFilter_${filter.name}'),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? CroColors.deepWaypoint : Colors.white.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8)],
-        ),
-        child: Text(
-          _label,
-          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: active ? Colors.white : CroColors.ink),
-        ),
-      ),
     );
   }
 }

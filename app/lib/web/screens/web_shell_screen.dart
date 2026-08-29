@@ -85,7 +85,6 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
-  MapFilter _mapFilter = MapFilter.all;
   bool _addingNest = false;
 
   final _dockKey = GlobalKey();
@@ -564,8 +563,6 @@ class WebShellScreenState extends State<WebShellScreen> {
           selectedHubId: _selectedHub?.id,
           selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id,
           bottomInset: _dockHeight,
-          filter: _mapFilter,
-          onFilterChanged: (f) => setState(() => _mapFilter = f),
           onSelectNest: _selectNest,
           onSelectHub: _selectHub,
           onSelectBird: _selectBird,

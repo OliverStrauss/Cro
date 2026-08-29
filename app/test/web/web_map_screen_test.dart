@@ -53,8 +53,6 @@ void main() {
           selectedHubId: null,
           selectedBirdId: selectedBirdId,
           bottomInset: 132,
-          filter: MapFilter.all,
-          onFilterChanged: (_) {},
           onSelectNest: (_) {},
           onSelectHub: (_) {},
           onSelectBird: (_) {},
