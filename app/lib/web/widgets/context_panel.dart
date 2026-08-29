@@ -38,6 +38,8 @@ class ContextPanel extends StatelessWidget {
   final ProfileService profileService;
   final BirdReactionService reactionService;
   final VoidCallback onDataChanged;
+  final VoidCallback onFollowOnMap;
+  final VoidCallback onComposePressed;
 
   const ContextPanel({
     super.key,
@@ -58,6 +60,8 @@ class ContextPanel extends StatelessWidget {
     required this.profileService,
     required this.reactionService,
     required this.onDataChanged,
+    required this.onFollowOnMap,
+    required this.onComposePressed,
   });
 
   @override
@@ -98,7 +102,11 @@ class ContextPanel extends StatelessWidget {
           hubs: hubs,
           authState: authState,
           reactionService: reactionService,
+          birdService: birdService,
           onClose: onClose,
+          onDataChanged: onDataChanged,
+          onFollowOnMap: onFollowOnMap,
+          onComposePressed: onComposePressed,
         ),
         // Defensive only: the shell never mounts ContextPanel unless a selection backs
         // `mode` (see WebShellScreen), so this can't actually be reached.
