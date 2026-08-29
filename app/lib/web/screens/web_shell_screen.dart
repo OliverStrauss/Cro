@@ -76,7 +76,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   late final BirdReactionService _reactionService = widget.reactionService ?? BirdReactionService();
 
   WebNavItem _selectedNav = WebNavItem.map;
-  PanelMode _panelMode = PanelMode.journeyLog;
+  PanelMode? _panelMode;
   Waypoint? _selectedNest;
   bool _selectedNestIsOwn = false;
   Hub? _selectedHub;
@@ -241,7 +241,7 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _closePanel() {
     setState(() {
-      _panelMode = PanelMode.journeyLog;
+      _panelMode = null;
       _selectedNest = null;
       _selectedHub = null;
       _selectedBird = null;
@@ -440,6 +440,10 @@ class WebShellScreenState extends State<WebShellScreen> {
                   onComposePressed: _onComposePressed,
                   onMarkAllRead: _markAllNotificationsRead,
                   onOpenNotification: _openNotification,
+                  events: _events,
+                  eventsLoading: false,
+                  eventsError: null,
+                  onRetryEvents: _loadData,
                 ),
                 Expanded(
                   child: Stack(
@@ -469,29 +473,26 @@ class WebShellScreenState extends State<WebShellScreen> {
               ],
             ),
           ),
-          ContextPanel(
-            mode: _panelMode,
-            selectedNest: _selectedNest,
-            selectedNestIsOwn: _selectedNestIsOwn,
-            selectedHub: _selectedHub,
-            selectedBird: _selectedBird,
-            ownNests: _ownNests,
-            friendWaypoints: _friendWaypoints,
-            hubs: _hubs,
-            onClose: _closePanel,
-            events: _events,
-            eventsLoading: false,
-            eventsError: null,
-            onRetryEvents: _loadData,
-            authState: widget.authState,
-            waypointService: _waypointService,
-            friendsService: _friendsService,
-            birdService: _birdService,
-            hubService: _hubService,
-            profileService: _profileService,
-            reactionService: _reactionService,
-            onDataChanged: _loadData,
-          ),
+          if (_panelMode != null)
+            ContextPanel(
+              mode: _panelMode!,
+              selectedNest: _selectedNest,
+              selectedNestIsOwn: _selectedNestIsOwn,
+              selectedHub: _selectedHub,
+              selectedBird: _selectedBird,
+              ownNests: _ownNests,
+              friendWaypoints: _friendWaypoints,
+              hubs: _hubs,
+              onClose: _closePanel,
+              authState: widget.authState,
+              waypointService: _waypointService,
+              friendsService: _friendsService,
+              birdService: _birdService,
+              hubService: _hubService,
+              profileService: _profileService,
+              reactionService: _reactionService,
+              onDataChanged: _loadData,
+            ),
         ],
       ),
     );

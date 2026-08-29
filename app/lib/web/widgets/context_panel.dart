@@ -11,15 +11,15 @@ import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
 import '../../theme.dart';
-import '../models/event.dart';
 import '../state/web_shell_controller.dart';
 import 'bird_panel_content.dart';
 import 'hub_panel_content.dart';
-import 'journey_log_panel.dart';
 import 'nest_panel_content.dart';
 
-/// The 392px right-hand panel: the journey log by default, swapping to a nest/hub/bird
-/// detail body when one is selected (map marker tap, dock card tap).
+/// The 392px right-hand panel: only mounted while a nest, hub or bird is selected (map
+/// marker tap, dock card tap, nests/hubs screen tap) - the journey log used to live here as
+/// its permanent default view but is now a top-bar popup (see JourneyLogPanel/TopBar), so
+/// there is no "nothing selected" state to render here any more.
 class ContextPanel extends StatelessWidget {
   final PanelMode mode;
   final Waypoint? selectedNest;
@@ -30,10 +30,6 @@ class ContextPanel extends StatelessWidget {
   final List<Waypoint> friendWaypoints;
   final List<Hub> hubs;
   final VoidCallback onClose;
-  final List<AppEvent> events;
-  final bool eventsLoading;
-  final String? eventsError;
-  final VoidCallback onRetryEvents;
   final AuthState authState;
   final WaypointService waypointService;
   final FriendsService friendsService;
@@ -54,10 +50,6 @@ class ContextPanel extends StatelessWidget {
     required this.friendWaypoints,
     required this.hubs,
     required this.onClose,
-    required this.events,
-    required this.eventsLoading,
-    required this.eventsError,
-    required this.onRetryEvents,
     required this.authState,
     required this.waypointService,
     required this.friendsService,
@@ -78,12 +70,6 @@ class ContextPanel extends StatelessWidget {
         border: Border(left: BorderSide(color: CroColors.ink.withValues(alpha: 0.08))),
       ),
       child: switch (mode) {
-        PanelMode.journeyLog => JourneyLogPanel(
-          events: events,
-          isLoading: eventsLoading,
-          errorMessage: eventsError,
-          onRetry: onRetryEvents,
-        ),
         PanelMode.nest when selectedNest != null => NestPanelContent(
           key: ValueKey('nest_${selectedNest!.id}'),
           nest: selectedNest!,
@@ -114,12 +100,9 @@ class ContextPanel extends StatelessWidget {
           reactionService: reactionService,
           onClose: onClose,
         ),
-        _ => JourneyLogPanel(
-          events: events,
-          isLoading: eventsLoading,
-          errorMessage: eventsError,
-          onRetry: onRetryEvents,
-        ),
+        // Defensive only: the shell never mounts ContextPanel unless a selection backs
+        // `mode` (see WebShellScreen), so this can't actually be reached.
+        _ => const SizedBox.shrink(),
       },
     );
   }
