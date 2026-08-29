@@ -142,21 +142,16 @@ class _TopBarState extends State<TopBar> {
         child: TapRegion(
           groupId: _journeyGroup,
           onTapOutside: (_) => _closeJourneyLog(),
-          child: Material(
+          child: _PopupSurface(
             key: const Key('webJourneyLogDropdown'),
-            color: Colors.white,
-            elevation: 8,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 380,
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.62),
-              child: JourneyLogPanel(
-                events: widget.events,
-                isLoading: widget.eventsLoading,
-                errorMessage: widget.eventsError,
-                onRetry: widget.onRetryEvents,
-                onClose: _closeJourneyLog,
-              ),
+            width: 380,
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.62),
+            child: JourneyLogPanel(
+              events: widget.events,
+              isLoading: widget.eventsLoading,
+              errorMessage: widget.eventsError,
+              onRetry: widget.onRetryEvents,
+              onClose: _closeJourneyLog,
             ),
           ),
         ),
@@ -348,6 +343,46 @@ class _TopBarState extends State<TopBar> {
   }
 }
 
+/// Shared "white rounded card with the design's soft shadow" wrapper for both popups -
+/// `Material(elevation:)` renders Flutter's own generic elevation shadow, not the design's
+/// soft, wide one; a literal BoxShadow matches this web shell's established convention (see
+/// your_birds_dock.dart's dock shadow) instead.
+class _PopupSurface extends StatelessWidget {
+  final double width;
+  final BoxConstraints? constraints;
+  final Widget child;
+
+  const _PopupSurface({super.key, required this.width, this.constraints, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      constraints: constraints,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CroColors.ink.withValues(alpha: 0.06)),
+        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.32), blurRadius: 44, offset: const Offset(0, 20))],
+      ),
+      child: child,
+    );
+  }
+}
+
+// Only 3 event kinds are ever surfaced as notifications (see api/Services/EventService.cs) -
+// a bird landing at your nest, a bird you sent landing elsewhere, and a friend request being
+// accepted. Real AppEvent data has no separate "who"/"tint" field the way the design mock's
+// fabricated demo data did, so this derives a tinted glyph per kind instead - the same
+// approach journey_log_panel.dart already uses for its timeline dots.
+(IconData, Color) _notificationGlyph(String kind) => switch (kind) {
+  EventKind.birdArrivedAtYourNest => (Icons.flutter_dash, CroColors.waypointBlue),
+  EventKind.birdArrived => (Icons.flutter_dash, CroColors.deepWaypoint),
+  EventKind.friendRequestAccepted => (Icons.person, CroColors.deliveryAmber),
+  _ => (Icons.notifications, CroColors.fog),
+};
+
 class _NotificationsDropdown extends StatelessWidget {
   final List<AppEvent> notifications;
   final VoidCallback onMarkAllRead;
@@ -359,69 +394,116 @@ class _NotificationsDropdown extends StatelessWidget {
     required this.onOpenNotification,
   });
 
+  // No `intl` dependency in this project - a plain relative-time string, same convention
+  // journey_log_panel.dart already uses.
+  String _relativeTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
+    }
+    if (diff.inHours < 24) {
+      return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
+    }
+    final days = diff.inDays;
+    return '$days day${days == 1 ? '' : 's'} ago';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return _PopupSurface(
       key: const Key('webNotificationsDropdown'),
-      color: Colors.white,
-      elevation: 8,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 340,
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
-                    ),
+      width: 372,
+      constraints: const BoxConstraints(maxHeight: 460),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Notifications',
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
                   ),
-                  GestureDetector(
-                    key: const Key('webMarkAllReadButton'),
-                    onTap: onMarkAllRead,
-                    child: const Text(
-                      'Mark all read',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
-                    ),
+                ),
+                GestureDetector(
+                  key: const Key('webMarkAllReadButton'),
+                  onTap: onMarkAllRead,
+                  child: const Text(
+                    'Mark all read',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (notifications.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Nothing yet', style: TextStyle(color: CroColors.fog)),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: notifications.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final n = notifications[i];
+                  final (glyph, tint) = _notificationGlyph(n.kind);
+                  return Material(
+                    color: n.isRead ? Colors.white : const Color(0xFFF7FBFD),
+                    child: InkWell(
+                      key: Key('webNotification_${n.id}'),
+                      onTap: () => onOpenNotification(n),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+                              alignment: Alignment.center,
+                              child: Icon(glyph, size: 17, color: Colors.white),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(n.displayText, style: const TextStyle(fontSize: 13, height: 1.45)),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    _relativeTime(n.createdAt),
+                                    style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (!n.isRead) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                width: 8,
+                                height: 8,
+                                margin: const EdgeInsets.only(top: 5),
+                                decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
-            const Divider(height: 1),
-            if (notifications.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('Nothing yet', style: TextStyle(color: CroColors.fog)),
-              )
-            else
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: notifications.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) {
-                    final n = notifications[i];
-                    return ListTile(
-                      key: Key('webNotification_${n.id}'),
-                      dense: true,
-                      tileColor: n.isRead ? Colors.white : const Color(0xFFF7FBFD),
-                      title: Text(n.displayText, style: const TextStyle(fontSize: 13)),
-                      trailing: n.isRead
-                          ? null
-                          : const CircleAvatar(radius: 4, backgroundColor: CroColors.waypointBlue),
-                      onTap: () => onOpenNotification(n),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }

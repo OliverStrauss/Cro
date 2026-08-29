@@ -492,6 +492,8 @@ class WebShellScreenState extends State<WebShellScreen> {
               profileService: _profileService,
               reactionService: _reactionService,
               onDataChanged: _loadData,
+              onFollowOnMap: () => _selectNav(WebNavItem.map),
+              onComposePressed: _onComposePressed,
             ),
         ],
       ),

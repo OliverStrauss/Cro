@@ -6,6 +6,7 @@ import 'package:cro_app/models/bird_reaction.dart';
 import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/services/bird_reaction_service.dart';
+import 'package:cro_app/services/bird_service.dart';
 import 'package:cro_app/state/auth_state.dart';
 import 'package:cro_app/theme.dart';
 import 'package:cro_app/web/widgets/bird_panel_content.dart';
@@ -39,31 +40,71 @@ class _FakeBirdReactionService implements BirdReactionService {
       throw UnimplementedError('${invocation.memberName} is not used by BirdPanelContent');
 }
 
+class _FakeBirdService implements BirdService {
+  String? lastSendBirdId;
+  String? lastSendNestId;
+  String? lastSendContent;
+
+  @override
+  Future<Bird> sendBird(String token, String birdId, {required String nestId, String? content}) async {
+    lastSendBirdId = birdId;
+    lastSendNestId = nestId;
+    lastSendContent = content;
+    return Bird(id: birdId, userId: 'u1', name: 'Sent', currentNestId: nestId, isTraveling: true, type: 'Cro');
+  }
+
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used by BirdPanelContent');
+}
+
 void main() {
   final ownNest = Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93);
-  final friendNest = Waypoint(id: 'f1', userId: 'u2', name: "Mia's Cabin", latitude: 43, longitude: -92, username: 'mia');
+  final ownNest2 = Waypoint(id: 'n2', userId: 'u1', name: 'Cabin', latitude: 41, longitude: -94);
+  final friendNest = Waypoint(
+    id: 'f1',
+    userId: 'u2',
+    name: "Mia's Cabin",
+    latitude: 43,
+    longitude: -92,
+    username: 'mia',
+    color: '#E53935',
+  );
   final hub = Hub(id: 'h1', name: 'Lighthouse', latitude: 44, longitude: -91, status: 'Approved', createdByUserId: 'admin');
 
   late _FakeBirdReactionService reactionService;
+  late _FakeBirdService birdService;
   late AuthState authState;
 
   setUp(() {
     reactionService = _FakeBirdReactionService();
+    birdService = _FakeBirdService();
     authState = AuthState()..login('a.b.c');
   });
 
-  Widget build(Bird bird, {VoidCallback? onClose}) {
+  Widget build(
+    Bird bird, {
+    VoidCallback? onClose,
+    VoidCallback? onDataChanged,
+    VoidCallback? onFollowOnMap,
+    VoidCallback? onComposePressed,
+    List<Waypoint>? ownNests,
+  }) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
         body: BirdPanelContent(
           bird: bird,
-          ownNests: [ownNest],
+          ownNests: ownNests ?? [ownNest],
           friendWaypoints: [friendNest],
           hubs: [hub],
           authState: authState,
           reactionService: reactionService,
+          birdService: birdService,
           onClose: onClose ?? () {},
+          onDataChanged: onDataChanged ?? () {},
+          onFollowOnMap: onFollowOnMap ?? () {},
+          onComposePressed: onComposePressed ?? () {},
         ),
       ),
     );
@@ -116,13 +157,13 @@ void main() {
     await tester.pumpWidget(build(bird));
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('webReactionChip_👍')));
+    await tester.tap(find.byKey(const Key('webReactionChip_🕊️')));
     await tester.pump();
-    expect(reactionService.lastAddedEmoji, '👍');
+    expect(reactionService.lastAddedEmoji, '🕊️');
 
-    await tester.tap(find.byKey(const Key('webReactionChip_👍')));
+    await tester.tap(find.byKey(const Key('webReactionChip_🕊️')));
     await tester.pump();
-    expect(reactionService.lastRemovedEmoji, '👍');
+    expect(reactionService.lastRemovedEmoji, '🕊️');
   });
 
   testWidgets('closing the panel calls onClose', (tester) async {
@@ -133,5 +174,88 @@ void main() {
 
     await tester.tap(find.byKey(const Key('webPanelClose')));
     expect(closed, isTrue);
+  });
+
+  testWidgets('a home bird shows the Home chip, "Home and rested" note, and Send footer button', (tester) async {
+    var composed = false;
+    final bird = Bird(id: 'b5', userId: 'u1', name: 'Willa', currentNestId: 'n1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(bird, onComposePressed: () => composed = true));
+    await tester.pump();
+
+    expect(find.byKey(const Key('birdPanelStateChip')), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.byKey(const Key('birdPanelProgressNote')), findsOneWidget);
+    expect(find.text('Home and rested'), findsOneWidget);
+    expect(find.byKey(const Key('birdPanelSendSomewhere')), findsOneWidget);
+    expect(find.text('Send this bird somewhere'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('birdPanelSendSomewhere')));
+    expect(composed, isTrue);
+  });
+
+  testWidgets('an in-flight bird shows the In flight chip, a percent note, and Follow footer button', (tester) async {
+    var followed = false;
+    final bird = Bird(
+      id: 'b6',
+      userId: 'u1',
+      name: 'Percy',
+      isTraveling: true,
+      nestFromId: 'n1',
+      nestToId: 'f1',
+      type: 'Cro',
+      departedAt: DateTime.now().subtract(const Duration(minutes: 10)),
+      estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 50)),
+    );
+    await tester.pumpWidget(build(bird, onFollowOnMap: () => followed = true));
+    await tester.pump();
+
+    expect(find.text('In flight'), findsOneWidget);
+    expect(find.textContaining('% of the way there'), findsOneWidget);
+    expect(find.byKey(const Key('birdPanelFollowOnMap')), findsOneWidget);
+    expect(find.text('Follow on the map'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('birdPanelFollowOnMap')));
+    expect(followed, isTrue);
+  });
+
+  testWidgets('a bird at a hub shows "Parked at a public hub, not your nest"', (tester) async {
+    final bird = Bird(id: 'b7', userId: 'u1', name: 'Fen', currentNestId: 'h1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(bird));
+    await tester.pump();
+
+    expect(find.text('At a hub'), findsOneWidget);
+    expect(find.text('Parked at a public hub, not your nest'), findsOneWidget);
+  });
+
+  testWidgets('a bird resting at a friend nest shows "Away from your nests"', (tester) async {
+    final bird = Bird(id: 'b8', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(bird));
+    await tester.pump();
+
+    expect(find.text('Away'), findsOneWidget);
+    expect(find.text('Away from your nests'), findsOneWidget);
+  });
+
+  testWidgets('"Call it home" opens the send dialog and calls BirdService.sendBird', (tester) async {
+    var dataChanged = false;
+    final bird = Bird(id: 'b9', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(bird, ownNests: [ownNest, ownNest2], onDataChanged: () => dataChanged = true));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdPanelCallItHome')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sendBirdDestinationDropdown')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cabin').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
+    await tester.pumpAndSettle();
+
+    expect(birdService.lastSendBirdId, 'b9');
+    expect(birdService.lastSendNestId, 'n2');
+    expect(dataChanged, isTrue);
   });
 }

@@ -345,6 +345,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(eventService.markAllCalled, isTrue);
   });
+
+  testWidgets('notification rows show a kind-tinted glyph and a relative-time line', (tester) async {
+    setDesktopSize(tester);
+    eventService.notificationsToReturn = [
+      AppEvent(
+        id: 'n2',
+        kind: EventKind.birdArrivedAtYourNest,
+        displayText: 'Juniper arrived at your Home Roost',
+        isNotification: true,
+        isRead: false,
+        createdAt: DateTime.now().subtract(const Duration(minutes: 4)),
+      ),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Juniper arrived at your Home Roost'), findsOneWidget);
+    expect(find.text('4 minutes ago'), findsOneWidget);
+    expect(find.byIcon(Icons.flutter_dash), findsOneWidget);
+  });
 }
 
 class _ThrowingBirdService implements BirdService {
