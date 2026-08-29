@@ -9,7 +9,7 @@ void main() {
   Widget wrap(Widget child) => MaterialApp(theme: croTheme, home: Scaffold(body: child));
 
   testWidgets('shows a loading indicator', (tester) async {
-    await tester.pumpWidget(wrap(JourneyLogPanel(events: const [], isLoading: true, errorMessage: null, onRetry: () {})));
+    await tester.pumpWidget(wrap(JourneyLogPanel(events: const [], isLoading: true, errorMessage: null, onRetry: () {}, onClose: () {})));
     expect(find.byKey(const Key('journeyLogLoading')), findsOneWidget);
   });
 
@@ -20,6 +20,7 @@ void main() {
       isLoading: false,
       errorMessage: 'Could not load the journey log',
       onRetry: () => retried = true,
+      onClose: () {},
     )));
     expect(find.byKey(const Key('journeyLogError')), findsOneWidget);
 
@@ -28,7 +29,7 @@ void main() {
   });
 
   testWidgets('shows an empty state when there are no events yet', (tester) async {
-    await tester.pumpWidget(wrap(JourneyLogPanel(events: const [], isLoading: false, errorMessage: null, onRetry: () {})));
+    await tester.pumpWidget(wrap(JourneyLogPanel(events: const [], isLoading: false, errorMessage: null, onRetry: () {}, onClose: () {})));
     expect(find.byKey(const Key('journeyLogEmpty')), findsOneWidget);
   });
 
@@ -53,7 +54,7 @@ void main() {
       ),
     ];
 
-    await tester.pumpWidget(wrap(JourneyLogPanel(events: events, isLoading: false, errorMessage: null, onRetry: () {})));
+    await tester.pumpWidget(wrap(JourneyLogPanel(events: events, isLoading: false, errorMessage: null, onRetry: () {}, onClose: () {})));
 
     expect(find.byKey(const Key('journeyEntry_e1')), findsOneWidget);
     expect(find.byKey(const Key('journeyEntry_e2')), findsOneWidget);

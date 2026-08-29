@@ -4,8 +4,11 @@ import '../../models/friend_request.dart';
 /// Which top-level screen the icon rail has selected.
 enum WebNavItem { map, nests, hubs, friends, you }
 
-/// What the right-hand context panel is currently showing.
-enum PanelMode { journeyLog, nest, hub, bird }
+/// What the right-hand context panel is currently showing. The panel itself is only mounted
+/// when one of these is selected - there is no "nothing selected" member here; the journey
+/// log moved out to a top-bar popup (see JourneyLogPanel/TopBar) and no longer occupies this
+/// panel's default state.
+enum PanelMode { nest, hub, bird }
 
 /// The "Your birds" dock's All/Away/Home filter chips.
 enum DockFilter { all, away, home }
