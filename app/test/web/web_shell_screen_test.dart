@@ -260,7 +260,11 @@ void main() {
 
     await tester.tap(find.byKey(const Key('webNavFriends')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('webPlaceholder_Friends')), findsOneWidget);
+    expect(find.byKey(const Key('webFriendsScreen')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webNavYou')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webYouScreen')), findsOneWidget);
   });
 
   testWidgets('tapping an own nest marker opens the nest panel', (tester) async {
