@@ -10,6 +10,7 @@ import '../../models/friend_request.dart';
 import '../../models/hub.dart';
 import '../../models/user_profile.dart';
 import '../../models/waypoint.dart';
+import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
 import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
@@ -17,10 +18,13 @@ import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
 import '../../utils/jwt_utils.dart';
+import '../../widgets/compose_bird_dialog.dart';
+import '../../widgets/send_bird_dialog.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import '../models/event.dart';
 import '../services/event_service.dart';
 import '../state/web_shell_controller.dart';
+import '../widgets/compose_bird_modal.dart';
 import '../widgets/context_panel.dart';
 import '../widgets/icon_rail.dart';
 import '../widgets/top_bar.dart';
@@ -44,6 +48,7 @@ class WebShellScreen extends StatefulWidget {
   final HubService? hubService;
   final ProfileService? profileService;
   final EventService? eventService;
+  final BirdReactionService? reactionService;
 
   const WebShellScreen({
     super.key,
@@ -54,6 +59,7 @@ class WebShellScreen extends StatefulWidget {
     this.hubService,
     this.profileService,
     this.eventService,
+    this.reactionService,
   });
 
   @override
@@ -67,6 +73,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   late final HubService _hubService = widget.hubService ?? HubService();
   late final ProfileService _profileService = widget.profileService ?? ProfileService();
   late final EventService _eventService = widget.eventService ?? EventService();
+  late final BirdReactionService _reactionService = widget.reactionService ?? BirdReactionService();
 
   WebNavItem _selectedNav = WebNavItem.map;
   PanelMode _panelMode = PanelMode.journeyLog;
@@ -325,11 +332,53 @@ class WebShellScreenState extends State<WebShellScreen> {
   }
 
   void _onComposePressed() {
-    // The compose modal lands in a later PR alongside the rest of the notification/reaction
-    // wiring - a placeholder toast keeps the button from feeling dead in the meantime.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Compose is coming in the next update')),
+    final origins = _ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)).toList();
+    if (origins.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Create a nest first - a new bird needs somewhere to depart from.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return;
+    }
+    final destinations = [
+      ..._ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)),
+      ..._friendWaypoints.map((w) => SendBirdDestination(nestId: w.id, label: '${w.name} (${w.username})')),
+      ..._hubs.map((h) => SendBirdDestination(nestId: h.id, label: '${h.name} (Hub)')),
+    ];
+
+    ComposeBirdModal.show(
+      context,
+      origins: origins,
+      destinations: destinations,
+      onSubmit: _submitCompose,
     );
+  }
+
+  Future<void> _submitCompose(ComposeBirdResult result) async {
+    try {
+      await _birdService.composeAndSendBird(
+        widget.authState.token!,
+        type: result.type,
+        name: result.name,
+        originNestId: result.originNestId,
+        destinationId: result.destinationId,
+        content: result.content,
+        isPublic: result.isPublic,
+        mediaBytes: result.mediaBytes,
+        mediaContentType: result.mediaContentType,
+        mediaFilename: result.mediaFilename,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${result.name} is on its way')));
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
   }
 
   @override
@@ -426,6 +475,9 @@ class WebShellScreenState extends State<WebShellScreen> {
             selectedNestIsOwn: _selectedNestIsOwn,
             selectedHub: _selectedHub,
             selectedBird: _selectedBird,
+            ownNests: _ownNests,
+            friendWaypoints: _friendWaypoints,
+            hubs: _hubs,
             onClose: _closePanel,
             events: _events,
             eventsLoading: false,
@@ -437,6 +489,7 @@ class WebShellScreenState extends State<WebShellScreen> {
             birdService: _birdService,
             hubService: _hubService,
             profileService: _profileService,
+            reactionService: _reactionService,
             onDataChanged: _loadData,
           ),
         ],
