@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../models/bird.dart';
+import '../../models/friend.dart';
 import '../../models/friend_bird.dart';
 import '../../models/friend_request.dart';
 import '../../models/hub.dart';
@@ -15,7 +16,6 @@ import '../../services/hub_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
-import '../../theme.dart';
 import '../../utils/jwt_utils.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import '../models/event.dart';
@@ -25,9 +25,11 @@ import '../widgets/context_panel.dart';
 import '../widgets/icon_rail.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/your_birds_dock.dart';
+import 'web_friends_screen.dart';
 import 'web_hubs_screen.dart';
 import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
+import 'web_you_screen.dart';
 
 /// Top-level widget for the web shell (rail + top bar + content + dock + right panel) - the
 /// kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart. Owns every piece of
@@ -87,6 +89,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   List<FriendBird> _friendsBirds = [];
   List<Hub> _hubs = [];
   List<FriendRequest> _incomingRequests = [];
+  List<Friend> _friends = [];
   List<AppEvent> _events = [];
   List<AppEvent> _notifications = [];
   String _username = '';
@@ -158,6 +161,7 @@ class WebShellScreenState extends State<WebShellScreen> {
         _friendsService.getIncomingRequests(token),
         _eventService.listEvents(token),
         _eventService.listNotifications(token),
+        _friendsService.getFriends(token),
         if (userId != null) _profileService.getUser(userId),
       ]);
       setState(() {
@@ -169,8 +173,9 @@ class WebShellScreenState extends State<WebShellScreen> {
         _incomingRequests = results[5] as List<FriendRequest>;
         _events = results[6] as List<AppEvent>;
         _notifications = results[7] as List<AppEvent>;
-        if (results.length > 8) {
-          final profile = results[8] as UserProfile;
+        _friends = results[8] as List<Friend>;
+        if (results.length > 9) {
+          final profile = results[9] as UserProfile;
           _username = profile.username;
           _profilePictureUrl = profile.profilePictureUrl;
           _isAdmin = profile.isAdmin;
@@ -484,15 +489,26 @@ class WebShellScreenState extends State<WebShellScreen> {
           onDataChanged: _loadData,
         );
       case WebNavItem.friends:
+        return WebFriendsScreen(
+          authState: widget.authState,
+          friendsService: _friendsService,
+          friendWaypoints: _friendWaypoints,
+          onDataChanged: _loadData,
+        );
       case WebNavItem.you:
-        final label = _selectedNav == WebNavItem.friends ? 'Friends' : 'You';
-        return SingleChildScrollView(
-          key: Key('webPlaceholder_$label'),
-          padding: const EdgeInsets.fromLTRB(26, 24, 26, 240),
-          child: Text(
-            '$label is coming in the next update.',
-            style: const TextStyle(fontSize: 14, color: CroColors.fog),
-          ),
+        return WebYouScreen(
+          authState: widget.authState,
+          profileService: _profileService,
+          username: _username,
+          profilePictureUrl: _profilePictureUrl,
+          isAdmin: _isAdmin,
+          birdCount: _birds.length,
+          nestCount: _ownNests.length,
+          friendCount: _friends.length,
+          events: _events,
+          onDataChanged: _loadData,
+          onNavigateFriends: () => _selectNav(WebNavItem.friends),
+          onNavigateHubs: () => _selectNav(WebNavItem.hubs),
         );
     }
   }
