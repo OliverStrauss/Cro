@@ -89,6 +89,29 @@ Hubs via the map's "Add Hub" button) — both with the fixed local dev password
 `correct-horse-battery-staple`, same well-known-local-credential category as the Cosmos/
 Azurite connection strings above, never meaningful outside a local emulator.
 
+### Seeding local dev data
+
+`Program.cs`'s own startup seed above only ever creates those two bare accounts — enough to
+have a known admin, but not enough to exercise friends, nests, or the map with. For that,
+**always run the standalone seed tool** (`api/Tools/SeedDevUsers`) after the emulators are up
+and `dotnet user-secrets` is configured, from `/api`:
+
+```
+dotnet run --project Tools/SeedDevUsers/SeedDevUsers.csproj
+```
+
+This wipes the entire `Users` container and replaces it with five fixed accounts — `Admin`,
+`Test1`, `Test2`, `Oliver`, `Annie` — all password `1` (a different well-known local-dev
+value than `Program.cs`'s own two-user seed above; still never meaningful outside a local
+emulator), already mutually Accepted-friends with each other with auto-assigned colors, plus
+one private nest apiece around Ames. `Admin` is seeded with `IsAdmin: true`. It talks
+directly to the Cosmos emulator rather than through the running API (there's no `DELETE
+/users` endpoint to do the wipe through), so it works whether or not `dotnet run` is up, and
+leaves Hubs, Birds, and Reactions untouched. Re-running it is the standard way to reset back
+to this known-good dataset — note that it deletes *every* existing user (including any
+you've registered by hand through the app), and each run mints fresh user ids, so a
+previously-seeded user's id is not stable across runs.
+
 ### Local Azurite Emulator (required for profile picture upload/tests)
 
 Profile pictures go through Azure Blob Storage via `Azurite`, its official local emulator —
