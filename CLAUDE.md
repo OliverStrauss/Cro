@@ -52,21 +52,29 @@ provisioned yet — see below). On this Apple Silicon/macOS machine, run the ARM
 don't work reliably here):
 
 ```
-docker run -p 8081:8081 mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
+docker run -p 8081:8081 -p 1234:1234 mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
 ```
 
-Startup can take 30-90 seconds — poll `https://localhost:8081/_explorer/emulator.pem` rather
-than using a fixed sleep. One-time local secret setup (never commit the connection string):
+Startup can take 30-90 seconds — poll `http://localhost:8081/` (200 once ready) rather than
+using a fixed sleep. **The vnext-preview image serves a plain-HTTP gateway, not HTTPS** —
+unlike the classic Windows emulator, there's no self-signed cert to bypass, and an
+`https://localhost:8081` connection string will hang/fail to connect (a raw TLS handshake
+against a plain-HTTP port fails in a way that's easy to mistake for "the emulator isn't
+running" — it is, this is just a scheme mismatch). One-time local secret setup (never commit
+the connection string):
 
 ```
 cd api
 dotnet user-secrets init
-dotnet user-secrets set "CosmosDb:ConnectionString" "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+dotnet user-secrets set "CosmosDb:ConnectionString" "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 ```
 
 That's the emulator's fixed, publicly-documented well-known key — identical on every install.
-`appsettings.Development.json` sets `CosmosDb:UseEmulator: true`, which makes the API bypass
-the emulator's self-signed TLS cert — this flag must never be true against a real endpoint.
+`appsettings.Development.json` sets `CosmosDb:UseEmulator: true`, which makes the API accept
+any TLS cert unconditionally — needed for CI's *different* emulator image (the classic x64
+one, which serves a self-signed HTTPS cert), and harmless here since no TLS handshake ever
+happens against this image's plain-HTTP port. This flag must never be true against a real
+endpoint.
 
 No real Azure Cosmos DB account is provisioned yet. Creating one (`az cosmosdb create` /
 `sql database create` / `sql container create --partition-key-path /id`) is a manual step
@@ -78,9 +86,11 @@ up to 5 waypoints now, so the owning user's id is the partition key instead of t
 waypoint's own id). `CreateContainerIfNotExistsAsync` (in `Program.cs`, dev-only startup
 provisioning) is a no-op against an existing container, so a local "Waypoints" container
 created before this change is stuck on the old partition key — drop it once via the
-emulator's Data Explorer (`https://localhost:8081/_explorer/index.html`), or just remove
-and re-run the emulator container to reset all local data, before running the API or tests
-again. CI is unaffected — its Cosmos emulator service container is fresh every run.
+emulator's Data Explorer, served on its own port at `http://localhost:1234/` (not under
+`:8081`, and not the classic emulator's `/_explorer/index.html` path — this image's Explorer
+is a separate service), or just remove and re-run the emulator container to reset all local
+data, before running the API or tests again. CI is unaffected — its Cosmos emulator service
+container is fresh every run.
 
 A `Hubs` container (partition key `/status`) is provisioned the same dev-only way for
 app-curated public landmark nests. On startup, `Program.cs` also idempotently seeds two dev
