@@ -301,6 +301,10 @@ void main() {
 
     expect(find.byKey(const Key('webJourneyLogDropdown')), findsOneWidget);
     expect(find.text('Percy joined your flock'), findsOneWidget);
+    // Regression check: the popup must size to its own content (380px), not stretch to fill
+    // the whole screen - it lives in an Overlay entry, whose root is forced to fill the
+    // screen unless explicitly wrapped to avoid that (see TopBar's OverlayEntry builders).
+    expect(tester.getSize(find.byKey(const Key('webJourneyLogDropdown'))).width, 380);
 
     await tester.tap(find.byKey(const Key('webJourneyLogClose')));
     await tester.pumpAndSettle();
@@ -367,6 +371,8 @@ void main() {
     expect(find.text('Juniper arrived at your Home Roost'), findsOneWidget);
     expect(find.text('4 minutes ago'), findsOneWidget);
     expect(find.byIcon(Icons.flutter_dash), findsOneWidget);
+    // Regression check: see the matching note on the journey log popup above.
+    expect(tester.getSize(find.byKey(const Key('webNotificationsDropdown'))).width, 372);
   });
 }
 

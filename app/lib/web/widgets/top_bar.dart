@@ -90,27 +90,39 @@ class _TopBarState extends State<TopBar> {
     // the bell via CompositedTransformFollower regardless of where the bell itself sits in
     // the tree.
     _dropdownEntry = OverlayEntry(
-      builder: (context) => CompositedTransformFollower(
-        link: _bellLink,
-        showWhenUnlinked: false,
-        targetAnchor: Alignment.bottomRight,
-        followerAnchor: Alignment.topRight,
-        offset: const Offset(0, 10),
-        // TapRegion (not a full-screen GestureDetector barrier) so an outside tap closes
-        // this without competing in the same gesture arena as whatever was tapped - a
-        // barrier's own tap recognizer and the journey log button's would fight over the
-        // same pointer, and only one could ever win, breaking a single click's ability to
-        // switch straight from one popup to the other.
-        child: TapRegion(
-          groupId: _notifGroup,
-          onTapOutside: (_) => _closeDropdown(),
-          child: _NotificationsDropdown(
-            notifications: widget.notifications,
-            onMarkAllRead: widget.onMarkAllRead,
-            onOpenNotification: (n) {
-              _closeDropdown();
-              widget.onOpenNotification(n);
-            },
+      // Align, not just CompositedTransformFollower directly: an OverlayEntry's builder
+      // result sits as a non-Positioned child of the Overlay's own internal Stack, which
+      // uses StackFit.expand - without this Align, the follower (and everything under it,
+      // including the dropdown itself) would be forced to fill the entire screen instead of
+      // sizing to its own content, since a bare CompositedTransformFollower just passes
+      // whatever constraints it's given straight down to its child. Align reports its own
+      // size as the full available space but hands its child loose constraints and only
+      // hit-tests within the child's actual (small) footprint - it doesn't reintroduce a
+      // full-screen tap barrier.
+      builder: (context) => Align(
+        alignment: Alignment.topLeft,
+        child: CompositedTransformFollower(
+          link: _bellLink,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.bottomRight,
+          followerAnchor: Alignment.topRight,
+          offset: const Offset(0, 10),
+          // TapRegion (not a full-screen GestureDetector barrier) so an outside tap closes
+          // this without competing in the same gesture arena as whatever was tapped - a
+          // barrier's own tap recognizer and the journey log button's would fight over the
+          // same pointer, and only one could ever win, breaking a single click's ability to
+          // switch straight from one popup to the other.
+          child: TapRegion(
+            groupId: _notifGroup,
+            onTapOutside: (_) => _closeDropdown(),
+            child: _NotificationsDropdown(
+              notifications: widget.notifications,
+              onMarkAllRead: widget.onMarkAllRead,
+              onOpenNotification: (n) {
+                _closeDropdown();
+                widget.onOpenNotification(n);
+              },
+            ),
           ),
         ),
       ),
@@ -132,26 +144,31 @@ class _TopBarState extends State<TopBar> {
     }
     _closeDropdown();
     _journeyEntry = OverlayEntry(
-      builder: (context) => CompositedTransformFollower(
-        link: _journeyLink,
-        showWhenUnlinked: false,
-        targetAnchor: Alignment.bottomRight,
-        followerAnchor: Alignment.topRight,
-        offset: const Offset(0, 10),
-        // See the matching comment on the notifications dropdown above.
-        child: TapRegion(
-          groupId: _journeyGroup,
-          onTapOutside: (_) => _closeJourneyLog(),
-          child: _PopupSurface(
-            key: const Key('webJourneyLogDropdown'),
-            width: 380,
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.62),
-            child: JourneyLogPanel(
-              events: widget.events,
-              isLoading: widget.eventsLoading,
-              errorMessage: widget.eventsError,
-              onRetry: widget.onRetryEvents,
-              onClose: _closeJourneyLog,
+      // See the matching comment on the notifications dropdown's OverlayEntry above - Align
+      // is required here for the same reason (an OverlayEntry's root sizes to fill the whole
+      // screen unless wrapped this way).
+      builder: (context) => Align(
+        alignment: Alignment.topLeft,
+        child: CompositedTransformFollower(
+          link: _journeyLink,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.bottomRight,
+          followerAnchor: Alignment.topRight,
+          offset: const Offset(0, 10),
+          child: TapRegion(
+            groupId: _journeyGroup,
+            onTapOutside: (_) => _closeJourneyLog(),
+            child: _PopupSurface(
+              key: const Key('webJourneyLogDropdown'),
+              width: 380,
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.62),
+              child: JourneyLogPanel(
+                events: widget.events,
+                isLoading: widget.eventsLoading,
+                errorMessage: widget.eventsError,
+                onRetry: widget.onRetryEvents,
+                onClose: _closeJourneyLog,
+              ),
             ),
           ),
         ),
