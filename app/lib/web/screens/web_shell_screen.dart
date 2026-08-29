@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../models/bird.dart';
 import '../../models/friend_bird.dart';
@@ -16,6 +17,7 @@ import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../../utils/jwt_utils.dart';
+import '../../widgets/waypoint_name_dialog.dart';
 import '../models/event.dart';
 import '../services/event_service.dart';
 import '../state/web_shell_controller.dart';
@@ -23,7 +25,9 @@ import '../widgets/context_panel.dart';
 import '../widgets/icon_rail.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/your_birds_dock.dart';
+import 'web_hubs_screen.dart';
 import 'web_map_screen.dart';
+import 'web_nests_screen.dart';
 
 /// Top-level widget for the web shell (rail + top bar + content + dock + right panel) - the
 /// kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart. Owns every piece of
@@ -72,6 +76,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
   MapFilter _mapFilter = MapFilter.all;
+  bool _addingNest = false;
 
   final _dockKey = GlobalKey();
   double _dockHeight = 132;
@@ -86,6 +91,12 @@ class WebShellScreenState extends State<WebShellScreen> {
   List<AppEvent> _notifications = [];
   String _username = '';
   String? _profilePictureUrl;
+  bool _isAdmin = false;
+  // Every own nest's current residents (idle birds, including ones delivered by someone
+  // else) - GET /birds alone can't see deliveries from other senders, so this is a separate
+  // per-nest fetch, same reasoning as the phone app's NestDetailsSheet. Small N (a user has
+  // at most 2 nests), fetched alongside everything else in _loadData.
+  Map<String, List<Bird>> _nestResidentsByNestId = {};
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -162,15 +173,28 @@ class WebShellScreenState extends State<WebShellScreen> {
           final profile = results[8] as UserProfile;
           _username = profile.username;
           _profilePictureUrl = profile.profilePictureUrl;
+          _isAdmin = profile.isAdmin;
         }
-        _isLoading = false;
       });
+      await _loadNestResidents(token);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _loadNestResidents(String token) async {
+    final residentLists = await Future.wait(_ownNests.map((n) => _birdService.getNestResidents(token, n.id)));
+    if (!mounted) return;
+    setState(() {
+      _nestResidentsByNestId = {
+        for (var i = 0; i < _ownNests.length; i++) _ownNests[i].id: residentLists[i],
+      };
+    });
   }
 
   void _selectNav(WebNavItem item) => setState(() => _selectedNav = item);
@@ -258,6 +282,43 @@ class WebShellScreenState extends State<WebShellScreen> {
     }
   }
 
+  void _startAddNest() {
+    setState(() {
+      _addingNest = true;
+      _selectedNav = WebNavItem.map;
+    });
+  }
+
+  void _cancelAddNest() => setState(() => _addingNest = false);
+
+  Future<void> _placeNest(LatLng point) async {
+    setState(() => _addingNest = false);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => const WaypointNameDialog(),
+    );
+    if (name == null || name.trim().isEmpty || !mounted) return;
+
+    try {
+      // A user's first nest is their private one; a second is the public one - same
+      // one-private-one-public cap the server enforces (see WaypointService.CreateAsync).
+      final isPublic = _ownNests.any((n) => !n.isPublic);
+      await _waypointService.createWaypoint(
+        widget.authState.token!,
+        name: name.trim(),
+        latitude: point.latitude,
+        longitude: point.longitude,
+        isPublic: isPublic,
+      );
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
+  }
+
   void _onComposePressed() {
     // The compose modal lands in a later PR alongside the rest of the notification/reaction
     // wiring - a placeholder toast keeps the button from feeling dead in the meantime.
@@ -308,7 +369,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           IconRail(
             selected: _selectedNav,
             onSelect: _selectNav,
-            nestsBadge: WebShellController.nestsBadgeCount(_ownNests, _birds),
+            nestsBadge: WebShellController.nestsBadgeCount(_nestResidentsByNestId),
             friendsBadge: WebShellController.friendsBadgeCount(_incomingRequests),
             profilePictureUrl: _profilePictureUrl,
             initialsSource: _username,
@@ -365,6 +426,13 @@ class WebShellScreenState extends State<WebShellScreen> {
             eventsLoading: false,
             eventsError: null,
             onRetryEvents: _loadData,
+            authState: widget.authState,
+            waypointService: _waypointService,
+            friendsService: _friendsService,
+            birdService: _birdService,
+            hubService: _hubService,
+            profileService: _profileService,
+            onDataChanged: _loadData,
           ),
         ],
       ),
@@ -372,37 +440,60 @@ class WebShellScreenState extends State<WebShellScreen> {
   }
 
   Widget _buildActiveScreen() {
-    if (_selectedNav == WebNavItem.map) {
-      return WebMapScreen(
-        ownNests: _ownNests,
-        friendWaypoints: _friendWaypoints,
-        birds: _birds,
-        friendsBirds: _friendsBirds,
-        hubs: _hubs,
-        selectedNestId: _selectedNest?.id,
-        selectedHubId: _selectedHub?.id,
-        bottomInset: _dockHeight,
-        filter: _mapFilter,
-        onFilterChanged: (f) => setState(() => _mapFilter = f),
-        onSelectNest: _selectNest,
-        onSelectHub: _selectHub,
-        onSelectBird: _selectBird,
-      );
+    switch (_selectedNav) {
+      case WebNavItem.map:
+        return WebMapScreen(
+          ownNests: _ownNests,
+          friendWaypoints: _friendWaypoints,
+          birds: _birds,
+          friendsBirds: _friendsBirds,
+          hubs: _hubs,
+          selectedNestId: _selectedNest?.id,
+          selectedHubId: _selectedHub?.id,
+          bottomInset: _dockHeight,
+          filter: _mapFilter,
+          onFilterChanged: (f) => setState(() => _mapFilter = f),
+          onSelectNest: _selectNest,
+          onSelectHub: _selectHub,
+          onSelectBird: _selectBird,
+          addingNest: _addingNest,
+          onPlaceNest: _placeNest,
+          onCancelAddNest: _cancelAddNest,
+        );
+      case WebNavItem.nests:
+        return WebNestsScreen(
+          ownNests: _ownNests,
+          friendWaypoints: _friendWaypoints,
+          nestResidentsByNestId: _nestResidentsByNestId,
+          selectedNestId: _selectedNest?.id,
+          onSelectNest: _selectNest,
+          onStartAddNest: _startAddNest,
+          authState: widget.authState,
+          waypointService: _waypointService,
+          onDataChanged: _loadData,
+        );
+      case WebNavItem.hubs:
+        return WebHubsScreen(
+          hubs: _hubs,
+          isAdmin: _isAdmin,
+          selectedHubId: _selectedHub?.id,
+          onSelectHub: _selectHub,
+          authState: widget.authState,
+          hubService: _hubService,
+          profileService: _profileService,
+          onDataChanged: _loadData,
+        );
+      case WebNavItem.friends:
+      case WebNavItem.you:
+        final label = _selectedNav == WebNavItem.friends ? 'Friends' : 'You';
+        return SingleChildScrollView(
+          key: Key('webPlaceholder_$label'),
+          padding: const EdgeInsets.fromLTRB(26, 24, 26, 240),
+          child: Text(
+            '$label is coming in the next update.',
+            style: const TextStyle(fontSize: 14, color: CroColors.fog),
+          ),
+        );
     }
-    final label = switch (_selectedNav) {
-      WebNavItem.nests => 'Nests',
-      WebNavItem.hubs => 'Hubs',
-      WebNavItem.friends => 'Friends',
-      WebNavItem.you => 'You',
-      WebNavItem.map => 'Map',
-    };
-    return SingleChildScrollView(
-      key: Key('webPlaceholder_$label'),
-      padding: const EdgeInsets.fromLTRB(26, 24, 26, 240),
-      child: Text(
-        '$label is coming in the next update.',
-        style: const TextStyle(fontSize: 14, color: CroColors.fog),
-      ),
-    );
   }
 }

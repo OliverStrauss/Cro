@@ -38,6 +38,11 @@ class WebMapScreen extends StatefulWidget {
   final ValueChanged<Waypoint> onSelectNest;
   final ValueChanged<Hub> onSelectHub;
   final ValueChanged<Bird> onSelectBird;
+  // Armed by the Nests screen's "+ Add a nest" button - the next map tap places a nest
+  // there instead of selecting whatever marker is underneath it.
+  final bool addingNest;
+  final ValueChanged<LatLng>? onPlaceNest;
+  final VoidCallback? onCancelAddNest;
 
   const WebMapScreen({
     super.key,
@@ -53,6 +58,9 @@ class WebMapScreen extends StatefulWidget {
     required this.onFilterChanged,
     required this.onSelectNest,
     required this.onSelectHub,
+    this.addingNest = false,
+    this.onPlaceNest,
+    this.onCancelAddNest,
     required this.onSelectBird,
   });
 
@@ -154,6 +162,7 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
             minZoom: 3,
             cameraConstraint: const CameraConstraint.containLatitude(),
             interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+            onTap: widget.addingNest ? (tapPosition, point) => widget.onPlaceNest?.call(point) : null,
           ),
           children: [
             TileLayer(
@@ -318,6 +327,37 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
             ],
           ),
         ),
+        if (widget.addingNest)
+          Positioned(
+            top: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                key: const Key('webAddNestBanner'),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                decoration: BoxDecoration(color: CroColors.ink, borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Click anywhere on the map to place your new nest',
+                      style: TextStyle(fontSize: 12.5, color: Colors.white),
+                    ),
+                    const SizedBox(width: 14),
+                    GestureDetector(
+                      key: const Key('webCancelAddNest'),
+                      onTap: widget.onCancelAddNest,
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
