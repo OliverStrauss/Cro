@@ -5,10 +5,10 @@ using Microsoft.Azure.Cosmos;
 using User = CroApp.Api.Models.User;
 
 // Resets the Users container to a fixed, known-good set of dev accounts, all already
-// friends with each other, each with one private "Home Base" nest around Ames. Only the
-// Users and Waypoints containers are touched (Waypoints only ever gets new rows added,
-// never wiped) - Hubs, Birds, and Reactions are left exactly as they are, so locally-placed
-// Hubs survive a re-run.
+// friends with each other, each with one private, uniquely-named "{Username}'s Roost" nest
+// around Ames. Only the Users and Waypoints containers are touched (Waypoints only ever gets
+// new rows added, never wiped) - Hubs, Birds, and Reactions are left exactly as they are, so
+// locally-placed Hubs survive a re-run.
 //
 // Talks directly to the Cosmos emulator (same TLS-bypass/Gateway-mode setup Program.cs
 // uses) rather than through the running API, so it works whether or not `dotnet run` is
@@ -107,8 +107,8 @@ foreach (var username in usernames)
     Console.WriteLine($"Created {username} (password: {Password}, id: {user.Id})");
 }
 
-// One private "Home Base" nest per user, spread across real Ames landmarks so they don't
-// all stack on the same map pin. Coordinates match the map's Ames-scoped default view.
+// One private, uniquely-named nest per user, spread across real Ames landmarks so they
+// don't all stack on the same map pin. Coordinates match the map's Ames-scoped default view.
 // A user can have at most one private and one public nest (see Waypoint.cs) - this is the
 // private slot, leaving the public slot open for manual testing.
 (string Username, double Latitude, double Longitude)[] homeBases =
@@ -123,16 +123,20 @@ foreach (var username in usernames)
 foreach (var (username, latitude, longitude) in homeBases)
 {
     var user = users[username];
+    // "{Username}'s Roost" rather than a shared literal "Home Base" for everyone - each
+    // nest name is unique (so nest pickers/dropdowns in the app are distinguishable across
+    // seeded users) while still following one common template.
+    var nestName = $"{username}'s Roost";
     var waypoint = new Waypoint(
         Guid.NewGuid().ToString(),
         user.Id,
-        "Home Base",
+        nestName,
         latitude,
         longitude,
         DateTimeOffset.UtcNow,
         IsPublic: false);
     await waypointsContainer.CreateItemAsync(waypoint, new PartitionKey(waypoint.UserId));
-    Console.WriteLine($"  + {username}'s Home Base at ({latitude}, {longitude})");
+    Console.WriteLine($"  + {nestName} at ({latitude}, {longitude})");
 }
 
-Console.WriteLine("Done - all 5 users are friends with each other, each with a Home Base nest around Ames.");
+Console.WriteLine("Done - all 5 users are friends with each other, each with a uniquely-named Roost nest around Ames.");
