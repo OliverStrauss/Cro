@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/bird.dart';
 import '../../models/hub.dart';
 import '../../models/waypoint.dart';
+import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
 import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
@@ -12,21 +13,22 @@ import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../models/event.dart';
 import '../state/web_shell_controller.dart';
+import 'bird_panel_content.dart';
 import 'hub_panel_content.dart';
 import 'journey_log_panel.dart';
 import 'nest_panel_content.dart';
-import 'panel_header.dart';
 
 /// The 392px right-hand panel: the journey log by default, swapping to a nest/hub/bird
-/// summary when one is selected (map marker tap, dock card tap). Bird detail is still a
-/// simple first pass here - reactions/payload/actions land in the compose PR; nest and hub
-/// detail are the real thing (delivered mail, resident birds, the hub board).
+/// detail body when one is selected (map marker tap, dock card tap).
 class ContextPanel extends StatelessWidget {
   final PanelMode mode;
   final Waypoint? selectedNest;
   final bool selectedNestIsOwn;
   final Hub? selectedHub;
   final Bird? selectedBird;
+  final List<Waypoint> ownNests;
+  final List<Waypoint> friendWaypoints;
+  final List<Hub> hubs;
   final VoidCallback onClose;
   final List<AppEvent> events;
   final bool eventsLoading;
@@ -38,6 +40,7 @@ class ContextPanel extends StatelessWidget {
   final BirdService birdService;
   final HubService hubService;
   final ProfileService profileService;
+  final BirdReactionService reactionService;
   final VoidCallback onDataChanged;
 
   const ContextPanel({
@@ -47,6 +50,9 @@ class ContextPanel extends StatelessWidget {
     this.selectedNestIsOwn = false,
     this.selectedHub,
     this.selectedBird,
+    required this.ownNests,
+    required this.friendWaypoints,
+    required this.hubs,
     required this.onClose,
     required this.events,
     required this.eventsLoading,
@@ -58,6 +64,7 @@ class ContextPanel extends StatelessWidget {
     required this.birdService,
     required this.hubService,
     required this.profileService,
+    required this.reactionService,
     required this.onDataChanged,
   });
 
@@ -97,7 +104,16 @@ class ContextPanel extends StatelessWidget {
           hubService: hubService,
           friendsService: friendsService,
         ),
-        PanelMode.bird when selectedBird != null => _BirdSummary(bird: selectedBird!, onClose: onClose),
+        PanelMode.bird when selectedBird != null => BirdPanelContent(
+          key: ValueKey('bird_${selectedBird!.id}'),
+          bird: selectedBird!,
+          ownNests: ownNests,
+          friendWaypoints: friendWaypoints,
+          hubs: hubs,
+          authState: authState,
+          reactionService: reactionService,
+          onClose: onClose,
+        ),
         _ => JourneyLogPanel(
           events: events,
           isLoading: eventsLoading,
@@ -105,39 +121,6 @@ class ContextPanel extends StatelessWidget {
           onRetry: onRetryEvents,
         ),
       },
-    );
-  }
-}
-
-class _BirdSummary extends StatelessWidget {
-  final Bird bird;
-  final VoidCallback onClose;
-
-  const _BirdSummary({required this.bird, required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PanelHeader(
-          avatar: CircleAvatar(
-            radius: 25,
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            child: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-          ),
-          title: bird.name,
-          subtitle: '${bird.type} · ${BirdType.description(bird.type)}',
-          onClose: onClose,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Text(
-            bird.isTraveling ? 'In flight' : 'Idle',
-            style: const TextStyle(fontSize: 12.5, color: CroColors.fog),
-          ),
-        ),
-      ],
     );
   }
 }

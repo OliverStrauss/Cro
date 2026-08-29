@@ -33,13 +33,13 @@ class ComposeBirdResult {
   });
 }
 
-// Spawn-and-send flow: pick a type, fill that type's required payload, pick where it
-// departs from (only asked when the caller owns 2 nests) and where it's headed, optionally
-// flag it public, then pops a ComposeBirdResult - same "dialog only collects input, caller
-// does the real service call" split as every other dialog in this app. Unlike SendBirdDialog
-// (which only ever picks a destination for an already-existing, already-idle bird), this
-// also creates the bird itself, so it needs a type + payload + origin up front.
-class ComposeBirdDialog extends StatefulWidget {
+// Thin AlertDialog wrapper around ComposeBirdForm - kept as its own widget (rather than
+// callers using ComposeBirdForm directly) so every existing call site's `showDialog(builder:
+// (_) => ComposeBirdDialog(...))` keeps working unchanged. The web shell's compose modal
+// (compose_bird_modal.dart) wraps the same ComposeBirdForm in a 620px Dialog shell instead of
+// this AlertDialog chrome - the actual field/validation/media logic lives in exactly one
+// place either way.
+class ComposeBirdDialog extends StatelessWidget {
   final List<SendBirdDestination> origins;
   final List<SendBirdDestination> destinations;
   final AudioRecorder? recorder;
@@ -54,10 +54,53 @@ class ComposeBirdDialog extends StatefulWidget {
   });
 
   @override
-  State<ComposeBirdDialog> createState() => _ComposeBirdDialogState();
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Spawn a bird'),
+      content: SingleChildScrollView(
+        child: ComposeBirdForm(
+          origins: origins,
+          destinations: destinations,
+          recorder: recorder,
+          imagePicker: imagePicker,
+          onCancel: () => Navigator.of(context).pop(),
+          onSubmit: (result) => Navigator.of(context).pop(result),
+        ),
+      ),
+    );
+  }
 }
 
-class _ComposeBirdDialogState extends State<ComposeBirdDialog> {
+// The actual spawn-and-send form: pick a type, fill that type's required payload, pick
+// where it departs from (only asked when the caller owns 2 nests) and where it's headed,
+// optionally flag it public, then Cancel/Send. Renders its own Cancel/Send row (rather than
+// relying on a host AlertDialog's `actions`) so it's a fully self-contained widget any
+// dialog/modal shell can embed without needing to mirror its internal validity state.
+class ComposeBirdForm extends StatefulWidget {
+  final List<SendBirdDestination> origins;
+  final List<SendBirdDestination> destinations;
+  final AudioRecorder? recorder;
+  final ImagePicker? imagePicker;
+  final VoidCallback onCancel;
+  final ValueChanged<ComposeBirdResult> onSubmit;
+  final String submitLabel;
+
+  const ComposeBirdForm({
+    super.key,
+    required this.origins,
+    required this.destinations,
+    this.recorder,
+    this.imagePicker,
+    required this.onCancel,
+    required this.onSubmit,
+    this.submitLabel = 'Send',
+  });
+
+  @override
+  State<ComposeBirdForm> createState() => _ComposeBirdFormState();
+}
+
+class _ComposeBirdFormState extends State<ComposeBirdForm> {
   late final AudioRecorder _recorder = widget.recorder ?? AudioRecorder();
   late final ImagePicker _imagePicker = widget.imagePicker ?? ImagePicker();
 
@@ -145,7 +188,7 @@ class _ComposeBirdDialogState extends State<ComposeBirdDialog> {
   void _save() {
     final needsAudio = _type == BirdType.parrot;
     final needsImage = _type == BirdType.pigeon || _type == BirdType.raven;
-    Navigator.of(context).pop(ComposeBirdResult(
+    widget.onSubmit(ComposeBirdResult(
       type: _type,
       name: _nameController.text.trim(),
       originNestId: _originNestId!,
@@ -160,83 +203,83 @@ class _ComposeBirdDialogState extends State<ComposeBirdDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Spawn a bird'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
           children: [
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final type in BirdType.all)
-                  ChoiceChip(
-                    key: Key('birdTypeChip_$type'),
-                    label: Text(type),
-                    selected: _type == type,
-                    onSelected: (_) => setState(() {
-                      _type = type;
-                      _audioBytes = null;
-                      _imageBytes = null;
-                      _imageFilename = null;
-                    }),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              BirdType.description(_type),
-              style: const TextStyle(fontSize: 12, color: CroColors.fog),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('composeBirdNameField'),
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-            ..._buildPayloadFields(),
-            const SizedBox(height: 12),
-            if (widget.origins.length > 1)
-              DropdownButton<String>(
-                key: const Key('composeBirdOriginDropdown'),
-                value: _originNestId,
-                isExpanded: true,
-                hint: const Text('Depart from'),
-                items: widget.origins
-                    .map((o) => DropdownMenuItem(value: o.nestId, child: Text(o.label)))
-                    .toList(),
-                onChanged: (value) => setState(() => _originNestId = value),
+            for (final type in BirdType.all)
+              ChoiceChip(
+                key: Key('birdTypeChip_$type'),
+                label: Text(type),
+                selected: _type == type,
+                onSelected: (_) => setState(() {
+                  _type = type;
+                  _audioBytes = null;
+                  _imageBytes = null;
+                  _imageFilename = null;
+                }),
               ),
-            DropdownButton<String>(
-              key: const Key('composeBirdDestinationDropdown'),
-              value: _destinationId,
-              isExpanded: true,
-              hint: const Text('Send to'),
-              items: widget.destinations
-                  .map((d) => DropdownMenuItem(value: d.nestId, child: Text(d.label)))
-                  .toList(),
-              onChanged: (value) => setState(() => _destinationId = value),
-            ),
-            SwitchListTile(
-              key: const Key('composeBirdPublicSwitch'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Public'),
-              subtitle: const Text('Anyone can read and react to this'),
-              value: _isPublic,
-              onChanged: (value) => setState(() => _isPublic = value),
-            ),
           ],
         ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-        TextButton(
-          key: const Key('confirmComposeBirdButton'),
-          onPressed: _canSave ? _save : null,
-          child: const Text('Send'),
+        const SizedBox(height: 4),
+        Text(
+          BirdType.description(_type),
+          style: const TextStyle(fontSize: 12, color: CroColors.fog),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('composeBirdNameField'),
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: 'Name'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        ..._buildPayloadFields(),
+        const SizedBox(height: 12),
+        if (widget.origins.length > 1)
+          DropdownButton<String>(
+            key: const Key('composeBirdOriginDropdown'),
+            value: _originNestId,
+            isExpanded: true,
+            hint: const Text('Depart from'),
+            items: widget.origins.map((o) => DropdownMenuItem(value: o.nestId, child: Text(o.label))).toList(),
+            onChanged: (value) => setState(() => _originNestId = value),
+          ),
+        DropdownButton<String>(
+          key: const Key('composeBirdDestinationDropdown'),
+          value: _destinationId,
+          isExpanded: true,
+          hint: const Text('Send to'),
+          items: widget.destinations.map((d) => DropdownMenuItem(value: d.nestId, child: Text(d.label))).toList(),
+          onChanged: (value) => setState(() => _destinationId = value),
+        ),
+        SwitchListTile(
+          key: const Key('composeBirdPublicSwitch'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Public'),
+          subtitle: const Text('Anyone can read and react to this'),
+          value: _isPublic,
+          onChanged: (value) => setState(() => _isPublic = value),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              key: const Key('cancelComposeBirdButton'),
+              onPressed: widget.onCancel,
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('confirmComposeBirdButton'),
+              onPressed: _canSave ? _save : null,
+              child: Text(widget.submitLabel),
+            ),
+          ],
         ),
       ],
     );
@@ -265,9 +308,7 @@ class _ComposeBirdDialogState extends State<ComposeBirdDialog> {
                 onPressed: _toggleRecording,
               ),
               Text(
-                _isRecording
-                    ? 'Recording...'
-                    : (_audioBytes != null ? 'Clip recorded' : 'Tap to record'),
+                _isRecording ? 'Recording...' : (_audioBytes != null ? 'Clip recorded' : 'Tap to record'),
               ),
             ],
           ),
