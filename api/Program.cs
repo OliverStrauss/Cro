@@ -88,6 +88,7 @@ builder.Services.AddScoped<IHubRepository, CosmosHubRepository>();
 builder.Services.AddScoped<IHubService, HubService>();
 builder.Services.AddScoped<IHubMessageRepository, CosmosHubMessageRepository>();
 builder.Services.AddScoped<IHubReadStateRepository, CosmosHubReadStateRepository>();
+builder.Services.AddScoped<IBirdReadStateRepository, CosmosBirdReadStateRepository>();
 builder.Services.AddScoped<IBirdReactionRepository, CosmosBirdReactionRepository>();
 builder.Services.AddScoped<IBirdReactionService, BirdReactionService>();
 builder.Services.AddScoped<IEventRepository, CosmosEventRepository>();
@@ -160,6 +161,11 @@ if (app.Environment.IsDevelopment())
     // Waypoints/Birds above. No TTL - a read state should persist indefinitely, unlike
     // HubMessages' own 7-day board reset.
     await database.Database.CreateContainerIfNotExistsAsync(opts.HubReadStatesContainerName, "/userId");
+    // /userId - same reasoning as HubReadStates above, one partition per viewer so "list
+    // every public bird I've viewed" (used to badge every friend's public bird on
+    // GET /friends/birds) is a single-partition read. No TTL, same "persists indefinitely"
+    // choice as HubReadStates.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.BirdReadStatesContainerName, "/userId");
     // /userId - the web UI's journey log and notification bell both read "my own history",
     // same single-partition-per-owner reasoning as Waypoints/Birds/HubReadStates above. No
     // TTL, unlike HubMessages' 7-day board reset - this history is the app's one deliberately
@@ -869,6 +875,35 @@ app.MapPost("/birds/{id}/read", async (string id, ClaimsPrincipal principal, IBi
 .RequireAuthorization()
 .WithName("MarkBirdRead");
 
+// Distinct from POST /birds/{id}/read above: that one is the *owner* marking their own
+// delivered bird read (gated on currently sitting in a nest they own). This is any friend
+// marking a public bird - theirs or someone else's - as viewed, the same "differs per
+// viewer, not per owner" reasoning BirdReadState.cs documents. Only public birds can be
+// viewed this way; a private bird has nothing for a friend to see yet.
+app.MapPost("/birds/{id}/viewed", async (string id, ClaimsPrincipal principal, IBirdRepository birdRepository, IBirdReadStateRepository readStateRepository) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var bird = await birdRepository.GetByIdAsync(id);
+    if (bird is null)
+    {
+        return Results.Json(new { error = "Bird not found." }, statusCode: 404);
+    }
+    if (!bird.IsPublic)
+    {
+        return Results.Json(new { error = "Only public birds can be marked viewed." }, statusCode: 400);
+    }
+
+    await readStateRepository.MarkReadAsync(userId, id, DateTimeOffset.UtcNow);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("MarkBirdViewed");
+
 app.MapGet("/birds/{id}/reactions", async (string id, ClaimsPrincipal principal, IBirdReactionService reactionService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -1194,7 +1229,7 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
 .RequireAuthorization()
 .WithName("GetFriendsWaypoints");
 
-app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository userRepo, IBirdService birdService) =>
+app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository userRepo, IBirdService birdService, IBirdReadStateRepository readStateRepository) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1209,6 +1244,13 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository u
     }
 
     var acceptedFriends = (user.Friends ?? []).Where(f => f.Status == FriendStatus.Accepted).ToList();
+
+    // The caller's own view history for public birds - used below to badge each returned
+    // public bird as viewed/unviewed, same one-round-trip-per-request shape as
+    // GET /hubs/unread-counts.
+    var viewedBirdIds = (await readStateRepository.ListForUserAsync(userId))
+        .Select(r => r.BirdId)
+        .ToHashSet();
 
     // Every flight path/bird on the map is colored by whoever sent it, not by
     // destination, so the caller's own nest can show several different friends'
@@ -1239,6 +1281,9 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository u
                 Content = bird.IsPublic ? bird.Content : null,
                 AudioUrl = bird.IsPublic ? bird.AudioUrl : null,
                 ImageUrl = bird.IsPublic ? bird.ImageUrl : null,
+                // Only meaningful for a public bird (see POST /birds/{id}/viewed) - always
+                // false for a private one, since there's nothing to have viewed yet.
+                HasViewed = bird.IsPublic && viewedBirdIds.Contains(bird.Id),
             });
         }
     }

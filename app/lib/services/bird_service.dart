@@ -190,6 +190,26 @@ class BirdService {
     return Bird.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  // Distinct from markBirdRead above: that one is the *owner* marking their own delivered
+  // bird read. This is any friend marking a public bird (theirs or someone else's) viewed -
+  // clears that bird's "unread" badge on the map on the next refresh. Only public birds can
+  // be marked this way; the server rejects a private one.
+  Future<void> markBirdViewed(String token, String birdId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/birds/$birdId/viewed'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw BirdException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw BirdException(_errorMessage(response, 'Could not mark this bird as viewed'));
+    }
+  }
+
   Future<http.Response> _get(String path, String token, String errorFallback) async {
     final http.Response response;
     try {
