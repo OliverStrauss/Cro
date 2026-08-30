@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // The 8-hex brand palette (see CLAUDE.md's "UI theme / color palette" section for the
 // role-mapping rationale). Exposed as raw constants for the handful of call sites that need
@@ -18,6 +19,16 @@ class CroColors {
   static const ink = Color(0xFF2B2F33);
   static const fog = Color(0xFF6B7280);
   static const deliveryAmber = Color(0xFFF3AA5E);
+
+  // Added for the web shell (dock cards, panel sections, hub-suggestion/admin accents,
+  // away-state and success cues) - no existing ColorScheme role fits these cleanly, so
+  // they're exposed as raw constants like the rest of this class rather than forced into
+  // a ColorScheme slot that doesn't semantically match.
+  static const warmSurface = Color(0xFFF4F2ED);
+  static const altSurface = Color(0xFFF9F8F5);
+  static const amberInk = Color(0xFFA2521F);
+  static const success = Color(0xFF4FA97C);
+  static const alertAway = Color(0xFFE8714A);
 }
 
 final ThemeData croTheme = ThemeData(
@@ -35,6 +46,15 @@ final ThemeData croTheme = ThemeData(
     onTertiary: CroColors.ink,
     onSurface: CroColors.ink,
     onSurfaceVariant: CroColors.fog,
+  ),
+  // Quicksand for headings/names/numerals, Inter for body copy - per the web design
+  // handoff's typography tokens. Applied to the shared theme (not web-only) since
+  // 02_theme_and_palette.md already specs this as a whole-app refresh, not a web-exclusive
+  // one; theme_test.dart doesn't assert on font family, so this is additive.
+  textTheme: GoogleFonts.interTextTheme().copyWith(
+    titleLarge: GoogleFonts.quicksand(fontWeight: FontWeight.w700),
+    titleMedium: GoogleFonts.quicksand(fontWeight: FontWeight.w600),
+    titleSmall: GoogleFonts.quicksand(fontWeight: FontWeight.w600),
   ),
   appBarTheme: const AppBarTheme(
     backgroundColor: CroColors.deepWaypoint,

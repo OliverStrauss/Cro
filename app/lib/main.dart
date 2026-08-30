@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'state/auth_state.dart';
 import 'theme.dart';
+import 'web/screens/web_shell_screen.dart';
 
 // Manual-dev-testing convenience only (not used by the automated test suite):
 // `flutter run --dart-define=SKIP_LOGIN=true` jumps straight past the login screen.
@@ -30,9 +32,13 @@ class MyApp extends StatelessWidget {
       home: ListenableBuilder(
         listenable: authState,
         builder: (context, _) {
-          return authState.isLoggedIn
-              ? HomeScreen(authState: authState)
-              : LoginScreen(authState: authState);
+          if (!authState.isLoggedIn) {
+            return LoginScreen(authState: authState);
+          }
+          // The web shell is a full sibling replacement for the phone's three-tab
+          // HomeScreen, not a responsive variant of it - every other platform keeps the
+          // phone shell completely unchanged.
+          return kIsWeb ? WebShellScreen(authState: authState) : HomeScreen(authState: authState);
         },
       ),
     );

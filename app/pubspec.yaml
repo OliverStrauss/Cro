@@ -42,6 +42,7 @@ dependencies:
   http_parser: ^4.1.2
   record: ^6.0.0
   audioplayers: ^6.1.0
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -65,10 +66,20 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # Bundled Quicksand/Inter weights for croTheme's textTheme (theme.dart) - declared as
+  # plain assets, not under a `fonts:` family block, matching google_fonts' documented
+  # "load from assets" convention: it finds these via a rootBundle.load lookup keyed by
+  # filename (Quicksand-Bold.ttf, Inter-Medium.ttf, etc.) before ever touching the
+  # network, so GoogleFonts.quicksand()/inter() resolve entirely offline. Downloaded
+  # byte-for-byte from the same fonts.gstatic.com URLs the google_fonts package itself
+  # would otherwise fetch at runtime - not fetched at build time, so this works with no
+  # network access at all, in tests and in the shipped app alike.
+  assets:
+    - assets/fonts/Quicksand-SemiBold.ttf
+    - assets/fonts/Quicksand-Bold.ttf
+    - assets/fonts/Inter-Regular.ttf
+    - assets/fonts/Inter-Medium.ttf
+    - assets/fonts/Inter-SemiBold.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
