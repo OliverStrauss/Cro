@@ -68,9 +68,13 @@ class _FakeFriendsService implements FriendsService {
 
 class _FakeBirdService implements BirdService {
   List<Bird> birdsToReturn = [];
+  Map<String, List<Bird>> residentsByNestId = {};
 
   @override
   Future<List<Bird>> listBirds(String token) async => birdsToReturn;
+
+  @override
+  Future<List<Bird>> getNestResidents(String token, String nestId) async => residentsByNestId[nestId] ?? [];
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -229,9 +233,9 @@ void main() {
     waypointService.waypointsToReturn = [
       Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
     ];
-    birdService.birdsToReturn = [
-      Bird(id: 'b1', userId: 'u1', name: 'Percy', currentNestId: 'n1', isTraveling: false, type: 'Cro', isRead: false),
-    ];
+    birdService.residentsByNestId = {
+      'n1': [Bird(id: 'b1', userId: 'u1', name: 'Percy', currentNestId: 'n1', isTraveling: false, type: 'Cro', isRead: false)],
+    };
     friendsService.incomingToReturn = [FriendRequest(userId: 'u2', username: 'mia')];
 
     await tester.pumpWidget(buildShell());
@@ -241,14 +245,22 @@ void main() {
     expect(find.byKey(const Key('railBadge_Friends')), findsOneWidget);
   });
 
-  testWidgets('switching nav items renders the corresponding placeholder', (tester) async {
+  testWidgets('switching nav items renders the corresponding screen', (tester) async {
     setDesktopSize(tester);
     await tester.pumpWidget(buildShell());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('webNavNests')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('webPlaceholder_Nests')), findsOneWidget);
+    expect(find.byKey(const Key('webNestsScreen')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webNavHubs')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webHubsScreen')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webNavFriends')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webPlaceholder_Friends')), findsOneWidget);
   });
 
   testWidgets('tapping an own nest marker opens the nest panel', (tester) async {

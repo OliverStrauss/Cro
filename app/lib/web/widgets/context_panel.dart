@@ -3,17 +3,24 @@ import 'package:flutter/material.dart';
 import '../../models/bird.dart';
 import '../../models/hub.dart';
 import '../../models/waypoint.dart';
+import '../../services/bird_service.dart';
+import '../../services/friends_service.dart';
+import '../../services/hub_service.dart';
+import '../../services/profile_service.dart';
+import '../../services/waypoint_service.dart';
+import '../../state/auth_state.dart';
 import '../../theme.dart';
-import '../../utils/color_utils.dart';
 import '../models/event.dart';
 import '../state/web_shell_controller.dart';
+import 'hub_panel_content.dart';
 import 'journey_log_panel.dart';
+import 'nest_panel_content.dart';
+import 'panel_header.dart';
 
 /// The 392px right-hand panel: the journey log by default, swapping to a nest/hub/bird
-/// summary when one is selected (map marker tap, dock card tap). The nest/hub/bird bodies
-/// here are a deliberately simple first pass - dedicated, fuller panel content (delivered
-/// birds, hub board, reactions) lands in later PRs; this pass just needs selecting
-/// something on the map to show *something* sensible rather than nothing.
+/// summary when one is selected (map marker tap, dock card tap). Bird detail is still a
+/// simple first pass here - reactions/payload/actions land in the compose PR; nest and hub
+/// detail are the real thing (delivered mail, resident birds, the hub board).
 class ContextPanel extends StatelessWidget {
   final PanelMode mode;
   final Waypoint? selectedNest;
@@ -25,6 +32,13 @@ class ContextPanel extends StatelessWidget {
   final bool eventsLoading;
   final String? eventsError;
   final VoidCallback onRetryEvents;
+  final AuthState authState;
+  final WaypointService waypointService;
+  final FriendsService friendsService;
+  final BirdService birdService;
+  final HubService hubService;
+  final ProfileService profileService;
+  final VoidCallback onDataChanged;
 
   const ContextPanel({
     super.key,
@@ -38,6 +52,13 @@ class ContextPanel extends StatelessWidget {
     required this.eventsLoading,
     required this.eventsError,
     required this.onRetryEvents,
+    required this.authState,
+    required this.waypointService,
+    required this.friendsService,
+    required this.birdService,
+    required this.hubService,
+    required this.profileService,
+    required this.onDataChanged,
   });
 
   @override
@@ -56,12 +77,26 @@ class ContextPanel extends StatelessWidget {
           errorMessage: eventsError,
           onRetry: onRetryEvents,
         ),
-        PanelMode.nest when selectedNest != null => _NestSummary(
+        PanelMode.nest when selectedNest != null => NestPanelContent(
+          key: ValueKey('nest_${selectedNest!.id}'),
           nest: selectedNest!,
           isOwn: selectedNestIsOwn,
+          authState: authState,
           onClose: onClose,
+          waypointService: waypointService,
+          friendsService: friendsService,
+          birdService: birdService,
+          profileService: profileService,
+          onChanged: onDataChanged,
         ),
-        PanelMode.hub when selectedHub != null => _HubSummary(hub: selectedHub!, onClose: onClose),
+        PanelMode.hub when selectedHub != null => HubPanelContent(
+          key: ValueKey('hub_${selectedHub!.id}'),
+          hub: selectedHub!,
+          authState: authState,
+          onClose: onClose,
+          hubService: hubService,
+          friendsService: friendsService,
+        ),
         PanelMode.bird when selectedBird != null => _BirdSummary(bird: selectedBird!, onClose: onClose),
         _ => JourneyLogPanel(
           events: events,
@@ -70,118 +105,6 @@ class ContextPanel extends StatelessWidget {
           onRetry: onRetryEvents,
         ),
       },
-    );
-  }
-}
-
-class _PanelHeader extends StatelessWidget {
-  final Widget avatar;
-  final String title;
-  final String subtitle;
-  final VoidCallback onClose;
-
-  const _PanelHeader({
-    required this.avatar,
-    required this.title,
-    required this.subtitle,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          avatar,
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 3),
-                Text(subtitle, style: const TextStyle(fontSize: 12, color: CroColors.fog)),
-              ],
-            ),
-          ),
-          GestureDetector(
-            key: const Key('webPanelClose'),
-            onTap: onClose,
-            child: const Icon(Icons.close, size: 18, color: CroColors.fog),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NestSummary extends StatelessWidget {
-  final Waypoint nest;
-  final bool isOwn;
-  final VoidCallback onClose;
-
-  const _NestSummary({required this.nest, required this.isOwn, required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isOwn ? CroColors.waypointBlue : hexToColor(nest.color ?? '#6B7280');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _PanelHeader(
-          avatar: CircleAvatar(radius: 26, backgroundColor: color, child: const Icon(Icons.home, color: Colors.white)),
-          title: isOwn ? 'Your nest' : "${nest.username}'s nest",
-          subtitle: nest.name,
-          onClose: onClose,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Text(
-            '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
-            style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HubSummary extends StatelessWidget {
-  final Hub hub;
-  final VoidCallback onClose;
-
-  const _HubSummary({required this.hub, required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _PanelHeader(
-          avatar: Container(
-            width: 50,
-            height: 50,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: CroColors.deliveryAmber, borderRadius: BorderRadius.circular(15)),
-            child: Text(
-              hub.name.isEmpty ? '?' : hub.name[0].toUpperCase(),
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white),
-            ),
-          ),
-          title: hub.name,
-          subtitle: '${hub.category ?? 'Landmark'} · anyone can send here',
-          onClose: onClose,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Text(
-            '(${hub.latitude.toStringAsFixed(4)}, ${hub.longitude.toStringAsFixed(4)})',
-            style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -197,7 +120,7 @@ class _BirdSummary extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _PanelHeader(
+        PanelHeader(
           avatar: CircleAvatar(
             radius: 25,
             backgroundColor: Theme.of(context).colorScheme.primary,

@@ -1,6 +1,5 @@
 import '../../models/bird.dart';
 import '../../models/friend_request.dart';
-import '../../models/waypoint.dart';
 
 /// Which top-level screen the icon rail has selected.
 enum WebNavItem { map, nests, hubs, friends, you }
@@ -18,14 +17,12 @@ enum DockFilter { all, away, home }
 class WebShellController {
   const WebShellController._();
 
-  /// "n waiting" - idle, unread birds currently resident at one of the caller's own nests.
-  /// Drives both the Nests rail badge and (eventually) each nest card's own badge.
-  static int nestsBadgeCount(List<Waypoint> ownNests, List<Bird> birds) {
-    final ownNestIds = ownNests.map((n) => n.id).toSet();
-    return birds
-        .where((b) => !b.isTraveling && !b.isRead && ownNestIds.contains(b.currentNestId))
-        .length;
-  }
+  /// "n waiting" - unread birds currently resident at one of the caller's own nests,
+  /// including ones delivered by someone else (GET /birds alone can't see those - see
+  /// WebShellScreen._loadNestResidents). Drives both the Nests rail badge and each nest
+  /// card's own badge.
+  static int nestsBadgeCount(Map<String, List<Bird>> nestResidentsByNestId) =>
+      nestResidentsByNestId.values.expand((birds) => birds).where((b) => !b.isRead).length;
 
   /// Incoming friend-request count - drives the Friends rail badge.
   static int friendsBadgeCount(List<FriendRequest> incoming) => incoming.length;
