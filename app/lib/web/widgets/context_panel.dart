@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/bird.dart';
+import '../../models/friend_bird.dart';
 import '../../models/hub.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_reaction_service.dart';
@@ -13,6 +14,7 @@ import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../state/web_shell_controller.dart';
 import 'bird_panel_content.dart';
+import 'friend_bird_panel_content.dart';
 import 'hub_panel_content.dart';
 import 'nest_panel_content.dart';
 
@@ -26,6 +28,7 @@ class ContextPanel extends StatelessWidget {
   final bool selectedNestIsOwn;
   final Hub? selectedHub;
   final Bird? selectedBird;
+  final FriendBird? selectedFriendBird;
   final List<Waypoint> ownNests;
   final List<Waypoint> friendWaypoints;
   final List<Hub> hubs;
@@ -48,6 +51,7 @@ class ContextPanel extends StatelessWidget {
     this.selectedNestIsOwn = false,
     this.selectedHub,
     this.selectedBird,
+    this.selectedFriendBird,
     required this.ownNests,
     required this.friendWaypoints,
     required this.hubs,
@@ -107,6 +111,17 @@ class ContextPanel extends StatelessWidget {
           onDataChanged: onDataChanged,
           onFollowOnMap: onFollowOnMap,
           onComposePressed: onComposePressed,
+        ),
+        PanelMode.friendBird when selectedFriendBird != null => FriendBirdPanelContent(
+          key: ValueKey('friendBird_${selectedFriendBird!.id}'),
+          bird: selectedFriendBird!,
+          ownNests: ownNests,
+          friendWaypoints: friendWaypoints,
+          hubs: hubs,
+          authState: authState,
+          reactionService: reactionService,
+          onClose: onClose,
+          onFollowOnMap: onFollowOnMap,
         ),
         // Defensive only: the shell never mounts ContextPanel unless a selection backs
         // `mode` (see WebShellScreen), so this can't actually be reached.

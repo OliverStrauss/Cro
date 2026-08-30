@@ -10,7 +10,7 @@ namespace CroApp.Api.Tests;
 public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
     private readonly HttpClient _client;
 
@@ -466,6 +466,100 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         Assert.Null(privateResult.Content);
     }
 
+    [Fact]
+    public async Task FriendsBirds_HasViewed_StartsFalseThenFlipsAfterMarkingViewed()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
+        var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
+        var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
+        var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
+
+        var composeRequest = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", tokenB) },
+            Content = new MultipartFormDataContent
+            {
+                { new StringContent("Cro"), "type" },
+                { new StringContent("Public Bird"), "name" },
+                { new StringContent(home!.Id), "originNestId" },
+                { new StringContent(away!.Id), "destinationId" },
+                { new StringContent("hello"), "content" },
+                { new StringContent("true"), "isPublic" },
+            }
+        };
+        var composeResponse = await _client.SendAsync(composeRequest);
+        composeResponse.EnsureSuccessStatusCode();
+        var bird = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+
+        var beforeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/birds", tokenA));
+        var before = await beforeResponse.Content.ReadFromJsonAsync<List<FriendBirdDto>>();
+        Assert.False(before!.Single(b => b.Id == bird.Id).HasViewed);
+
+        var markViewedResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{bird.Id}/viewed", tokenA));
+        Assert.Equal(HttpStatusCode.NoContent, markViewedResponse.StatusCode);
+
+        var afterResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/birds", tokenA));
+        var after = await afterResponse.Content.ReadFromJsonAsync<List<FriendBirdDto>>();
+        Assert.True(after!.Single(b => b.Id == bird.Id).HasViewed);
+    }
+
+    [Fact]
+    public async Task MarkBirdViewed_ForAPrivateBird_ReturnsBadRequest()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
+        var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
+        var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
+        var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
+
+        var composeRequest = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", tokenB) },
+            Content = new MultipartFormDataContent
+            {
+                { new StringContent("Cro"), "type" },
+                { new StringContent("Private Bird"), "name" },
+                { new StringContent(home!.Id), "originNestId" },
+                { new StringContent(away!.Id), "destinationId" },
+                { new StringContent("hello"), "content" },
+                { new StringContent("false"), "isPublic" },
+            }
+        };
+        var composeResponse = await _client.SendAsync(composeRequest);
+        composeResponse.EnsureSuccessStatusCode();
+        var bird = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{bird.Id}/viewed", tokenA));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MarkBirdViewed_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/birds/some-id/viewed", null));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record FriendDto(string Id, string Username, string? Color);
@@ -475,5 +569,5 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private record BirdDto(string Id, string? CurrentNestId, bool IsTraveling);
     private record FriendBirdDto(
         string Id, string UserId, string Username, string? Color, string? NestFromId, string? NestToId,
-        bool IsPublic, string? Content);
+        bool IsPublic, string? Content, bool HasViewed);
 }

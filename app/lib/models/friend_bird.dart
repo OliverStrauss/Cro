@@ -17,6 +17,10 @@ class FriendBird {
   final String? content;
   final String? audioUrl;
   final String? imageUrl;
+  // Only meaningful when isPublic - whether the *caller* (not the owner) has already opened
+  // this bird's detail view, via POST /birds/{id}/viewed. Always false for a private bird,
+  // since there's nothing to have viewed yet.
+  final bool hasViewed;
 
   FriendBird({
     required this.id,
@@ -33,6 +37,7 @@ class FriendBird {
     this.content,
     this.audioUrl,
     this.imageUrl,
+    this.hasViewed = false,
   });
 
   factory FriendBird.fromJson(Map<String, dynamic> json) => FriendBird(
@@ -50,5 +55,6 @@ class FriendBird {
         content: json['content'] as String?,
         audioUrl: json['audioUrl'] as String?,
         imageUrl: json['imageUrl'] as String?,
+        hasViewed: json['hasViewed'] as bool? ?? false,
       );
 }

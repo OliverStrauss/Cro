@@ -6,6 +6,7 @@ import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/theme.dart';
 import 'package:cro_app/web/state/web_shell_controller.dart';
+import 'package:cro_app/web/widgets/dock_bird_card.dart';
 import 'package:cro_app/web/widgets/your_birds_dock.dart';
 
 void main() {
@@ -124,4 +125,52 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('dockAddBirdCard')), findsOneWidget);
   });
+
+  testWidgets(
+    'cards are sorted home, away, hub, flying-to-a-nest, flying-to-a-hub regardless of input order',
+    (tester) async {
+      // Wide enough that all 5 cards actually lay out within the horizontal ListView's
+      // viewport - at the default (narrow) test size, cards past the visible edge are never
+      // built, so find.byType wouldn't see them at all.
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final birds = [
+        // Deliberately scrambled input order - the dock must reorder this itself.
+        Bird(
+          id: 'flightHub',
+          userId: 'u1',
+          name: 'Fen',
+          isTraveling: true,
+          nestFromId: 'n1',
+          nestToId: 'h1',
+          type: 'Cro',
+          departedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 5)),
+        ),
+        Bird(
+          id: 'flightNest',
+          userId: 'u1',
+          name: 'Juniper',
+          isTraveling: true,
+          nestFromId: 'n1',
+          nestToId: 'f1',
+          type: 'Cro',
+          departedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 5)),
+        ),
+        Bird(id: 'hub', userId: 'u1', name: 'Willa', currentNestId: 'h1', isTraveling: false, type: 'Cro'),
+        Bird(id: 'away', userId: 'u1', name: 'Percy', currentNestId: 'f1', isTraveling: false, type: 'Cro'),
+        Bird(id: 'home', userId: 'u1', name: 'Otto', currentNestId: 'n1', isTraveling: false, type: 'Cro'),
+      ];
+
+      await tester.pumpWidget(buildDock(birds: birds));
+      await tester.pump();
+
+      final order = tester.widgetList<DockBirdCard>(find.byType(DockBirdCard)).map((c) => c.view.bird.id).toList();
+      expect(order, ['home', 'away', 'hub', 'flightNest', 'flightHub']);
+    },
+  );
 }

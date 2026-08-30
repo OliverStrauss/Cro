@@ -69,12 +69,18 @@ class _FakeFriendsService implements FriendsService {
 class _FakeBirdService implements BirdService {
   List<Bird> birdsToReturn = [];
   Map<String, List<Bird>> residentsByNestId = {};
+  String? lastMarkedViewedBirdId;
 
   @override
   Future<List<Bird>> listBirds(String token) async => birdsToReturn;
 
   @override
   Future<List<Bird>> getNestResidents(String token, String nestId) async => residentsByNestId[nestId] ?? [];
+
+  @override
+  Future<void> markBirdViewed(String token, String birdId) async {
+    lastMarkedViewedBirdId = birdId;
+  }
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -287,6 +293,55 @@ void main() {
     await tester.tap(find.byKey(const Key('webPanelClose')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('webContextPanel')), findsNothing);
+  });
+
+  testWidgets("tapping a friend's public bird marker opens its panel and marks it viewed", (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 1.0, longitude: 2.0),
+    ];
+    friendsService.friendWaypointsToReturn = [
+      Waypoint(
+        id: 'f1',
+        userId: 'u2',
+        name: "Mia's Cabin",
+        latitude: 1.002,
+        longitude: 2.002,
+        username: 'mia',
+        color: '#E53935',
+      ),
+    ];
+    friendsService.friendsBirdsToReturn = [
+      FriendBird(
+        id: 'fb1',
+        userId: 'u2',
+        username: 'mia',
+        color: '#E53935',
+        name: 'Fen',
+        type: 'Cro',
+        nestFromId: 'f1',
+        nestToId: 'n1',
+        departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+        estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+        isPublic: true,
+        content: 'On my way',
+      ),
+    ];
+    // Not pumpAndSettle: a traveling bird starts the map's repeating bob animation, which
+    // never "settles" - bounded pumps instead, same convention map_screen_test.dart uses for
+    // bird marker taps.
+    await tester.pumpWidget(buildShell());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
+    await tester.tap(find.byKey(const Key('webBirdMarker_fb1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
+    expect(find.text('On my way'), findsOneWidget);
+    expect(birdService.lastMarkedViewedBirdId, 'fb1');
   });
 
   testWidgets('journey log button opens a popup listing fetched events', (tester) async {
