@@ -205,7 +205,9 @@ void main() {
     expect(find.byKey(const Key('webShellLoading')), findsNothing);
     expect(find.byKey(const Key('webNavMap')), findsOneWidget);
     expect(find.byKey(const Key('yourBirdsDock')), findsOneWidget);
-    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
+    // The right panel only mounts once a nest/hub/bird is selected - with nothing selected
+    // it's absent entirely so the map reclaims the full width.
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
   });
 
   testWidgets('shows an error state with Retry when loading fails', (tester) async {
@@ -267,7 +269,7 @@ void main() {
     expect(find.byKey(const Key('webYouScreen')), findsOneWidget);
   });
 
-  testWidgets('tapping an own nest marker opens the nest panel', (tester) async {
+  testWidgets('tapping an own nest marker opens the nest panel, and closing it unmounts the panel', (tester) async {
     setDesktopSize(tester);
     waypointService.waypointsToReturn = [
       Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
@@ -275,25 +277,54 @@ void main() {
     await tester.pumpWidget(buildShell());
     await tester.pumpAndSettle();
 
-    expect(find.text('Journey log'), findsOneWidget);
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
     await tester.tap(find.byKey(const Key('webOwnNestMarker_n1')));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
     expect(find.text('Your nest'), findsOneWidget);
-    expect(find.text('Journey log'), findsNothing);
 
     await tester.tap(find.byKey(const Key('webPanelClose')));
     await tester.pumpAndSettle();
-    expect(find.text('Journey log'), findsOneWidget);
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
   });
 
-  testWidgets('journey log lists fetched events', (tester) async {
+  testWidgets('journey log button opens a popup listing fetched events', (tester) async {
     setDesktopSize(tester);
     eventService.eventsToReturn = [_event('e1', EventKind.birdJoinedFlock, 'Percy joined your flock')];
     await tester.pumpWidget(buildShell());
     await tester.pumpAndSettle();
 
+    expect(find.text('Percy joined your flock'), findsNothing);
+    await tester.tap(find.byKey(const Key('webJourneyLogButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsOneWidget);
     expect(find.text('Percy joined your flock'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webJourneyLogClose')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsNothing);
+  });
+
+  testWidgets('the journey log popup and the notifications dropdown are mutually exclusive', (tester) async {
+    setDesktopSize(tester);
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webJourneyLogButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsNothing);
+    expect(find.byKey(const Key('webNotificationsDropdown')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webJourneyLogButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webNotificationsDropdown')), findsNothing);
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsOneWidget);
   });
 
   testWidgets('bell shows unread count and mark-all-read clears the dropdown badges', (tester) async {
