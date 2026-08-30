@@ -8,7 +8,7 @@ namespace CroApp.Api.Services;
 // can leave one side stale. Same accepted-tradeoff category as Waypoint's bare
 // UpsertItemAsync with no ETag concurrency checks; not worth a saga/compensation pattern
 // at this project's scale.
-public class FriendService(IUserRepository userRepository) : IFriendService
+public class FriendService(IUserRepository userRepository, IEventService eventService) : IFriendService
 {
     public async Task SendRequestAsync(string requesterId, string targetUsername)
     {
@@ -82,6 +82,7 @@ public class FriendService(IUserRepository userRepository) : IFriendService
 
         await userRepository.UpdateAsync(user with { Friends = updatedUserFriends });
         await userRepository.UpdateAsync(requester with { Friends = updatedRequesterFriends });
+        await eventService.RecordFriendAddedAsync(user, requester);
     }
 
     public async Task RemoveAsync(string userId, string otherUserId)

@@ -44,6 +44,26 @@ public class CosmosWaypointRepository : IWaypointRepository
         }
     }
 
+    public async Task<Waypoint?> GetByIdAsync(string waypointId)
+    {
+        // Cross-partition - EventService looks up a bird's destination nest by id alone to
+        // find its owner, the same "caller doesn't know the owning userId" situation
+        // IBirdRepository.GetByIdAsync already handles for Bird.
+        var query = _container.GetItemQueryIterator<Waypoint>(
+            new QueryDefinition("SELECT * FROM c WHERE c.id = @id").WithParameter("@id", waypointId));
+
+        while (query.HasMoreResults)
+        {
+            var page = await query.ReadNextAsync();
+            var match = page.FirstOrDefault();
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+        return null;
+    }
+
     public async Task<Waypoint> CreateAsync(Waypoint waypoint)
     {
         var response = await _container.CreateItemAsync(waypoint, new PartitionKey(waypoint.UserId));

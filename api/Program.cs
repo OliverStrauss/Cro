@@ -90,6 +90,8 @@ builder.Services.AddScoped<IHubMessageRepository, CosmosHubMessageRepository>();
 builder.Services.AddScoped<IHubReadStateRepository, CosmosHubReadStateRepository>();
 builder.Services.AddScoped<IBirdReactionRepository, CosmosBirdReactionRepository>();
 builder.Services.AddScoped<IBirdReactionService, BirdReactionService>();
+builder.Services.AddScoped<IEventRepository, CosmosEventRepository>();
+builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
 builder.Services.AddScoped<INestPictureService, NestPictureService>();
@@ -158,6 +160,11 @@ if (app.Environment.IsDevelopment())
     // Waypoints/Birds above. No TTL - a read state should persist indefinitely, unlike
     // HubMessages' own 7-day board reset.
     await database.Database.CreateContainerIfNotExistsAsync(opts.HubReadStatesContainerName, "/userId");
+    // /userId - the web UI's journey log and notification bell both read "my own history",
+    // same single-partition-per-owner reasoning as Waypoints/Birds/HubReadStates above. No
+    // TTL, unlike HubMessages' 7-day board reset - this history is the app's one deliberately
+    // permanent record, so nothing here ever auto-expires.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.EventsContainerName, "/userId");
 
     // Dev-only seed users: "Oliver 1" (regular) and "Admin 1" (IsAdmin) so there's always a
     // known admin account locally to place Hubs through the app's own "Add Hub" flow,
@@ -1307,6 +1314,84 @@ app.MapPut("/waypoints/{id}/picture", async (string id, IFormFile file, ClaimsPr
 .RequireAuthorization()
 .DisableAntiforgery()
 .WithName("UploadNestPicture");
+
+// The web UI's "journey log" - every event ever recorded for the caller, newest first,
+// never pruned (see Event.cs/EventService). No projection needed: Event.UserId is always
+// the caller's own, there's nothing here to hide from them.
+app.MapGet("/events", async (int? limit, ClaimsPrincipal principal, IEventService eventService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(await eventService.ListTimelineAsync(userId, limit ?? 200));
+})
+.RequireAuthorization()
+.WithName("ListEvents");
+
+// The notification bell's dropdown - the IsNotification subset of the same event history.
+app.MapGet("/notifications", async (int? limit, ClaimsPrincipal principal, IEventService eventService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(await eventService.ListNotificationsAsync(userId, limit ?? 50));
+})
+.RequireAuthorization()
+.WithName("ListNotifications");
+
+app.MapGet("/notifications/unread-count", async (ClaimsPrincipal principal, IEventService eventService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(new { Count = await eventService.CountUnreadNotificationsAsync(userId) });
+})
+.RequireAuthorization()
+.WithName("GetUnreadNotificationCount");
+
+app.MapPost("/notifications/{id}/read", async (string id, ClaimsPrincipal principal, IEventService eventService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await eventService.MarkNotificationReadAsync(userId, id);
+        return Results.NoContent();
+    }
+    catch (EventServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("MarkNotificationRead");
+
+app.MapPost("/notifications/read-all", async (ClaimsPrincipal principal, IEventService eventService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    await eventService.MarkAllNotificationsReadAsync(userId);
+    return Results.NoContent();
+})
+.RequireAuthorization()
+.WithName("MarkAllNotificationsRead");
 
 var summaries = new[]
 {

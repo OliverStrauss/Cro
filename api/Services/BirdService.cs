@@ -13,6 +13,7 @@ public class BirdService(
     IHubRepository hubRepository,
     IHubMessageRepository hubMessageRepository,
     IBirdMediaService birdMediaService,
+    IEventService eventService,
     IOptions<BirdTravelOptions> birdTravelOptions,
     ILogger<BirdService> logger) : IBirdService
 {
@@ -132,8 +133,12 @@ public class BirdService(
             // compose form's toggle said, same "if you send it there, it's public" rule the
             // Hub message board enforces.
             IsPublic: destination.IsHub || isPublic,
-            NestFromName: origin.Name);
-        return await birdRepository.CreateAsync(bird);
+            NestFromName: origin.Name,
+            NestToName: destination.Name);
+        var created = await birdRepository.CreateAsync(bird);
+        await eventService.RecordBirdDepartedAsync(created);
+        await eventService.RecordBirdJoinedFlockAsync(created);
+        return created;
     }
 
     // Resends an already-landed, caller-owned bird onward - distinct from ComposeAndSendAsync
@@ -188,8 +193,11 @@ public class BirdService(
             // once true, IsPublic never needs to flip back false on a later resend elsewhere.
             IsPublic = destination.IsHub || bird.IsPublic,
             NestFromName = origin.Name,
+            NestToName = destination.Name,
         };
-        return await birdRepository.UpdateAsync(updated);
+        var saved = await birdRepository.UpdateAsync(updated);
+        await eventService.RecordBirdDepartedAsync(saved);
+        return saved;
     }
 
     public async Task<Bird> RenameAsync(string userId, string birdId, string name)
@@ -332,6 +340,7 @@ public class BirdService(
             UpdatedAt = DateTimeOffset.UtcNow,
         };
         arrived = await birdRepository.UpdateAsync(arrived);
+        await eventService.RecordBirdArrivalAsync(arrived);
 
         // ComposeAndSendAsync/SendAsync already force IsPublic=true for anything Hub-bound,
         // so no separate public check is needed here - every arrival at a Hub is board-worthy.
@@ -361,6 +370,8 @@ public class BirdService(
             {
                 logger.LogWarning(ex, "Failed to post HubMessage for bird {BirdId} landing at hub {HubId}", arrived.Id, landedHub.Id);
             }
+
+            await eventService.RecordHubPostAsync(arrived, landedHub);
         }
 
         return arrived;
