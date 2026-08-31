@@ -18,7 +18,7 @@ public record Hub(
     string Status,
     string CreatedByUserId,
     DateTimeOffset CreatedAt,
-    string? Category = null,
+    string Category,
     string? ProfilePictureUrl = null);
 
 public static class HubStatus

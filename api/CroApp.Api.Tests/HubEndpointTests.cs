@@ -80,7 +80,7 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     private Task<HttpResponseMessage> CreateHubAsync(string? token, string name, double lat = 42.0, double lng = -93.6) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token, new { Name = name, Latitude = lat, Longitude = lng, Category = "Library" }));
+        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token, new { Name = name, Latitude = lat, Longitude = lng, Category = "Landmark" }));
 
     [Fact]
     public async Task Admin1_CanCreateAHub()
@@ -168,6 +168,29 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var birds = await response.Content.ReadFromJsonAsync<List<object>>();
 
         Assert.Empty(birds!);
+    }
+
+    [Fact]
+    public async Task CreateHub_WithInvalidCategory_ReturnsBadRequest()
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", adminToken,
+            new { Name = "Should Not Exist", Latitude = 42.0, Longitude = -93.6, Category = "Not A Real Category" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SuggestHub_WithInvalidCategory_ReturnsBadRequest()
+    {
+        var username = $"hub-suggester-{Guid.NewGuid():N}";
+        var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hub-suggestions", token,
+            new { Name = "Should Not Exist", Latitude = 42.3, Longitude = -93.4, Category = "Not A Real Category" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private Task<HttpResponseMessage> SuggestHubAsync(string token, string name, double lat = 42.3, double lng = -93.4) =>

@@ -7,7 +7,7 @@ public class HubService(IHubRepository hubRepository) : IHubService
 {
     public Task<List<Hub>> ListApprovedAsync() => hubRepository.ListApprovedAsync();
 
-    public async Task<Hub> CreateAsync(string createdByUserId, string name, double latitude, double longitude, string? category)
+    public async Task<Hub> CreateAsync(string createdByUserId, string name, double latitude, double longitude, string category)
     {
         var hub = new Hub(
             Guid.NewGuid().ToString(),
@@ -24,7 +24,7 @@ public class HubService(IHubRepository hubRepository) : IHubService
     public async Task<Hub> GetAsync(string hubId) =>
         await hubRepository.GetAsync(hubId) ?? throw new HubServiceException(404, "Hub not found.");
 
-    public async Task<Hub> SuggestAsync(string suggestedByUserId, string name, double latitude, double longitude, string? category)
+    public async Task<Hub> SuggestAsync(string suggestedByUserId, string name, double latitude, double longitude, string category)
     {
         var hub = new Hub(
             Guid.NewGuid().ToString(),

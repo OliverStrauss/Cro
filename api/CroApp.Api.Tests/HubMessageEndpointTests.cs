@@ -88,7 +88,7 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private async Task<HubDto> CreateHubAsync(string token, string name, double lat, double lng)
     {
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token,
-            new { Name = name, Latitude = lat, Longitude = lng, Category = "Library" }));
+            new { Name = name, Latitude = lat, Longitude = lng, Category = "Landmark" }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<HubDto>())!;
     }
