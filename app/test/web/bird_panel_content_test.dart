@@ -110,7 +110,9 @@ void main() {
     );
   }
 
-  testWidgets('a private bird shows the sealed placeholder, not the content', (tester) async {
+  testWidgets('a private bird still shows its content to its own sender, but no reaction row', (tester) async {
+    // This panel only ever shows the caller's own bird, and GET /birds never withholds
+    // content regardless of isPublic - only the reaction row stays gated on isPublic.
     final bird = Bird(
       id: 'b1',
       userId: 'u1',
@@ -124,8 +126,9 @@ void main() {
     await tester.pumpWidget(build(bird));
     await tester.pump();
 
-    expect(find.text('Sealed until it lands'), findsOneWidget);
-    expect(find.text('Secret message'), findsNothing);
+    expect(find.text('What it carries'), findsOneWidget);
+    expect(find.text('Secret message'), findsOneWidget);
+    expect(find.text('Sealed until it lands'), findsNothing);
     expect(find.byKey(const Key('webBirdReactionRow')), findsNothing);
   });
 

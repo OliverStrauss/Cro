@@ -20,8 +20,9 @@ import 'panel_header.dart';
 const _webReactionEmojis = ['🕊️', '🌿', '⭐', '🔥'];
 
 /// The bird detail panel body - adapted from the phone app's BirdDetailsSheet: where/when,
-/// a progress bar, the payload (sealed if private), a reaction row for public birds, and a
-/// state-dependent footer action. Only the caller's own birds are selectable in this pass
+/// a progress bar, the payload (always visible - it's always the caller's own bird), a
+/// reaction row for public birds, and a state-dependent footer action. Only the caller's
+/// own birds are selectable in this pass
 /// (see WebMapScreen/YourBirdsDock), so the sender is always "you" - a friend's bird would
 /// need a different data shape (FriendBird, not Bird) this panel doesn't handle yet.
 class BirdPanelContent extends StatefulWidget {
@@ -195,10 +196,10 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       friendWaypoints: widget.friendWaypoints,
       hubs: widget.hubs,
     );
-    // A bird sitting on a public Hub board is already visible to anyone who opens that
-    // Hub (see HubPanelContent/HubMessageCard) - sealing it here too, just because the
-    // bird itself wasn't composed as isPublic, would be misleading rather than protective.
-    final showContent = bird.isPublic || view?.state == BirdDockState.hub;
+    // This panel only ever shows the caller's own bird (see the class doc comment) and
+    // GET /birds never withholds Content/AudioUrl/ImageUrl the way GET /friends/birds does
+    // for someone else's - IsPublic only ever gates whether *other* people can see it
+    // (reactions, a friend's/Hub view), never the sender's own read of their own message.
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -278,24 +279,18 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            showContent ? 'What it carries' : 'Sealed until it lands',
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                          const Text(
+                            'What it carries',
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          if (showContent) ...[
-                            BirdPayloadView(
-                              content: bird.content,
-                              imageUrl: bird.imageUrl,
-                              audioUrl: bird.type == BirdType.parrot ? null : bird.audioUrl,
-                            ),
-                            if (bird.type == BirdType.parrot && bird.audioUrl != null)
-                              _ParrotWaveform(audioUrl: bird.audioUrl!, color: Theme.of(context).colorScheme.primary),
-                          ] else
-                            const Text(
-                              'This bird is private. The message stays sealed until it reaches its nest.',
-                              style: TextStyle(fontSize: 12.5, color: CroColors.fog),
-                            ),
+                          BirdPayloadView(
+                            content: bird.content,
+                            imageUrl: bird.imageUrl,
+                            audioUrl: bird.type == BirdType.parrot ? null : bird.audioUrl,
+                          ),
+                          if (bird.type == BirdType.parrot && bird.audioUrl != null)
+                            _ParrotWaveform(audioUrl: bird.audioUrl!, color: Theme.of(context).colorScheme.primary),
                         ],
                       ),
                     ),

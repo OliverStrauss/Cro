@@ -1016,8 +1016,10 @@ class _TravelingBird {
   final DateTime departedAt;
   final DateTime estimatedArrivalAt;
   final bool isPublic;
-  // Only ever populated when isPublic - a private bird's message stays a surprise until
-  // it's delivered, same rule GET /birds and GET /friends/birds already enforce server-side.
+  // Always populated for the caller's own bird (GET /birds never withholds it) regardless
+  // of isPublic; only null here for a friend's still-private bird, which GET /friends/birds
+  // actually withholds server-side - see BirdDetailsSheet's showPayload for how that's told
+  // apart from a genuinely empty message.
   final String? content;
   final String? audioUrl;
   final String? imageUrl;
