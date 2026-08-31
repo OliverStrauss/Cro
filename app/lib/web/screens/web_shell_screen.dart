@@ -38,8 +38,8 @@ import 'web_you_screen.dart';
 
 /// Top-level widget for the web shell (rail + content + floating actions cluster + dock +
 /// right panel) - the kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart.
-/// There is no top bar: the floating actions cluster (Send a bird / journey log / bell) and
-/// the dock both overlay the content column instead (see 05_web_ui_updates.md item 1). Owns
+/// There is no top bar: the floating actions cluster (journey log / bell) and the dock both
+/// overlay the content column instead (see 05_web_ui_updates.md item 1). Owns
 /// every piece of shell state (nav selection, panel selection, dock filter/expanded, map
 /// filter) the same way HomeScreen owns tab selection: one StatefulWidget, plain setState,
 /// no state-mgmt package (none exists anywhere else in this codebase).
