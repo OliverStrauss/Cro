@@ -101,21 +101,23 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
         return (await response.Content.ReadFromJsonAsync<WaypointDto>())!;
     }
 
-    // Text-only Cro, so no media upload is needed to satisfy BirdPayloadValidator. Never
-    // passes isPublic - the whole point of these tests is whether the server forces it.
-    private Task<HttpResponseMessage> ComposeBirdAsync(string token, string name, string originNestId, string destinationId, string content)
+    // Text-only Cro, so no media upload is needed to satisfy BirdPayloadValidator.
+    // isPublic is omitted (server default: false) unless explicitly given.
+    private Task<HttpResponseMessage> ComposeBirdAsync(string token, string name, string originNestId, string destinationId, string content, bool? isPublic = null)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
+        var multipart = new MultipartFormDataContent
         {
-            Content = new MultipartFormDataContent
-            {
-                { new StringContent("Cro"), "type" },
-                { new StringContent(name), "name" },
-                { new StringContent(originNestId), "originNestId" },
-                { new StringContent(destinationId), "destinationId" },
-                { new StringContent(content), "content" },
-            }
+            { new StringContent("Cro"), "type" },
+            { new StringContent(name), "name" },
+            { new StringContent(originNestId), "originNestId" },
+            { new StringContent(destinationId), "destinationId" },
+            { new StringContent(content), "content" },
         };
+        if (isPublic is not null)
+        {
+            multipart.Add(new StringContent(isPublic.Value.ToString()), "isPublic");
+        }
+        var request = new HttpRequestMessage(HttpMethod.Post, "/birds/compose") { Content = multipart };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return _client.SendAsync(request);
     }
@@ -125,7 +127,7 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
         _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", token));
 
     [Fact]
-    public async Task SendingBirdToHub_ForcesIsPublic_AndAppearsOnBoard()
+    public async Task SendingBirdToHub_CanStayPrivate_ButStillAppearsOnBoard()
     {
         var adminToken = await LoginAsync("Admin 1", SeedPassword);
         var hub = await CreateHubAsync(adminToken, $"Test Plaza {Guid.NewGuid():N}", 42.05, -93.55);
@@ -135,7 +137,7 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
         // Same coordinates as the Hub -> zero distance -> instant arrival on the next read.
         var origin = await CreateWaypointAsync(token, "My Nest", 42.05, -93.55);
 
-        var composeResponse = await ComposeBirdAsync(token, "Hello Plaza", origin.Id, hub.Id, "hi everyone");
+        var composeResponse = await ComposeBirdAsync(token, "Hello Plaza", origin.Id, hub.Id, "hi everyone", isPublic: false);
         composeResponse.EnsureSuccessStatusCode();
 
         var listResponse = await ListOwnBirdsAsync(token);
@@ -143,8 +145,18 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var birds = await listResponse.Content.ReadFromJsonAsync<List<BirdDto>>();
         var landed = Assert.Single(birds!, b => b.Name == "Hello Plaza");
         Assert.False(landed.IsTraveling);
-        Assert.True(landed.IsPublic);
+        Assert.False(landed.IsPublic);
 
+        // A different viewer's live "who's here" view masks it, since it isn't public.
+        var viewerUsername = $"hub-viewer-{Guid.NewGuid():N}";
+        var (_, viewerToken) = await RegisterAndLoginAsync(viewerUsername, SeedPassword);
+        var residentsResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/hubs/{hub.Id}/birds", viewerToken));
+        residentsResponse.EnsureSuccessStatusCode();
+        var residents = await residentsResponse.Content.ReadFromJsonAsync<List<HubResidentBirdDto>>();
+        var resident = Assert.Single(residents!, b => b.Name == "Hello Plaza");
+        Assert.Null(resident.Content);
+
+        // But the durable board always shows it in full, regardless of IsPublic.
         var messagesResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/hubs/{hub.Id}/messages", token));
         messagesResponse.EnsureSuccessStatusCode();
         var messages = await messagesResponse.Content.ReadFromJsonAsync<List<HubMessageDto>>();
@@ -153,6 +165,26 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
         Assert.Equal("Hello Plaza", posted.BirdName);
         Assert.Equal("My Nest", posted.OriginNestName);
         Assert.Equal("hi everyone", posted.Content);
+    }
+
+    [Fact]
+    public async Task SendingBirdToHub_RespectsExplicitIsPublicTrue()
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var hub = await CreateHubAsync(adminToken, $"Open Plaza {Guid.NewGuid():N}", 42.06, -93.56);
+
+        var username = $"hub-poster-{Guid.NewGuid():N}";
+        var (_, token) = await RegisterAndLoginAsync(username, SeedPassword);
+        var origin = await CreateWaypointAsync(token, "My Nest", 42.06, -93.56);
+
+        var composeResponse = await ComposeBirdAsync(token, "Open Bird", origin.Id, hub.Id, "hi everyone", isPublic: true);
+        composeResponse.EnsureSuccessStatusCode();
+
+        var listResponse = await ListOwnBirdsAsync(token);
+        listResponse.EnsureSuccessStatusCode();
+        var birds = await listResponse.Content.ReadFromJsonAsync<List<BirdDto>>();
+        var landed = Assert.Single(birds!, b => b.Name == "Open Bird");
+        Assert.True(landed.IsPublic);
     }
 
     [Fact]
@@ -273,6 +305,16 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
         string? ImageUrl,
         string? ProfilePictureUrl,
         bool IsPublic);
+    private record HubResidentBirdDto(
+        string Id,
+        string UserId,
+        string Name,
+        string Type,
+        string? CurrentNestId,
+        bool IsPublic,
+        string? Content,
+        string? AudioUrl,
+        string? ImageUrl);
     private record HubMessageDto(
         string Id,
         string SenderId,
