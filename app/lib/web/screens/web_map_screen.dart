@@ -201,20 +201,23 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                       key: Key('webHubMarker_${hub.id}'),
                       point: LatLng(hub.latitude, hub.longitude),
                       width: 180,
-                      height: 60,
+                      height: 44,
                       child: MapMarkerPill(
-                        borderRadius: 14,
+                        borderRadius: 11,
+                        compact: true,
                         selected: widget.selectedHubId == hub.id,
                         selectionColor: CroColors.deliveryAmber,
                         onTap: () => widget.onSelectHub(hub),
+                        // Deliberately smaller than a nest marker's avatar (05_web_ui_updates.md
+                        // item 3) - Hub markers read as secondary to nest markers on the map.
                         avatar: Container(
-                          width: 34,
-                          height: 34,
+                          width: 24,
+                          height: 24,
                           alignment: Alignment.center,
-                          decoration: BoxDecoration(color: CroColors.deliveryAmber, borderRadius: BorderRadius.circular(11)),
+                          decoration: BoxDecoration(color: CroColors.deliveryAmber, borderRadius: BorderRadius.circular(7)),
                           child: Text(
                             hub.name.isEmpty ? '?' : hub.name[0].toUpperCase(),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
                           ),
                         ),
                         name: hub.name,
