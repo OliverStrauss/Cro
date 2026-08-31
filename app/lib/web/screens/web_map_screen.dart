@@ -45,6 +45,16 @@ class WebMapScreen extends StatefulWidget {
   final bool addingNest;
   final ValueChanged<LatLng>? onPlaceNest;
   final VoidCallback? onCancelAddNest;
+  // Whether the signed-in user is an admin - only used to word the addingHub banner
+  // ("place" for an admin vs "suggest" for anyone else); the actual admin gate is enforced
+  // server-side, same as the phone app's Add Hub/Suggest Hub buttons.
+  final bool isAdmin;
+  // Armed by the Hubs screen's "+ Add Hub"/"+ Suggest Hub" button - the next map tap places
+  // a Hub (admin) or submits a suggestion (everyone else) instead of selecting whatever
+  // marker is underneath it. Mutually exclusive with addingNest (see WebShellScreen).
+  final bool addingHub;
+  final ValueChanged<LatLng>? onPlaceHub;
+  final VoidCallback? onCancelAddHub;
 
   const WebMapScreen({
     super.key,
@@ -62,6 +72,10 @@ class WebMapScreen extends StatefulWidget {
     this.addingNest = false,
     this.onPlaceNest,
     this.onCancelAddNest,
+    this.isAdmin = false,
+    this.addingHub = false,
+    this.onPlaceHub,
+    this.onCancelAddHub,
     required this.onSelectBird,
     required this.onSelectFriendBird,
   });
@@ -157,7 +171,11 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
             minZoom: 3,
             cameraConstraint: const CameraConstraint.containLatitude(),
             interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-            onTap: widget.addingNest ? (tapPosition, point) => widget.onPlaceNest?.call(point) : null,
+            onTap: widget.addingNest
+                ? (tapPosition, point) => widget.onPlaceNest?.call(point)
+                : widget.addingHub
+                    ? (tapPosition, point) => widget.onPlaceHub?.call(point)
+                    : null,
           ),
           children: [
             TileLayer(
@@ -308,6 +326,39 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                     GestureDetector(
                       key: const Key('webCancelAddNest'),
                       onTap: widget.onCancelAddNest,
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        if (widget.addingHub)
+          Positioned(
+            top: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                key: const Key('webAddHubBanner'),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                decoration: BoxDecoration(color: CroColors.ink, borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.isAdmin
+                          ? 'Click anywhere on the map to place your new Hub'
+                          : 'Click anywhere on the map to suggest a Hub location',
+                      style: const TextStyle(fontSize: 12.5, color: Colors.white),
+                    ),
+                    const SizedBox(width: 14),
+                    GestureDetector(
+                      key: const Key('webCancelAddHub'),
+                      onTap: widget.onCancelAddHub,
                       child: const Text(
                         'Cancel',
                         style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),

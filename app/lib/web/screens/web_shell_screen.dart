@@ -19,6 +19,7 @@ import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
 import '../../utils/jwt_utils.dart';
 import '../../widgets/compose_bird_dialog.dart';
+import '../../widgets/hub_name_dialog.dart';
 import '../../widgets/send_bird_dialog.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import '../models/event.dart';
@@ -86,6 +87,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
   bool _addingNest = false;
+  bool _addingHub = false;
 
   final _dockKey = GlobalKey();
   double _dockHeight = 132;
@@ -105,7 +107,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   // Every own nest's current residents (idle birds, including ones delivered by someone
   // else) - GET /birds alone can't see deliveries from other senders, so this is a separate
   // per-nest fetch, same reasoning as the phone app's NestDetailsSheet. Small N (a user has
-  // at most 2 nests), fetched alongside everything else in _loadData.
+  // at most 1 nest), fetched alongside everything else in _loadData.
   Map<String, List<Bird>> _nestResidentsByNestId = {};
 
   bool _isLoading = true;
@@ -346,24 +348,92 @@ class WebShellScreenState extends State<WebShellScreen> {
   void _startAddNest() {
     setState(() {
       _addingNest = true;
+      _addingHub = false;
       _selectedNav = WebNavItem.map;
     });
   }
 
   void _cancelAddNest() => setState(() => _addingNest = false);
 
+  void _startAddHub() {
+    setState(() {
+      _addingHub = true;
+      _addingNest = false;
+      _selectedNav = WebNavItem.map;
+    });
+  }
+
+  void _cancelAddHub() => setState(() => _addingHub = false);
+
+  Future<void> _placeHub(LatLng point) async {
+    setState(() => _addingHub = false);
+    final result = await showDialog<HubNameDialogResult>(
+      context: context,
+      builder: (context) => const HubNameDialog(),
+    );
+    if (result == null || result.name.trim().isEmpty || !mounted) return;
+
+    try {
+      if (_isAdmin) {
+        await _hubService.createHub(
+          widget.authState.token!,
+          name: result.name.trim(),
+          latitude: point.latitude,
+          longitude: point.longitude,
+          category: result.category,
+        );
+      } else {
+        await _hubService.suggestHub(
+          widget.authState.token!,
+          name: result.name.trim(),
+          latitude: point.latitude,
+          longitude: point.longitude,
+          category: result.category,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sent to admins for review')));
+        }
+      }
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
+  }
+
   Future<void> _placeNest(LatLng point) async {
     setState(() => _addingNest = false);
+    // A user gets exactly one personal nest, enforced server-side by
+    // WaypointService.CreateAsync - checked here too so the picker/name dialogs below never
+    // even open for a no-op add.
+    if (_ownNests.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You already have a nest')),
+      );
+      return;
+    }
+
+    final isPublic = await showDialog<bool>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Add which kind of nest?'),
+        children: [
+          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(false), child: const Text('Private nest')),
+          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(true), child: const Text('Public nest')),
+        ],
+      ),
+    );
+    if (isPublic == null || !mounted) return;
+
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => const WaypointNameDialog(),
+      builder: (context) => WaypointNameDialog(kindLabel: isPublic ? 'Public nest' : 'Private nest'),
     );
     if (name == null || name.trim().isEmpty || !mounted) return;
 
     try {
-      // A user's first nest is their private one; a second is the public one - same
-      // one-private-one-public cap the server enforces (see WaypointService.CreateAsync).
-      final isPublic = _ownNests.any((n) => !n.isPublic);
       await _waypointService.createWaypoint(
         widget.authState.token!,
         name: name.trim(),
@@ -486,7 +556,6 @@ class WebShellScreenState extends State<WebShellScreen> {
                   subtitle: titles.$2,
                   unreadCount: _notifications.where((n) => !n.isRead).length,
                   notifications: _notifications,
-                  onComposePressed: _onComposePressed,
                   onMarkAllRead: _markAllNotificationsRead,
                   onOpenNotification: _openNotification,
                   events: _events,
@@ -570,6 +639,10 @@ class WebShellScreenState extends State<WebShellScreen> {
           addingNest: _addingNest,
           onPlaceNest: _placeNest,
           onCancelAddNest: _cancelAddNest,
+          isAdmin: _isAdmin,
+          addingHub: _addingHub,
+          onPlaceHub: _placeHub,
+          onCancelAddHub: _cancelAddHub,
         );
       case WebNavItem.nests:
         return WebNestsScreen(
@@ -593,6 +666,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           hubService: _hubService,
           profileService: _profileService,
           onDataChanged: _loadData,
+          onStartAddHub: _startAddHub,
         );
       case WebNavItem.friends:
         return WebFriendsScreen(

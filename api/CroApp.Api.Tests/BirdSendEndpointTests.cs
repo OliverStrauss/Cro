@@ -12,6 +12,12 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
     private const string DefaultEmulatorConnectionString =
         "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
+    // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
+    // see CLAUDE.md's well-known-local-credentials section. Used here (as HubEndpointTests.cs
+    // already does) to create Hubs for test setup, since a plain user can no longer be given
+    // a second nest of their own to bounce a setup bird through (see LandBirdAtHomeAsync).
+    private const string SeedPassword = "correct-horse-battery-staple";
+
     private readonly HttpClient _client;
 
     public BirdSendEndpointTests(WebApplicationFactory<Program> factory)
@@ -67,6 +73,14 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         return (created!.Id, body!.Token);
     }
 
+    private async Task<string> LoginAsync(string username, string password)
+    {
+        var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = password });
+        loginResponse.EnsureSuccessStatusCode();
+        var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
+        return body!.Token;
+    }
+
     private static HttpRequestMessage AuthedRequest(HttpMethod method, string uri, string? token, object? body = null)
     {
         var request = new HttpRequestMessage(method, uri);
@@ -87,6 +101,14 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
             new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<WaypointDto>())!;
+    }
+
+    private async Task<HubDto> CreateHubAsync(string token, string name, double lat, double lng)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token,
+            new { Name = name, Latitude = lat, Longitude = lng }));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<HubDto>())!;
     }
 
     private Task<HttpResponseMessage> ComposeBirdAsync(
@@ -120,22 +142,28 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
     private Task<HttpResponseMessage> MarkReadAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/read", token));
 
-    // Composes a bird between identical coordinates (different nest ids, so it's still a
-    // valid origin/destination pair) so its ETA is exactly zero, then reads it back via the
-    // nest-residents endpoint (which resolves arrival as a side effect) - lands the bird idle
-    // at `home` instantly without needing a cranked SpeedMultiplier, which would make the
-    // *real* send-under-test resolve instantly too and defeat "stays traveling" assertions.
-    // Deletes the throwaway setup-origin nest afterward so the caller's public slot (1
-    // private + 1 public cap) is free for the real, deliberately-far nest an actual test needs.
+    // Lands a bird idle at `home` instantly, without needing a cranked SpeedMultiplier (which
+    // would make the *real* send-under-test resolve instantly too and defeat "stays
+    // traveling" assertions). A user gets exactly one personal nest (see
+    // WaypointService.CreateAsync), so the old "compose from a second throwaway nest of this
+    // user's own, at the same coordinates, then delete it" trick no longer works - this
+    // bounces the setup bird through a same-coordinates Hub instead (reachable to anyone, no
+    // ownership needed) and straight back to Home, both hops zero-distance so each resolves
+    // the instant it's next queried.
     private async Task<(BirdDto Bird, WaypointDto Home, string UserId, string Token)> LandBirdAtHomeAsync(string usernamePrefix)
     {
         var (userId, token) = await RegisterAndLoginAsync($"{usernamePrefix}-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
-        var setupOrigin = await CreateNestAsync(token, "Setup Origin", 42.0, -93.5, isPublic: true);
 
-        var composeResponse = await ComposeBirdAsync(token, "Cro", "Setup Bird", setupOrigin.Id, home.Id, content: "setup");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var bounceHub = await CreateHubAsync(adminToken, $"Setup Bounce {Guid.NewGuid():N}", 42.0, -93.5);
+
+        var composeResponse = await ComposeBirdAsync(token, "Cro", "Setup Bird", home.Id, bounceHub.Id, content: "setup");
         composeResponse.EnsureSuccessStatusCode();
         var composed = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+
+        var backResponse = await SendBirdAsync(token, composed.Id, home.Id);
+        backResponse.EnsureSuccessStatusCode();
 
         var residentsResponse = await GetNestResidentsAsync(token, home.Id);
         residentsResponse.EnsureSuccessStatusCode();
@@ -143,16 +171,17 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         var landed = residents!.Single(b => b.Id == composed.Id);
         Assert.False(landed.IsTraveling);
 
-        (await _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/waypoints/{setupOrigin.Id}", token))).EnsureSuccessStatusCode();
-
         return (landed, home, userId, token);
     }
 
     [Fact]
-    public async Task Send_ToOwnOtherNest_MarksItTravelingWithEta()
+    public async Task Send_ToAHub_MarksItTravelingWithEta()
     {
         var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-user");
-        var away = await CreateNestAsync(token, "Away", 60.0, -93.6, isPublic: true);
+        // A user gets exactly one personal nest, so "send to another destination" is
+        // exercised against a Hub here rather than a second own nest.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
 
         var response = await SendBirdAsync(token, bird.Id, away.Id, "Hello there");
         response.EnsureSuccessStatusCode();
@@ -172,7 +201,8 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
     public async Task Send_AlreadyTravelingBird_ReturnsConflict()
     {
         var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-user");
-        var away = await CreateNestAsync(token, "Away", 60.0, -93.6, isPublic: true);
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
 
         var first = await SendBirdAsync(token, bird.Id, away.Id);
         first.EnsureSuccessStatusCode();
@@ -235,6 +265,7 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
+    private record HubDto(string Id, string Name, double Latitude, double Longitude, string Status, string CreatedByUserId, DateTimeOffset CreatedAt, string? Category, string? ProfilePictureUrl);
     private record BirdDto(
         string Id,
         string UserId,

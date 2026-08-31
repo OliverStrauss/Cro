@@ -459,7 +459,7 @@ void main() {
     expect(fakeService.lastCreatedWaypoint?.name, 'Front Porch');
   });
 
-  testWidgets('tapping the map to add a nest keeps existing own nests', (WidgetTester tester) async {
+  testWidgets('tapping the map with an existing nest does not create a second one', (WidgetTester tester) async {
     final fakeService = _FakeWaypointService()
       ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
     final authState = AuthState()..login(_fakeJwtFor('u1'));
@@ -478,12 +478,13 @@ void main() {
     // projected position falls outside the initial zoom-13 viewport.
     tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1.003, 2.003));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('waypointNameField')), 'Work');
-    await tester.tap(find.byKey(const Key('saveWaypointButton')));
-    await tester.pumpAndSettle();
 
+    // A user gets exactly one personal nest (see WaypointService.CreateAsync) - the tap is
+    // rejected before any naming dialog opens.
+    expect(find.byKey(const Key('waypointNameField')), findsNothing);
+    expect(find.text('You already have a nest'), findsOneWidget);
+    expect(fakeService.lastCreatedWaypoint, isNull);
     expect(find.byKey(const Key('ownNestMarker_w1')), findsOneWidget);
-    expect(find.byKey(Key('ownNestMarker_${fakeService.lastCreatedWaypoint!.id}')), findsOneWidget);
   });
 
   testWidgets('renders one marker per friend waypoint plus the own nest marker',

@@ -139,7 +139,7 @@ class WaypointService {
   }
 
   // Waypoint error responses are {"error": "..."} - surface that message when present
-  // (e.g. the one-private-one-public cap) rather than a generic one, same pattern as
+  // (e.g. the one-nest-per-user cap) rather than a generic one, same pattern as
   // FriendsService.
   String _errorMessage(http.Response response, String fallback) {
     try {

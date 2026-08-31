@@ -6,6 +6,7 @@ public interface IBirdService
 {
     Task<List<Bird>> ListAsync(string userId);
     Task<List<Bird>> ListTravelingAsync(string userId);
+    Task<List<Bird>> ListTravelingForUsersAsync(IEnumerable<string> userIds);
     Task<Bird> ComposeAndSendAsync(
         string userId,
         string type,

@@ -4,16 +4,17 @@ import '../../theme.dart';
 import '../models/event.dart';
 import 'journey_log_panel.dart';
 
-/// The 70px top bar: screen title/subtitle, a live-polling indicator, the primary "Send a
-/// bird" action, the journey log trigger, and the notification bell. Both the journey log
-/// and notifications open as overlay popups anchored to their trigger button - see
-/// 03_journey_log_popup.md - and are mutually exclusive (opening one closes the other).
+/// The 70px top bar: screen title/subtitle, a live-polling indicator, the journey log
+/// trigger, and the notification bell. Both the journey log and notifications open as
+/// overlay popups anchored to their trigger button - see 03_journey_log_popup.md - and are
+/// mutually exclusive (opening one closes the other). The "Send a bird" action used to live
+/// here too, but every screen already has its own send/compose entry point (the dock's "+"
+/// card, the context panel, a nest's resident-bird tiles), so this was just a duplicate.
 class TopBar extends StatefulWidget {
   final String title;
   final String subtitle;
   final int unreadCount;
   final List<AppEvent> notifications;
-  final VoidCallback onComposePressed;
   final VoidCallback onMarkAllRead;
   final ValueChanged<AppEvent> onOpenNotification;
   final List<AppEvent> events;
@@ -27,7 +28,6 @@ class TopBar extends StatefulWidget {
     required this.subtitle,
     required this.unreadCount,
     required this.notifications,
-    required this.onComposePressed,
     required this.onMarkAllRead,
     required this.onOpenNotification,
     required this.events,
@@ -240,30 +240,6 @@ class _TopBarState extends State<TopBar> {
             ],
           ),
           const SizedBox(width: 16),
-          Material(
-            color: CroColors.waypointBlue,
-            borderRadius: BorderRadius.circular(11),
-            child: InkWell(
-              key: const Key('webSendBirdButton'),
-              borderRadius: BorderRadius.circular(11),
-              onTap: widget.onComposePressed,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_forward_rounded, size: 15, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text(
-                      'Send a bird',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
           TapRegion(
             groupId: _journeyGroup,
             child: CompositedTransformTarget(

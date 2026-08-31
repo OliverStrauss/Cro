@@ -162,24 +162,25 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
     }
 
     [Fact]
-    public async Task CreatingMultipleWaypoints_CreatesSeparateDocuments()
+    public async Task CreatingASecondWaypoint_ReturnsConflictAndLeavesOnlyOneDocument()
     {
         var username = $"waypoint-user-{Guid.NewGuid():N}";
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
 
         var first = await (await CreateWaypointAsync(token, "Backyard")).Content.ReadFromJsonAsync<WaypointDto>();
-        await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6, isPublic: true);
+        var second = await CreateWaypointAsync(token, "Front Porch", 42.1, -93.6, isPublic: true);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
 
         var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
         var waypoints = await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>();
-        Assert.Equal(2, waypoints!.Count);
+        Assert.Single(waypoints!);
 
         var documentCount = await CountWaypointDocumentsAsync(first!.UserId);
-        Assert.Equal(2, documentCount);
+        Assert.Equal(1, documentCount);
     }
 
     [Fact]
-    public async Task CreatingOnePrivateAndOnePublicNest_Succeeds()
+    public async Task CreatingASecondNestOfTheOppositeKind_StillReturnsConflict()
     {
         var username = $"waypoint-user-{Guid.NewGuid():N}";
         var token = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
@@ -187,14 +188,9 @@ public class WaypointEndpointTests : IClassFixture<WebApplicationFactory<Program
         var privateResponse = await CreateWaypointAsync(token, "Backyard", isPublic: false);
         Assert.Equal(HttpStatusCode.Created, privateResponse.StatusCode);
 
+        // A user gets exactly one personal nest, public or private - not one of each.
         var publicResponse = await CreateWaypointAsync(token, "The Library", isPublic: true);
-        Assert.Equal(HttpStatusCode.Created, publicResponse.StatusCode);
-
-        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/waypoints", token));
-        var waypoints = await listResponse.Content.ReadFromJsonAsync<List<WaypointDto>>();
-        Assert.Equal(2, waypoints!.Count);
-        Assert.Contains(waypoints, w => !w.IsPublic);
-        Assert.Contains(waypoints, w => w.IsPublic);
+        Assert.Equal(HttpStatusCode.Conflict, publicResponse.StatusCode);
     }
 
     [Fact]

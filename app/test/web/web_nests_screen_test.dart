@@ -102,6 +102,12 @@ void main() {
     expect(called, isTrue);
   });
 
+  testWidgets('already having a nest hides "+ Add a nest" and shows the limit message', (tester) async {
+    await tester.pumpWidget(build(ownNests: [ownNest]));
+    expect(find.byKey(const Key('webAddNestButton')), findsNothing);
+    expect(find.byKey(const Key('webNestLimitReachedMessage')), findsOneWidget);
+  });
+
   testWidgets('delete requires two taps to confirm', (tester) async {
     await tester.pumpWidget(build(ownNests: [ownNest]));
 

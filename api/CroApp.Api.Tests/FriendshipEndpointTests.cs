@@ -12,6 +12,12 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private const string DefaultEmulatorConnectionString =
         "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
+    // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
+    // see CLAUDE.md's well-known-local-credentials section. Used here to create Hubs for
+    // test setup, since a user can no longer be given a second nest of their own to act as a
+    // compose/send destination.
+    private const string SeedPassword = "correct-horse-battery-staple";
+
     private readonly HttpClient _client;
 
     public FriendshipEndpointTests(WebApplicationFactory<Program> factory)
@@ -54,6 +60,22 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         loginResponse.EnsureSuccessStatusCode();
         var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
         return (created!.Id, body!.Token);
+    }
+
+    private async Task<string> LoginAsync(string username, string password)
+    {
+        var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = password });
+        loginResponse.EnsureSuccessStatusCode();
+        var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
+        return body!.Token;
+    }
+
+    private async Task<HubDto> CreateHubAsync(string adminToken, string name, double lat, double lng)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", adminToken,
+            new { Name = name, Latitude = lat, Longitude = lng }));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<HubDto>())!;
     }
 
     private static HttpRequestMessage AuthedRequest(HttpMethod method, string uri, string? token, object? body = null)
@@ -223,30 +245,11 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         Assert.Equal(idB, waypoints!.Single().UserId);
     }
 
-    [Fact]
-    public async Task FriendsWaypoints_ReturnsOneRowPerNest_WhenAFriendHasMultipleNests()
-    {
-        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
-        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
-        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
-        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
-
-        await SendRequestAsync(tokenA, usernameB);
-        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
-
-        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
-        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Work", Latitude = 11.0, Longitude = 21.0, IsPublic = true }));
-
-        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/waypoints", tokenA));
-        response.EnsureSuccessStatusCode();
-        var waypoints = await response.Content.ReadFromJsonAsync<List<FriendWaypointDto>>();
-
-        Assert.Equal(2, waypoints!.Count);
-        Assert.All(waypoints, w => Assert.Equal(idB, w.UserId));
-        Assert.Equal(2, waypoints.Select(w => w.Id).Distinct().Count());
-    }
+    // A friend having MULTIPLE nests is no longer possible (a user gets exactly one personal
+    // nest - see WaypointService.CreateAsync), so the "one row per nest" multi-nest scenario
+    // this test used to cover is gone; FriendsWaypoints_ReturnsOnlyAcceptedFriendsWithAWaypointSet
+    // above already covers the single-nest happy path this collapses to, so this test isn't
+    // kept as a near-duplicate of it.
 
     [Fact]
     public async Task Remove_ClearsFriendshipFromBothSides()
@@ -380,9 +383,10 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
             new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
         var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
-        var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
-        var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
+        // B gets exactly one personal nest, so the compose destination here is a Hub rather
+        // than a second nest of B's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"B's Away Hub {Guid.NewGuid():N}", 30.0, 40.0);
 
         var composeRequest = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
         {
@@ -392,7 +396,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
                 { new StringContent("Cro"), "type" },
                 { new StringContent("B's Bird"), "name" },
                 { new StringContent(home!.Id), "originNestId" },
-                { new StringContent(away!.Id), "destinationId" },
+                { new StringContent(away.Id), "destinationId" },
                 { new StringContent("On my way"), "content" },
             }
         };
@@ -426,11 +430,18 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
             new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
         var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
-        var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
-        var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
+        // B gets exactly one personal nest, so the compose destination here is a Hub rather
+        // than a second nest of B's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"B's Away Hub {Guid.NewGuid():N}", 30.0, 40.0);
+        // Landing at a Hub is inherently public (BirdService.ComposeAndSendAsync), so the
+        // genuinely-private bird below needs a non-Hub destination instead - A's own nest,
+        // reachable since A and B are already friends.
+        var aNestResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenA,
+            new { Name = "A's Home", Latitude = 50.0, Longitude = 60.0, IsPublic = false }));
+        var aNest = await aNestResponse.Content.ReadFromJsonAsync<WaypointDto>();
 
-        async Task<BirdDto> ComposeAsync(string name, bool isPublic)
+        async Task<BirdDto> ComposeAsync(string name, bool isPublic, string destinationId)
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
             {
@@ -440,7 +451,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
                     { new StringContent("Cro"), "type" },
                     { new StringContent(name), "name" },
                     { new StringContent(home!.Id), "originNestId" },
-                    { new StringContent(away!.Id), "destinationId" },
+                    { new StringContent(destinationId), "destinationId" },
                     { new StringContent("secret payload"), "content" },
                     { new StringContent(isPublic.ToString()), "isPublic" },
                 }
@@ -450,8 +461,8 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
             return (await response.Content.ReadFromJsonAsync<BirdDto>())!;
         }
 
-        var publicBird = await ComposeAsync("Public Bird", isPublic: true);
-        var privateBird = await ComposeAsync("Private Bird", isPublic: false);
+        var publicBird = await ComposeAsync("Public Bird", isPublic: true, away.Id);
+        var privateBird = await ComposeAsync("Private Bird", isPublic: false, aNest!.Id);
 
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/birds", tokenA));
         response.EnsureSuccessStatusCode();
@@ -480,9 +491,10 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
             new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
         var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
-        var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
-        var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
+        // B gets exactly one personal nest, so the compose destination here is a Hub rather
+        // than a second nest of B's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"B's Away Hub {Guid.NewGuid():N}", 30.0, 40.0);
 
         var composeRequest = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
         {
@@ -492,7 +504,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
                 { new StringContent("Cro"), "type" },
                 { new StringContent("Public Bird"), "name" },
                 { new StringContent(home!.Id), "originNestId" },
-                { new StringContent(away!.Id), "destinationId" },
+                { new StringContent(away.Id), "destinationId" },
                 { new StringContent("hello"), "content" },
                 { new StringContent("true"), "isPublic" },
             }
@@ -527,9 +539,12 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
             new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
         var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
-        var awayResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
-            new { Name = "B's Away", Latitude = 30.0, Longitude = 40.0, IsPublic = true }));
-        var away = await awayResponse.Content.ReadFromJsonAsync<WaypointDto>();
+        // Landing at a Hub is inherently public (BirdService.ComposeAndSendAsync), so a
+        // genuinely-private bird needs a non-Hub destination - A's own nest, reachable
+        // since A and B are already friends.
+        var aNestResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenA,
+            new { Name = "A's Home", Latitude = 50.0, Longitude = 60.0, IsPublic = false }));
+        var aNest = await aNestResponse.Content.ReadFromJsonAsync<WaypointDto>();
 
         var composeRequest = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
         {
@@ -539,7 +554,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
                 { new StringContent("Cro"), "type" },
                 { new StringContent("Private Bird"), "name" },
                 { new StringContent(home!.Id), "originNestId" },
-                { new StringContent(away!.Id), "destinationId" },
+                { new StringContent(aNest!.Id), "destinationId" },
                 { new StringContent("hello"), "content" },
                 { new StringContent("false"), "isPublic" },
             }
@@ -566,6 +581,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private record FriendRequestDto(string Id, string Username);
     private record FriendWaypointDto(string Id, string UserId, string Username, string? Color, double Latitude, double Longitude);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude);
+    private record HubDto(string Id, string Name, double Latitude, double Longitude, string Status, string CreatedByUserId, DateTimeOffset CreatedAt, string? Category, string? ProfilePictureUrl);
     private record BirdDto(string Id, string? CurrentNestId, bool IsTraveling);
     private record FriendBirdDto(
         string Id, string UserId, string Username, string? Color, string? NestFromId, string? NestToId,

@@ -141,7 +141,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var response = await ComposeBirdAsync(token, "Cro", "Speedy", origin.Id, dest.Id, content: "hello");
         response.EnsureSuccessStatusCode();
@@ -160,7 +164,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var response = await ComposeBirdAsync(token, "Cro", "Speedy", origin.Id, dest.Id);
 
@@ -172,7 +180,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var response = await ComposeBirdAsync(token, "Parrot", "Squawks", origin.Id, dest.Id,
             media: (TinyAudioBytes, "audio/mpeg", "clip.mp3"));
@@ -189,7 +201,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var response = await ComposeBirdAsync(token, "Parrot", "Squawks", origin.Id, dest.Id);
 
@@ -201,7 +217,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var response = await ComposeBirdAsync(token, "Parrot", "Squawks", origin.Id, dest.Id, content: "text not allowed");
 
@@ -213,7 +233,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var response = await ComposeBirdAsync(token, "Pigeon", "Slowpoke", origin.Id, dest.Id,
             media: (TinyImageBytes, "image/png", "photo.png"));
@@ -229,7 +253,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var textOnly = await ComposeBirdAsync(token, "Raven", "Messenger", origin.Id, dest.Id, content: "hi");
         Assert.Equal(HttpStatusCode.BadRequest, textOnly.StatusCode);
@@ -251,7 +279,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         var response = await ComposeBirdAsync(token, "Eagle", "Nope", origin.Id, dest.Id, content: "hi");
 
@@ -293,7 +325,11 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     {
         var token = await RegisterAndLoginAsync($"compose-user-{Guid.NewGuid():N}", SeedPassword);
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // (reachable to anyone, no ownership needed) rather than a second nest of the same
+        // user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
         for (var i = 0; i < 5; i++)
         {

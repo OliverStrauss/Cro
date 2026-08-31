@@ -39,6 +39,9 @@ void main() {
     List<FriendBird> friendsBirds = const [],
     String? selectedBirdId,
     ValueChanged<FriendBird>? onSelectFriendBird,
+    bool isAdmin = false,
+    bool addingHub = false,
+    VoidCallback? onCancelAddHub,
   }) {
     return MaterialApp(
       theme: croTheme,
@@ -57,6 +60,9 @@ void main() {
           onSelectHub: (_) {},
           onSelectBird: (_) {},
           onSelectFriendBird: onSelectFriendBird ?? (_) {},
+          isAdmin: isAdmin,
+          addingHub: addingHub,
+          onCancelAddHub: onCancelAddHub,
         ),
       ),
     );
@@ -124,5 +130,26 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('webBirdMarkerGlow')), findsNothing);
+  });
+
+  testWidgets('addingHub banner reads "place" for an admin and "suggest" otherwise', (tester) async {
+    await tester.pumpWidget(buildMap(addingHub: true, isAdmin: true));
+    expect(find.text('Click anywhere on the map to place your new Hub'), findsOneWidget);
+
+    await tester.pumpWidget(buildMap(addingHub: true, isAdmin: false));
+    expect(find.text('Click anywhere on the map to suggest a Hub location'), findsOneWidget);
+  });
+
+  testWidgets('no addingHub banner when not arming a Hub placement', (tester) async {
+    await tester.pumpWidget(buildMap());
+    expect(find.byKey(const Key('webAddHubBanner')), findsNothing);
+  });
+
+  testWidgets('cancelling the addingHub banner calls onCancelAddHub', (tester) async {
+    var cancelled = false;
+    await tester.pumpWidget(buildMap(addingHub: true, onCancelAddHub: () => cancelled = true));
+
+    await tester.tap(find.byKey(const Key('webCancelAddHub')));
+    expect(cancelled, isTrue);
   });
 }

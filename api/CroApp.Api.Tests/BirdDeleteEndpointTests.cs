@@ -142,13 +142,40 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private Task<HttpResponseMessage> DeleteBirdAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/birds/{birdId}", token));
 
+    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/send", token, new { NestId = nestId, Content = content }));
+
+    // Lands a bird idle back at `home` itself, without needing a second nest of the same
+    // user's own. A compose origin must be a nest the caller owns (see
+    // BirdService.ComposeAndSendAsync), so a Hub can't stand in for the origin - instead this
+    // composes out to a same-coordinates Hub (a valid *destination* for anyone) and then uses
+    // the existing /send endpoint to send it straight back to `home`, both hops zero-distance
+    // so each resolves the instant it's next queried. Same trick as LandBirdAtHomeAsync in
+    // BirdSendEndpointTests.cs.
+    private async Task<BirdDto> LandBirdAtHomeAsync(string token, WaypointDto home)
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var bounceHub = await CreateHubAsync(adminToken, $"Bounce Hub {Guid.NewGuid():N}", home.Latitude, home.Longitude);
+
+        var composeResponse = await ComposeBirdAsync(token, "Cro", "Setup Bird", home.Id, bounceHub.Id, content: "hi");
+        composeResponse.EnsureSuccessStatusCode();
+        var composed = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+
+        var backResponse = await SendBirdAsync(token, composed.Id, home.Id);
+        backResponse.EnsureSuccessStatusCode();
+
+        var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", token));
+        listResponse.EnsureSuccessStatusCode();
+        var birds = await listResponse.Content.ReadFromJsonAsync<List<BirdDto>>();
+        return birds!.Single(b => b.Id == composed.Id);
+    }
+
     [Fact]
     public async Task DeleteBird_WhileIdleAtPrivateNest_Succeeds()
     {
         var (_, token) = await RegisterAndLoginAsync($"delete-user-{Guid.NewGuid():N}", SeedPassword);
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
-        var setupOrigin = await CreateNestAsync(token, "Setup", 42.0, -93.5, isPublic: true);
-        var bird = await ComposeAndLandAsync(token, setupOrigin.Id, home.Id);
+        var bird = await LandBirdAtHomeAsync(token, home);
         Assert.False(bird.IsTraveling);
         Assert.Equal(home.Id, bird.CurrentNestId);
 
@@ -165,7 +192,10 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
     {
         var (_, token) = await RegisterAndLoginAsync($"delete-user-{Guid.NewGuid():N}", SeedPassword);
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
-        var away = await CreateNestAsync(token, "Away", 60.0, -93.6, isPublic: true); // genuinely far - stays in flight
+        // A user gets exactly one personal nest, so the far-away destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6); // genuinely far - stays in flight
 
         var composeResponse = await ComposeBirdAsync(token, "Cro", "In Flight", home.Id, away.Id, content: "hi");
         composeResponse.EnsureSuccessStatusCode();
@@ -181,7 +211,13 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
     {
         var (_, token) = await RegisterAndLoginAsync($"delete-user-{Guid.NewGuid():N}", SeedPassword);
         var setupOrigin = await CreateNestAsync(token, "Setup", 42.0, -93.5, isPublic: false);
-        var pub = await CreateNestAsync(token, "Public Spot", 42.0, -93.5, isPublic: true);
+        // A user gets exactly one personal nest, so "somewhere non-private" here is a Hub
+        // rather than a second public nest of the same user's own. Per
+        // BirdService.DeleteAsync's rule (only the caller's own private Waypoint counts as
+        // "home"), a Hub is rejected the same way a public nest was - it's never equal to
+        // the caller's private Waypoint id either.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var pub = await CreateHubAsync(adminToken, $"Public Spot {Guid.NewGuid():N}", 42.0, -93.5);
         var bird = await ComposeAndLandAsync(token, setupOrigin.Id, pub.Id);
         Assert.False(bird.IsTraveling);
         Assert.Equal(pub.Id, bird.CurrentNestId);
@@ -234,8 +270,13 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
         var (_, tokenA) = await RegisterAndLoginAsync($"delete-a-{Guid.NewGuid():N}", SeedPassword);
         var (_, tokenB) = await RegisterAndLoginAsync($"delete-b-{Guid.NewGuid():N}", SeedPassword);
         var home = await CreateNestAsync(tokenA, "Home", 42.0, -93.5, isPublic: false);
-        var setupOrigin = await CreateNestAsync(tokenA, "Setup", 42.0, -93.5, isPublic: true);
-        var bird = await ComposeAndLandAsync(tokenA, setupOrigin.Id, home.Id);
+        // A user gets exactly one personal nest, so this bird is landed at a Hub rather than
+        // bounced back to `home` - irrelevant to this test anyway, since Delete's ownership
+        // check (bird lookup scoped to the caller's own partition) rejects tokenB regardless
+        // of the bird's current nest/traveling state.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var hub = await CreateHubAsync(adminToken, $"Some Hub {Guid.NewGuid():N}", 42.0, -93.5);
+        var bird = await ComposeAndLandAsync(tokenA, home.Id, hub.Id);
 
         var response = await DeleteBirdAsync(tokenB, bird.Id);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -253,21 +294,20 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
     {
         var (_, token) = await RegisterAndLoginAsync($"delete-user-{Guid.NewGuid():N}", SeedPassword);
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
-        var away = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the far-away destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
 
-        // Four genuinely in-flight birds (far distance, stay traveling for the test's
-        // lifetime) plus one landed-at-home bird fill the 5-bird cap. The landed one still
-        // needs to depart from a caller-owned nest, but the 1-private/1-public cap leaves no
-        // room for a third nest to serve as a zero-distance origin - so instead, relocate
-        // `away` on top of `home` right before composing it (already-composed birds keep
-        // their originally-computed ETA; a waypoint move doesn't retroactively touch it).
+        // Four genuinely in-flight birds (far Hub destination, stay traveling for the test's
+        // lifetime) plus one bird bounced back to `home` itself (via LandBirdAtHomeAsync's
+        // same-coordinates-Hub trick, since a compose origin must be a nest the caller owns
+        // and a user only has the one) fill the 5-bird cap.
         for (var i = 0; i < 4; i++)
         {
             (await ComposeBirdAsync(token, "Cro", $"Bird {i}", home.Id, away.Id, content: "hi")).EnsureSuccessStatusCode();
         }
-        (await _client.SendAsync(AuthedRequest(HttpMethod.Put, $"/waypoints/{away.Id}", token,
-            new { Name = "Away", Latitude = home.Latitude, Longitude = home.Longitude }))).EnsureSuccessStatusCode();
-        var landed = await ComposeAndLandAsync(token, away.Id, home.Id);
+        var landed = await LandBirdAtHomeAsync(token, home);
         Assert.False(landed.IsTraveling);
 
         var sixth = await ComposeBirdAsync(token, "Cro", "One Too Many", home.Id, away.Id, content: "hi");

@@ -10,10 +10,9 @@ public class WaypointService(IWaypointRepository waypointRepository) : IWaypoint
     public async Task<Waypoint> CreateAsync(string userId, string name, double latitude, double longitude, bool isPublic)
     {
         var existing = await waypointRepository.ListByUserIdAsync(userId);
-        if (existing.Any(w => w.IsPublic == isPublic))
+        if (existing.Count > 0)
         {
-            var kindLabel = isPublic ? "public" : "private";
-            throw new WaypointServiceException(409, $"You already have a {kindLabel} nest. Delete it before adding another.");
+            throw new WaypointServiceException(409, "You already have a nest. Delete it before adding another.");
         }
 
         var waypoint = new Waypoint(Guid.NewGuid().ToString(), userId, name, latitude, longitude, DateTimeOffset.UtcNow, isPublic);

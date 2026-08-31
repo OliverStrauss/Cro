@@ -11,6 +11,7 @@ class Bird {
   final String type;
   final DateTime? departedAt;
   final DateTime? estimatedArrivalAt;
+  final DateTime? updatedAt;
   final bool isRead;
   // Message payload media - AudioUrl for Parrot, ImageUrl for Pigeon/Raven. Distinct from
   // profilePictureUrl, the bird's own persistent avatar.
@@ -32,6 +33,7 @@ class Bird {
     required this.type,
     this.departedAt,
     this.estimatedArrivalAt,
+    this.updatedAt,
     this.isRead = true,
     this.audioUrl,
     this.imageUrl,
@@ -54,6 +56,7 @@ class Bird {
         estimatedArrivalAt: json['estimatedArrivalAt'] == null
             ? null
             : DateTime.parse(json['estimatedArrivalAt'] as String),
+        updatedAt: json['updatedAt'] == null ? null : DateTime.parse(json['updatedAt'] as String),
         isRead: json['isRead'] as bool,
         audioUrl: json['audioUrl'] as String?,
         imageUrl: json['imageUrl'] as String?,

@@ -15,6 +15,12 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
     private const string DefaultEmulatorConnectionString =
         "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
+    // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
+    // see CLAUDE.md's well-known-local-credentials section. Used here (as HubEndpointTests.cs
+    // already does) to create a Hub for test setup, since a plain user can no longer be given
+    // a second nest of their own to compose an "already at my own nest" bird from.
+    private const string SeedPassword = "correct-horse-battery-staple";
+
     private readonly HttpClient _client;
 
     public BirdArrivalEndpointTests(WebApplicationFactory<Program> factory)
@@ -63,6 +69,14 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
         loginResponse.EnsureSuccessStatusCode();
         var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
         return (created!.Id, body!.Token);
+    }
+
+    private async Task<string> LoginAsync(string username, string password)
+    {
+        var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = password });
+        loginResponse.EnsureSuccessStatusCode();
+        var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
+        return body!.Token;
     }
 
     private static HttpRequestMessage AuthedRequest(HttpMethod method, string uri, string? token, object? body = null)
@@ -115,6 +129,17 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
     private Task<HttpResponseMessage> MarkReadAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/read", token));
 
+    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/send", token, new { NestId = nestId, Content = content }));
+
+    private async Task<HubDto> CreateHubAsync(string token, string name, double lat, double lng)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token,
+            new { Name = name, Latitude = lat, Longitude = lng }));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<HubDto>())!;
+    }
+
     // Small pause after a compose/read write, purely so the emulator's cross-partition query
     // index has caught up with the just-written document before a subsequent GET (a query,
     // not a point read) looks for it - unrelated to flight duration, which the huge
@@ -134,11 +159,19 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
 
         var aNest = await CreateNestAsync(tokenA, "A's Nest");
         var bNest = await CreateNestAsync(tokenB, "B's Nest");
-        var bOrigin = await CreateNestAsync(tokenB, "B's Other Nest", 51.0, 51.0, isPublic: true);
 
-        var ownBirdResponse = await ComposeBirdAsync(tokenB, "Cro", "B's Own Bird", bOrigin.Id, bNest.Id, content: "B's own message");
-        ownBirdResponse.EnsureSuccessStatusCode();
-        var ownBirdB = (await ownBirdResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+        // A user gets exactly one personal nest (see WaypointService.CreateAsync), so B's own
+        // idle bird can no longer be composed from a second nest of B's own - compose it from
+        // bNest itself to a same-class-scoped Hub, then bounce it straight back. The huge
+        // SpeedMultiplier this test class configures means both hops resolve the instant
+        // they're next queried, same as a real cross-user delivery below.
+        var bounceHub = await CreateHubAsync(await LoginAsync("Admin 1", SeedPassword), $"B Bounce Hub {Guid.NewGuid():N}", 51.0, 51.0);
+        var ownBirdComposeResponse = await ComposeBirdAsync(tokenB, "Cro", "B's Own Bird", bNest.Id, bounceHub.Id, content: "B's own message");
+        ownBirdComposeResponse.EnsureSuccessStatusCode();
+        var ownBirdComposed = (await ownBirdComposeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+        var bounceBackResponse = await SendBirdAsync(tokenB, ownBirdComposed.Id, bNest.Id);
+        bounceBackResponse.EnsureSuccessStatusCode();
+        var ownBirdB = (await bounceBackResponse.Content.ReadFromJsonAsync<BirdDto>())!;
 
         var sentResponse = await ComposeBirdAsync(tokenA, "Cro", "A's Bird", aNest.Id, bNest.Id, content: "For you!");
         sentResponse.EnsureSuccessStatusCode();
@@ -185,9 +218,45 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
         Assert.True(arrivedAfter.IsRead);
     }
 
+    [Fact]
+    public async Task NestResidents_AreOrderedNewestArrivalFirst()
+    {
+        var usernameA = $"bird-order-a-{Guid.NewGuid():N}";
+        var usernameB = $"bird-order-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA, new { Username = usernameB }));
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var aNest = await CreateNestAsync(tokenA, "A's Nest");
+        var bNest = await CreateNestAsync(tokenB, "B's Nest");
+
+        var firstResponse = await ComposeBirdAsync(tokenA, "Cro", "First Bird", aNest.Id, bNest.Id, content: "First");
+        firstResponse.EnsureSuccessStatusCode();
+        var firstBird = (await firstResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+        await WaitForIndexingAsync();
+        // Resolves the first bird's arrival (setting its UpdatedAt) strictly before the
+        // second bird is even composed, so the two arrival timestamps can't tie.
+        await GetNestResidentsAsync(tokenB, bNest.Id);
+
+        var secondResponse = await ComposeBirdAsync(tokenA, "Cro", "Second Bird", aNest.Id, bNest.Id, content: "Second");
+        secondResponse.EnsureSuccessStatusCode();
+        var secondBird = (await secondResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+        await WaitForIndexingAsync();
+
+        var residents = await (await GetNestResidentsAsync(tokenB, bNest.Id)).Content.ReadFromJsonAsync<List<BirdDto>>();
+
+        var firstIndex = residents!.FindIndex(b => b.Id == firstBird.Id);
+        var secondIndex = residents.FindIndex(b => b.Id == secondBird.Id);
+        Assert.True(secondIndex >= 0 && firstIndex >= 0 && secondIndex < firstIndex,
+            "the more recently arrived bird should be listed before the earlier one");
+    }
+
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
+    private record HubDto(string Id, string Name, double Latitude, double Longitude, string Status, string CreatedByUserId, DateTimeOffset CreatedAt, string? Category, string? ProfilePictureUrl);
     private record BirdDto(
         string Id,
         string UserId,
