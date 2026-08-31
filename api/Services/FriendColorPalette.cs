@@ -13,7 +13,7 @@ public static class FriendColorPalette
         "#FB8C00",
         "#8E24AA",
         "#00ACC1",
-        "#FDD835",
+        "#D81B60",
         "#6D4C41",
     ];
 
