@@ -26,6 +26,9 @@ void main() {
     required List<Bird> birds,
     DockFilter filter = DockFilter.all,
     bool expanded = false,
+    bool hidden = false,
+    VoidCallback? onHide,
+    VoidCallback? onShow,
     ValueChanged<Bird>? onBirdTap,
   }) {
     return MaterialApp(
@@ -40,6 +43,9 @@ void main() {
           onFilterChanged: (_) {},
           expanded: expanded,
           onToggleExpanded: () {},
+          hidden: hidden,
+          onHide: onHide ?? () {},
+          onShow: onShow ?? () {},
           onBirdTap: onBirdTap ?? (_) {},
           onComposePressed: () {},
         ),
@@ -124,6 +130,35 @@ void main() {
     await tester.pumpWidget(buildDock(birds: []));
     await tester.pump();
     expect(find.byKey(const Key('dockAddBirdCard')), findsOneWidget);
+  });
+
+  testWidgets('tapping Hide swaps the dock for the collapsed Show pill', (tester) async {
+    var hidden = false;
+    await tester.pumpWidget(buildDock(birds: [], onHide: () => hidden = true));
+    await tester.pump();
+
+    expect(find.byKey(const Key('yourBirdsDock')), findsOneWidget);
+    expect(find.byKey(const Key('dockShowPill')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('dockHideButton')));
+    expect(hidden, isTrue);
+  });
+
+  testWidgets('hidden shows only the summary pill, and tapping it calls onShow', (tester) async {
+    var shown = false;
+    final birds = [
+      Bird(id: 'home1', userId: 'u1', name: 'Otto', currentNestId: 'n1', isTraveling: false, type: 'Cro'),
+    ];
+    await tester.pumpWidget(buildDock(birds: birds, hidden: true, onShow: () => shown = true));
+    await tester.pump();
+
+    expect(find.byKey(const Key('yourBirdsDock')), findsNothing);
+    expect(find.byKey(const Key('dockHideButton')), findsNothing);
+    expect(find.byKey(const Key('dockShowPill')), findsOneWidget);
+    expect(find.textContaining('1 home'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('dockShowPill')));
+    expect(shown, isTrue);
   });
 
   testWidgets(

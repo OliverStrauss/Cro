@@ -29,7 +29,9 @@ List<DockBirdView> _sortedForDock(List<DockBirdView> views) {
 /// The persistent "Your birds" dock, overlaid on the content column (never the right
 /// panel) on every screen. Every bird in the caller's flock shows here regardless of
 /// state - a fixed roster, not a feed (see 01_web_shell_and_dock.md). Sorted home → away →
-/// hub → flying-to-a-nest → flying-to-a-hub (see _sortedForDock).
+/// hub → flying-to-a-nest → flying-to-a-hub (see _sortedForDock). Can be put away entirely
+/// (`hidden`) - it then collapses to a small "Show" pill instead (05_web_ui_updates.md item
+/// 7); hidden/shown is independent of expanded/less-detail.
 class YourBirdsDock extends StatelessWidget {
   final List<Bird> birds;
   final List<Waypoint> ownNests;
@@ -39,6 +41,9 @@ class YourBirdsDock extends StatelessWidget {
   final ValueChanged<DockFilter> onFilterChanged;
   final bool expanded;
   final VoidCallback onToggleExpanded;
+  final bool hidden;
+  final VoidCallback onHide;
+  final VoidCallback onShow;
   final ValueChanged<Bird> onBirdTap;
   final VoidCallback onComposePressed;
 
@@ -52,6 +57,9 @@ class YourBirdsDock extends StatelessWidget {
     required this.onFilterChanged,
     required this.expanded,
     required this.onToggleExpanded,
+    required this.hidden,
+    required this.onHide,
+    required this.onShow,
     required this.onBirdTap,
     required this.onComposePressed,
   });
@@ -67,6 +75,46 @@ class YourBirdsDock extends StatelessWidget {
     final homeCount = views.where((v) => v.state == BirdDockState.home).length;
     final flightCount = views.where((v) => v.state == BirdDockState.flight).length;
     final awayCount = views.length - homeCount - flightCount;
+    final summary = '$homeCount home · $flightCount flying · $awayCount away from your nests';
+
+    if (hidden) {
+      return Align(
+        alignment: Alignment.bottomRight,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 22, bottom: 20),
+          child: GestureDetector(
+            key: const Key('dockShowPill'),
+            onTap: onShow,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.34), blurRadius: 22, offset: const Offset(0, 8))],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.arrow_forward_rounded, size: 11, color: Colors.white),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('Your birds', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13)),
+                  const SizedBox(width: 10),
+                  Text(summary, style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
+                  const SizedBox(width: 10),
+                  const Text('Show', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     final filtered = _sortedForDock(views.where((v) {
       switch (filter) {
@@ -100,7 +148,7 @@ class YourBirdsDock extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '$homeCount home · $flightCount flying · $awayCount away from your nests',
+                  summary,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, color: CroColors.fog),
                 ),
@@ -113,6 +161,15 @@ class YourBirdsDock extends StatelessWidget {
                 child: Text(
                   expanded ? 'Less detail' : 'More detail',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                key: const Key('dockHideButton'),
+                onTap: onHide,
+                child: const Text(
+                  'Hide',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog),
                 ),
               ),
             ],
