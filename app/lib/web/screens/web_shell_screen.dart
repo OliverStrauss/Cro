@@ -614,6 +614,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                         selectedHub: _selectedHub,
                         selectedBird: _selectedBird,
                         selectedFriendBird: _selectedFriendBird,
+                        ownBirds: _birds,
                         ownNests: _ownNests,
                         friendWaypoints: _friendWaypoints,
                         hubs: _hubs,

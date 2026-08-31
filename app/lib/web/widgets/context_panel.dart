@@ -29,6 +29,9 @@ class ContextPanel extends StatelessWidget {
   final Hub? selectedHub;
   final Bird? selectedBird;
   final FriendBird? selectedFriendBird;
+  // The caller's own full bird list - only used by NestPanelContent, to find which of the
+  // caller's own birds are currently resting at a friend's nest (see its own doc comment).
+  final List<Bird> ownBirds;
   final List<Waypoint> ownNests;
   final List<Waypoint> friendWaypoints;
   final List<Hub> hubs;
@@ -52,6 +55,7 @@ class ContextPanel extends StatelessWidget {
     this.selectedHub,
     this.selectedBird,
     this.selectedFriendBird,
+    required this.ownBirds,
     required this.ownNests,
     required this.friendWaypoints,
     required this.hubs,
@@ -87,6 +91,7 @@ class ContextPanel extends StatelessWidget {
           key: ValueKey('nest_${selectedNest!.id}'),
           nest: selectedNest!,
           isOwn: selectedNestIsOwn,
+          ownBirds: ownBirds,
           authState: authState,
           onClose: onClose,
           waypointService: waypointService,

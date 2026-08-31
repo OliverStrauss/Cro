@@ -16,12 +16,20 @@ import '../../widgets/waypoint_name_dialog.dart';
 import 'panel_header.dart';
 
 /// The nest detail panel body - own nests get delivered-mail + resident-bird sections
-/// (rename, send onward), friend nests get a privacy-preserving note. Adapted from the
-/// phone app's NestDetailsSheet (same resident-fetch/rename/send logic) into the panel
-/// format instead of a bottom sheet.
+/// (rename, send onward). A friend's nest reuses that same resident-bird section (name,
+/// type, "Send onward/home") for whichever of the caller's OWN birds happen to be resting
+/// there right now - e.g. one you already sent this friend - and otherwise renders nothing
+/// beyond the header, since a friend's nest never reveals anything else about what's there.
+/// Adapted from the phone app's NestDetailsSheet (same resident-fetch/rename/send logic)
+/// into the panel format instead of a bottom sheet.
 class NestPanelContent extends StatefulWidget {
   final Waypoint nest;
   final bool isOwn;
+  // The caller's full own-bird list (already loaded shell-wide) - used only for a friend's
+  // nest, to find which of the caller's own birds are currently parked there without needing
+  // a separate fetch (GET /waypoints/{id}/birds is owner-gated, so it can't be called for a
+  // nest that isn't the caller's own).
+  final List<Bird> ownBirds;
   final AuthState authState;
   final VoidCallback onClose;
   final WaypointService waypointService;
@@ -36,6 +44,7 @@ class NestPanelContent extends StatefulWidget {
     super.key,
     required this.nest,
     required this.isOwn,
+    required this.ownBirds,
     required this.authState,
     required this.onClose,
     required this.waypointService,
@@ -57,6 +66,12 @@ class _NestPanelContentState extends State<NestPanelContent> {
 
   List<Bird> get _ownIdleBirds => _residents.where((b) => b.userId == _currentUserId).toList();
   List<Bird> get _deliveredBirds => _residents.where((b) => b.userId != _currentUserId).toList();
+
+  // Only meaningful for a friend's nest (isOwn's own body uses _ownIdleBirds instead, from
+  // the cross-partition GET /waypoints/{id}/birds fetch, which also needs to see what
+  // friends delivered - this list can't answer that).
+  List<Bird> get _myBirdsHere =>
+      widget.ownBirds.where((b) => b.currentNestId == widget.nest.id && !b.isTraveling).toList();
 
   // Both lists come back from GET /waypoints/{id}/birds already newest-arrival-first (see
   // BirdService.GetNestResidentsAsync's OrderByDescending(UpdatedAt)) - same relative-time
@@ -155,7 +170,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
         widget.friendsService.getFriendsWaypoints(token),
       ]);
       final ownNests = results[0].where((w) => w.id != widget.nest.id);
-      final friendNests = results[1];
+      final friendNests = results[1].where((w) => w.id != widget.nest.id);
       final destinations = [
         ...ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)),
         ...friendNests.map((w) => SendBirdDestination(nestId: w.id, label: '${w.name} (${w.username})')),
@@ -225,6 +240,9 @@ class _NestPanelContentState extends State<NestPanelContent> {
         if (widget.isOwn) ...[
           const SizedBox(height: 16),
           Flexible(child: _ownBody()),
+        ] else if (_myBirdsHere.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Flexible(child: _friendBirdsBody()),
         ],
       ],
     );
@@ -244,14 +262,33 @@ class _NestPanelContentState extends State<NestPanelContent> {
           for (final bird in _deliveredBirds) _deliveredRow(bird),
           const SizedBox(height: 16),
         ],
-        const Text('Birds here', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 9),
-        if (_ownIdleBirds.isEmpty)
-          const Text('This nest is empty', key: Key('nestPanelEmpty'), style: TextStyle(fontSize: 12.5, color: CroColors.fog))
-        else
-          for (final bird in _ownIdleBirds) _residentRow(bird),
+        ..._birdsHereSection(_ownIdleBirds, title: 'Birds here'),
       ],
     );
+  }
+
+  // Only reached when _myBirdsHere is non-empty (see build()) - e.g. Oliver viewing Annie's
+  // nest, where a bird he already sent her is currently resting. Reuses the exact same row
+  // + send flow as an own nest's "Birds here" - the same "send home or onward" action works
+  // unchanged since _openSendFlow already excludes whichever nest the bird is currently at
+  // (this one) from both the own- and friend-nest destination lists.
+  Widget _friendBirdsBody() {
+    return ListView(
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+      children: _birdsHereSection(_myBirdsHere, title: 'Your birds here'),
+    );
+  }
+
+  List<Widget> _birdsHereSection(List<Bird> birds, {required String title}) {
+    return [
+      Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 9),
+      if (birds.isEmpty)
+        const Text('This nest is empty', key: Key('nestPanelEmpty'), style: TextStyle(fontSize: 12.5, color: CroColors.fog))
+      else
+        for (final bird in birds) _residentRow(bird),
+    ];
   }
 
   Widget _deliveredRow(Bird bird) {
