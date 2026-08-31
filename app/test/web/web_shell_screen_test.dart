@@ -358,7 +358,8 @@ void main() {
     expect(find.text('Percy joined your flock'), findsOneWidget);
     // Regression check: the popup must size to its own content (380px), not stretch to fill
     // the whole screen - it lives in an Overlay entry, whose root is forced to fill the
-    // screen unless explicitly wrapped to avoid that (see TopBar's OverlayEntry builders).
+    // screen unless explicitly wrapped to avoid that (see FloatingActionsCluster's
+    // OverlayEntry builders).
     expect(tester.getSize(find.byKey(const Key('webJourneyLogDropdown'))).width, 380);
 
     await tester.tap(find.byKey(const Key('webJourneyLogClose')));
@@ -403,6 +404,21 @@ void main() {
     await tester.tap(find.byKey(const Key('webMarkAllReadButton')));
     await tester.pumpAndSettle();
     expect(eventService.markAllCalled, isTrue);
+  });
+
+  testWidgets('empty notifications dropdown is just its header - no placeholder, no mark-all-read', (tester) async {
+    setDesktopSize(tester);
+    eventService.notificationsToReturn = [];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webNotificationsDropdown')), findsOneWidget);
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.byKey(const Key('webMarkAllReadButton')), findsNothing);
+    expect(find.text('Nothing yet'), findsNothing);
   });
 
   testWidgets('notification rows show a kind-tinted glyph and a relative-time line', (tester) async {

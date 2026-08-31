@@ -4,15 +4,13 @@ import '../../theme.dart';
 import '../models/event.dart';
 import 'journey_log_panel.dart';
 
-/// The 70px top bar: screen title/subtitle, a live-polling indicator, the journey log
-/// trigger, and the notification bell. Both the journey log and notifications open as
-/// overlay popups anchored to their trigger button - see 03_journey_log_popup.md - and are
-/// mutually exclusive (opening one closes the other). The "Send a bird" action used to live
-/// here too, but every screen already has its own send/compose entry point (the dock's "+"
-/// card, the context panel, a nest's resident-bird tiles), so this was just a duplicate.
-class TopBar extends StatefulWidget {
-  final String title;
-  final String subtitle;
+/// The floating top-right action cluster (Send a bird / Journey log / notification bell)
+/// that replaced the old 70px top bar - see 05_web_ui_updates.md item 1. It's positioned by
+/// its caller (WebShellScreen) as an overlay inside the content column's own Stack, so it
+/// never overlaps the right-hand context panel the way a full-width header would have.
+/// Every screen's title/subtitle and the "Live" polling indicator went away with the bar
+/// itself - polling still runs, it's just no longer advertised in the UI.
+class FloatingActionsCluster extends StatefulWidget {
   final int unreadCount;
   final List<AppEvent> notifications;
   final VoidCallback onMarkAllRead;
@@ -21,11 +19,10 @@ class TopBar extends StatefulWidget {
   final bool eventsLoading;
   final String? eventsError;
   final VoidCallback onRetryEvents;
+  final VoidCallback onComposePressed;
 
-  const TopBar({
+  const FloatingActionsCluster({
     super.key,
-    required this.title,
-    required this.subtitle,
     required this.unreadCount,
     required this.notifications,
     required this.onMarkAllRead,
@@ -34,13 +31,14 @@ class TopBar extends StatefulWidget {
     required this.eventsLoading,
     required this.eventsError,
     required this.onRetryEvents,
+    required this.onComposePressed,
   });
 
   @override
-  State<TopBar> createState() => _TopBarState();
+  State<FloatingActionsCluster> createState() => _FloatingActionsClusterState();
 }
 
-class _TopBarState extends State<TopBar> {
+class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
   // Shared between each trigger button and its own popup's TapRegion so pressing a trigger
   // while its popup is already open is handled purely by that button's onTap toggle, rather
   // than also registering as an "outside" tap on its own popup and racing with the toggle.
@@ -53,7 +51,7 @@ class _TopBarState extends State<TopBar> {
   OverlayEntry? _journeyEntry;
 
   @override
-  void didUpdateWidget(covariant TopBar oldWidget) {
+  void didUpdateWidget(covariant FloatingActionsCluster oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Keep an already-open dropdown's contents (unread counts, mark-all-read having just
     // run, freshly loaded events) in sync with new data instead of only refreshing on the
@@ -81,14 +79,13 @@ class _TopBarState extends State<TopBar> {
       return;
     }
     _closeJourneyLog();
-    // A dropdown built from a StatefulWidget nested a few levels deep (here, inside the top
-    // bar's own Row) only ever paints within that Row's stacking position - a
-    // later-painted sibling elsewhere on the page (the map, the dock) would paint over any
-    // part of it that visually overflows outside the top bar's own bounds. Inserting into
-    // the app's root Overlay via a LayerLink is the standard fix: the dropdown becomes a
-    // top-level layer that always paints above the rest of the page, positioned relative to
-    // the bell via CompositedTransformFollower regardless of where the bell itself sits in
-    // the tree.
+    // A dropdown built from a StatefulWidget nested a few levels deep only ever paints
+    // within its parent's own stacking position - a later-painted sibling elsewhere on the
+    // page (the map, the dock) would paint over any part of it that visually overflows
+    // outside those bounds. Inserting into the app's root Overlay via a LayerLink is the
+    // standard fix: the dropdown becomes a top-level layer that always paints above the
+    // rest of the page, positioned relative to the bell via CompositedTransformFollower
+    // regardless of where the bell itself sits in the tree.
     _dropdownEntry = OverlayEntry(
       // Align, not just CompositedTransformFollower directly: an OverlayEntry's builder
       // result sits as a non-Positioned child of the Overlay's own internal Stack, which
@@ -194,144 +191,138 @@ class _TopBarState extends State<TopBar> {
   Widget _timelineBar(bool active) =>
       Container(width: 2, height: 4, color: (active ? CroColors.deepWaypoint : CroColors.fog).withValues(alpha: 0.45));
 
+  // Both popup trigger tiles (journey log, bell) share this 40px card treatment - a soft
+  // shadow instead of Material's own generic elevation shadow, matching this web shell's
+  // established convention (see your_birds_dock.dart's dock shadow).
+  Widget _triggerTile({required Key key, required Color bg, required VoidCallback onTap, required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.16), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          key: key,
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: SizedBox(width: 40, height: 40, child: child),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final open = _dropdownEntry != null;
     final journeyOpen = _journeyEntry != null;
-    return Container(
-      height: 70,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: CroColors.ink.withValues(alpha: 0.08))),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  widget.title,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4))],
+          ),
+          child: Material(
+            color: CroColors.waypointBlue,
+            borderRadius: BorderRadius.circular(11),
+            child: InkWell(
+              key: const Key('webSendBirdButton'),
+              borderRadius: BorderRadius.circular(11),
+              onTap: widget.onComposePressed,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text('Send a bird', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  widget.subtitle,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: CroColors.fog),
-                ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(color: CroColors.success, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        TapRegion(
+          groupId: _journeyGroup,
+          child: CompositedTransformTarget(
+            link: _journeyLink,
+            child: _triggerTile(
+              key: const Key('webJourneyLogButton'),
+              bg: journeyOpen ? CroColors.waypointBlue.withValues(alpha: 0.16) : Colors.white,
+              onTap: _toggleJourneyLog,
+              child: Tooltip(
+                message: 'Journey log',
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _timelineDot(journeyOpen),
+                    const SizedBox(height: 2),
+                    _timelineBar(journeyOpen),
+                    const SizedBox(height: 2),
+                    _timelineDot(journeyOpen),
+                    const SizedBox(height: 2),
+                    _timelineBar(journeyOpen),
+                    const SizedBox(height: 2),
+                    _timelineDot(journeyOpen),
+                  ],
+                ),
               ),
-              const SizedBox(width: 7),
-              const Text('Live', style: TextStyle(fontSize: 12, color: CroColors.fog)),
-            ],
+            ),
           ),
-          const SizedBox(width: 16),
-          TapRegion(
-            groupId: _journeyGroup,
-            child: CompositedTransformTarget(
-              link: _journeyLink,
-              child: Material(
-                color: journeyOpen ? CroColors.waypointBlue.withValues(alpha: 0.16) : CroColors.warmSurface,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  key: const Key('webJourneyLogButton'),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: _toggleJourneyLog,
-                  child: Tooltip(
-                    message: 'Journey log',
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _timelineDot(journeyOpen),
-                          const SizedBox(height: 2),
-                          _timelineBar(journeyOpen),
-                          const SizedBox(height: 2),
-                          _timelineDot(journeyOpen),
-                          const SizedBox(height: 2),
-                          _timelineBar(journeyOpen),
-                          const SizedBox(height: 2),
-                          _timelineDot(journeyOpen),
-                        ],
+        ),
+        const SizedBox(width: 10),
+        TapRegion(
+          groupId: _notifGroup,
+          child: CompositedTransformTarget(
+            link: _bellLink,
+            child: _triggerTile(
+              key: const Key('webNotificationBell'),
+              bg: open ? CroColors.waypointBlue.withValues(alpha: 0.16) : Colors.white,
+              onTap: _toggleDropdown,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.notifications_outlined,
+                    size: 19,
+                    color: open ? CroColors.deepWaypoint : CroColors.fog,
+                  ),
+                  if (widget.unreadCount > 0)
+                    Positioned(
+                      top: -3,
+                      right: -3,
+                      child: Container(
+                        key: const Key('webNotificationBadge'),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: CroColors.alertAway,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Text(
+                          widget.unreadCount > 99 ? '99+' : '${widget.unreadCount}',
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          TapRegion(
-            groupId: _notifGroup,
-            child: CompositedTransformTarget(
-              link: _bellLink,
-              child: Material(
-                color: open ? CroColors.waypointBlue.withValues(alpha: 0.16) : CroColors.warmSurface,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  key: const Key('webNotificationBell'),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: _toggleDropdown,
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      alignment: Alignment.center,
-                      children: [
-                        Icon(
-                          Icons.notifications_outlined,
-                          size: 19,
-                          color: open ? CroColors.deepWaypoint : CroColors.fog,
-                        ),
-                        if (widget.unreadCount > 0)
-                          Positioned(
-                            top: -3,
-                            right: -3,
-                            child: Container(
-                              key: const Key('webNotificationBadge'),
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: CroColors.alertAway,
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                              child: Text(
-                                widget.unreadCount > 99 ? '99+' : '${widget.unreadCount}',
-                                style: const TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -404,6 +395,10 @@ class _NotificationsDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Empty means empty (05_web_ui_updates.md item 5): when there's nothing to show, the
+    // dropdown is just its header - no "Nothing yet" placeholder, no divider, and no
+    // "Mark all read" (there's nothing to mark).
+    final hasNotifications = notifications.isNotEmpty;
     return _PopupSurface(
       key: const Key('webNotificationsDropdown'),
       width: 372,
@@ -421,24 +416,20 @@ class _NotificationsDropdown extends StatelessWidget {
                     style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
                   ),
                 ),
-                GestureDetector(
-                  key: const Key('webMarkAllReadButton'),
-                  onTap: onMarkAllRead,
-                  child: const Text(
-                    'Mark all read',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                if (hasNotifications)
+                  GestureDetector(
+                    key: const Key('webMarkAllReadButton'),
+                    onTap: onMarkAllRead,
+                    child: const Text(
+                      'Mark all read',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
-          const Divider(height: 1),
-          if (notifications.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text('Nothing yet', style: TextStyle(color: CroColors.fog)),
-            )
-          else
+          if (hasNotifications) ...[
+            const Divider(height: 1),
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,
@@ -496,6 +487,7 @@ class _NotificationsDropdown extends StatelessWidget {
                 },
               ),
             ),
+          ],
         ],
       ),
     );

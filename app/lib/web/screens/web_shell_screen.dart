@@ -27,8 +27,8 @@ import '../services/event_service.dart';
 import '../state/web_shell_controller.dart';
 import '../widgets/compose_bird_modal.dart';
 import '../widgets/context_panel.dart';
+import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
-import '../widgets/top_bar.dart';
 import '../widgets/your_birds_dock.dart';
 import 'web_friends_screen.dart';
 import 'web_hubs_screen.dart';
@@ -36,11 +36,13 @@ import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
 import 'web_you_screen.dart';
 
-/// Top-level widget for the web shell (rail + top bar + content + dock + right panel) - the
-/// kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart. Owns every piece of
-/// shell state (nav selection, panel selection, dock filter/expanded, map filter) the same
-/// way HomeScreen owns tab selection: one StatefulWidget, plain setState, no state-mgmt
-/// package (none exists anywhere else in this codebase).
+/// Top-level widget for the web shell (rail + content + floating actions cluster + dock +
+/// right panel) - the kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart.
+/// There is no top bar: the floating actions cluster (Send a bird / journey log / bell) and
+/// the dock both overlay the content column instead (see 05_web_ui_updates.md item 1). Owns
+/// every piece of shell state (nav selection, panel selection, dock filter/expanded, map
+/// filter) the same way HomeScreen owns tab selection: one StatefulWidget, plain setState,
+/// no state-mgmt package (none exists anywhere else in this codebase).
 class WebShellScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService? waypointService;
@@ -528,14 +530,6 @@ class WebShellScreenState extends State<WebShellScreen> {
       );
     }
 
-    final titles = switch (_selectedNav) {
-      WebNavItem.map => ('Map', 'Everything your flock can reach'),
-      WebNavItem.nests => ('Nests', 'Your roosts and the ones your friends keep'),
-      WebNavItem.hubs => ('Hubs', 'Public landmarks with a shared board'),
-      WebNavItem.friends => ('Friends', 'Who you can send to, and who is asking'),
-      WebNavItem.you => ('You', 'Your keeper account'),
-    };
-
     return Scaffold(
       body: Row(
         children: [
@@ -549,43 +543,40 @@ class WebShellScreenState extends State<WebShellScreen> {
             onAvatarTap: () => _selectNav(WebNavItem.you),
           ),
           Expanded(
-            child: Column(
+            child: Stack(
               children: [
-                TopBar(
-                  title: titles.$1,
-                  subtitle: titles.$2,
-                  unreadCount: _notifications.where((n) => !n.isRead).length,
-                  notifications: _notifications,
-                  onMarkAllRead: _markAllNotificationsRead,
-                  onOpenNotification: _openNotification,
-                  events: _events,
-                  eventsLoading: false,
-                  eventsError: null,
-                  onRetryEvents: _loadData,
+                Positioned.fill(child: _buildActiveScreen()),
+                Positioned(
+                  top: 18,
+                  right: 22,
+                  child: FloatingActionsCluster(
+                    unreadCount: _notifications.where((n) => !n.isRead).length,
+                    notifications: _notifications,
+                    onMarkAllRead: _markAllNotificationsRead,
+                    onOpenNotification: _openNotification,
+                    events: _events,
+                    eventsLoading: false,
+                    eventsError: null,
+                    onRetryEvents: _loadData,
+                    onComposePressed: _onComposePressed,
+                  ),
                 ),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(child: _buildActiveScreen()),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: YourBirdsDock(
-                          key: _dockKey,
-                          birds: _birds,
-                          ownNests: _ownNests,
-                          friendWaypoints: _friendWaypoints,
-                          hubs: _hubs,
-                          filter: _dockFilter,
-                          onFilterChanged: (f) => setState(() => _dockFilter = f),
-                          expanded: _dockExpanded,
-                          onToggleExpanded: () => setState(() => _dockExpanded = !_dockExpanded),
-                          onBirdTap: _selectBird,
-                          onComposePressed: _onComposePressed,
-                        ),
-                      ),
-                    ],
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: YourBirdsDock(
+                    key: _dockKey,
+                    birds: _birds,
+                    ownNests: _ownNests,
+                    friendWaypoints: _friendWaypoints,
+                    hubs: _hubs,
+                    filter: _dockFilter,
+                    onFilterChanged: (f) => setState(() => _dockFilter = f),
+                    expanded: _dockExpanded,
+                    onToggleExpanded: () => setState(() => _dockExpanded = !_dockExpanded),
+                    onBirdTap: _selectBird,
+                    onComposePressed: _onComposePressed,
                   ),
                 ),
               ],

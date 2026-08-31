@@ -88,7 +88,9 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       key: const Key('webNestsScreen'),
-      padding: const EdgeInsets.fromLTRB(26, 24, 26, 240),
+      // Top padding keeps content clear of the floating actions cluster (no top bar - see
+      // 05_web_ui_updates.md item 1).
+      padding: const EdgeInsets.fromLTRB(26, 74, 26, 240),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
