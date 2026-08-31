@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/waypoint.dart';
@@ -37,6 +38,7 @@ void main() {
 
   Widget buildMap({
     List<FriendBird> friendsBirds = const [],
+    List<Friend> friends = const [],
     String? selectedBirdId,
     ValueChanged<FriendBird>? onSelectFriendBird,
     bool isAdmin = false,
@@ -52,6 +54,7 @@ void main() {
           birds: const [],
           friendsBirds: friendsBirds,
           hubs: const <Hub>[],
+          friends: friends,
           selectedNestId: null,
           selectedHubId: null,
           selectedBirdId: selectedBirdId,
@@ -151,5 +154,19 @@ void main() {
 
     await tester.tap(find.byKey(const Key('webCancelAddHub')));
     expect(cancelled, isTrue);
+  });
+
+  testWidgets('Trails legend lists your trails, each friend, then Hubs', (tester) async {
+    final friends = [
+      Friend(userId: 'u2', username: 'mia_c', color: '#E8714A'),
+      Friend(userId: 'u3', username: 'sam_r', color: '#4FA97C'),
+    ];
+    await tester.pumpWidget(buildMap(friends: friends));
+
+    expect(find.byKey(const Key('webMapTrailsLegend')), findsOneWidget);
+    expect(find.text('Your trails'), findsOneWidget);
+    expect(find.text('mia_c'), findsOneWidget);
+    expect(find.text('sam_r'), findsOneWidget);
+    expect(find.text('Hubs'), findsOneWidget);
   });
 }

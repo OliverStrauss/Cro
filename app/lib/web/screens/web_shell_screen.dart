@@ -628,6 +628,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           birds: _birds,
           friendsBirds: _friendsBirds,
           hubs: _hubs,
+          friends: _friends,
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
           selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id,

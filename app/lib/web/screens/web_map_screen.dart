@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../models/bird.dart';
+import '../../models/friend.dart';
 import '../../models/friend_bird.dart';
 import '../../models/hub.dart';
 import '../../models/waypoint.dart';
@@ -23,14 +24,18 @@ class WebMapScreen extends StatefulWidget {
   final List<Bird> birds;
   final List<FriendBird> friendsBirds;
   final List<Hub> hubs;
+  // Only used for the Trails legend's per-friend rows (username + trail color) -
+  // WebShellScreen already loads this for the Friends screen and rail badge.
+  final List<Friend> friends;
   final String? selectedNestId;
   final String? selectedHubId;
   // Whichever bird's panel is currently open (own or a friend's) - that marker gets a glow
   // on the map so "the bird you're following" reads at a glance among the others in flight.
   final String? selectedBirdId;
-  // Measured height of the "Your birds" dock, passed down so a future bottom-anchored
-  // overlay (a trail legend, a toast) can sit above it instead of underneath it -
-  // flutter_map 8.x has no persistent camera-viewport-padding option (only a one-shot
+  // Measured height of the "Your birds" dock - the Trails legend sits this far above the
+  // dock's actual current height (collapsed or not - see YourBirdsDock's hidden pill),
+  // rather than a fixed offset that would either overlap the dock or leave a gap once it's
+  // hidden. flutter_map 8.x has no persistent camera-viewport-padding option (only a one-shot
   // CameraFit.padding for explicit bounds fits), so this doesn't shift the map/markers
   // themselves the way the design doc's own coordinate-rescaling prototype hack did.
   final double bottomInset;
@@ -63,6 +68,7 @@ class WebMapScreen extends StatefulWidget {
     required this.birds,
     required this.friendsBirds,
     required this.hubs,
+    this.friends = const [],
     required this.selectedNestId,
     required this.selectedHubId,
     this.selectedBirdId,
@@ -369,7 +375,58 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
               ),
             ),
           ),
+        Positioned(left: 22, bottom: widget.bottomInset + 20, child: _TrailsLegend(friends: widget.friends)),
       ],
+    );
+  }
+}
+
+/// Bottom-left legend (05_web_ui_updates.md item 4): the caller's own trail color, then one
+/// row per friend (their real trail color/username - the design mock's fabricated "mia_c"/
+/// "sam_r" rows are stand-ins for this), then Hubs. Filter chips (also item 4) are
+/// deliberately out of scope for now - see issue tracker.
+class _TrailsLegend extends StatelessWidget {
+  final List<Friend> friends;
+
+  const _TrailsLegend({required this.friends});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      (Theme.of(context).colorScheme.primary, 'Your trails'),
+      for (final f in friends) (hexToColor(f.color ?? '#6B7280'), f.username),
+      (CroColors.deliveryAmber, 'Hubs'),
+    ];
+    return Container(
+      key: const Key('webMapTrailsLegend'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.93),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'TRAILS',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.4),
+          ),
+          const SizedBox(height: 6),
+          for (final (color, label) in rows) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 18, height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(width: 8),
+                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
