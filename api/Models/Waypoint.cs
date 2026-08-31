@@ -2,12 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace CroApp.Api.Models;
 
-// Id is a generated GUID (a user has exactly one private and one public nest, see
-// IsPublic below), and UserId is the owning user's id and the partition key - one
+// Id is a generated GUID, and UserId is the owning user's id and the partition key - one
 // partition per user keeps "list all of a user's nests" a single-partition query and
-// "get/update/delete one nest" a point op. IsPublic is set once at creation
-// (WaypointService rejects a second nest of the same kind) and is not editable
-// afterward, since flipping it could silently violate the one-of-each invariant.
+// "get/update/delete one nest" a point op. A user gets exactly one personal nest total
+// (WaypointService rejects a second, of either kind), always created private now that the
+// frontend no longer offers a public choice - Hubs are the only public landmark type.
+// IsPublic is set once at creation and not editable afterward; older nests created back
+// when the choice existed may still be true.
 // ProfilePictureUrl is the nest's own picture, set via PUT /waypoints/{id}/picture - null
 // until the nest's author sets one, in which case callers fall back to the owner's own
 // profile picture (resolved at the /waypoints and /friends/waypoints endpoints, not stored

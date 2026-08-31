@@ -445,11 +445,6 @@ void main() {
     tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
     await tester.pumpAndSettle();
 
-    // Neither slot is filled yet, so the kind picker appears before the name dialog.
-    expect(find.text('Add which kind of nest?'), findsOneWidget);
-    await tester.tap(find.text('Private nest'));
-    await tester.pumpAndSettle();
-
     expect(find.byKey(const Key('waypointNameField')), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('waypointNameField')), 'Front Porch');
@@ -1813,11 +1808,6 @@ void main() {
       await tester.pumpAndSettle();
 
       tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
-      await tester.pumpAndSettle();
-
-      // Neither nest slot is filled yet, so the kind picker appears before the name dialog.
-      expect(find.text('Add which kind of nest?'), findsOneWidget);
-      await tester.tap(find.text('Private nest'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('waypointNameField')), findsOneWidget);

@@ -102,6 +102,7 @@ class _HubPanelContentState extends State<HubPanelContent> {
     final hub = widget.hub;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
           avatar: Container(
@@ -131,7 +132,7 @@ class _HubPanelContentState extends State<HubPanelContent> {
           child: Text('The board', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
         ),
         const SizedBox(height: 8),
-        Expanded(child: _body()),
+        Flexible(child: _body()),
       ],
     );
   }
@@ -166,6 +167,7 @@ class _HubPanelContentState extends State<HubPanelContent> {
       onRefresh: _load,
       child: ListView.builder(
         key: const Key('hubPanelMessageList'),
+        shrinkWrap: true,
         padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
         itemCount: _messages.length,
         itemBuilder: (context, i) {

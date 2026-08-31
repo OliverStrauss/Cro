@@ -428,33 +428,37 @@ class WebShellScreenState extends State<WebShellScreen> {
     }
   }
 
+  // A user gets exactly one personal nest, always private now (Hubs are the only public
+  // landmark type), enforced server-side by WaypointService.CreateAsync. Once one already
+  // exists, placing a new point moves it instead of erroring - see _startAddNest/
+  // WebNestsScreen's "+ Add a nest" row, which becomes "Move nest" once _ownNests is
+  // non-empty but arms the same _addingNest flow either way.
   Future<void> _placeNest(LatLng point) async {
     setState(() => _addingNest = false);
-    // A user gets exactly one personal nest, enforced server-side by
-    // WaypointService.CreateAsync - checked here too so the picker/name dialogs below never
-    // even open for a no-op add.
+
     if (_ownNests.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You already have a nest')),
-      );
+      final existing = _ownNests.first;
+      try {
+        await _waypointService.updateWaypoint(
+          widget.authState.token!,
+          existing.id,
+          name: existing.name,
+          latitude: point.latitude,
+          longitude: point.longitude,
+        );
+        await _loadData();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
       return;
     }
 
-    final isPublic = await showDialog<bool>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Add which kind of nest?'),
-        children: [
-          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(false), child: const Text('Private nest')),
-          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(true), child: const Text('Public nest')),
-        ],
-      ),
-    );
-    if (isPublic == null || !mounted) return;
-
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => WaypointNameDialog(kindLabel: isPublic ? 'Public nest' : 'Private nest'),
+      builder: (context) => const WaypointNameDialog(),
     );
     if (name == null || name.trim().isEmpty || !mounted) return;
 
@@ -464,7 +468,7 @@ class WebShellScreenState extends State<WebShellScreen> {
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
-        isPublic: isPublic,
+        isPublic: false,
       );
       await _loadData();
     } catch (e) {
@@ -555,6 +559,12 @@ class WebShellScreenState extends State<WebShellScreen> {
 
     return Scaffold(
       body: Row(
+        // ContextPanel now hugs its content's height instead of always filling the screen
+        // (see NestPanelContent/HubPanelContent/BirdPanelContent/FriendBirdPanelContent's
+        // mainAxisSize.min) - crossAxisAlignment.start keeps it flush against the top-right
+        // corner instead of the Row's default vertical centering. IconRail fills to the
+        // Row's max height on its own regardless of this.
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconRail(
             selected: _selectedNav,

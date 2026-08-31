@@ -192,6 +192,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
           avatar: CircleAvatar(radius: 26, backgroundColor: color, child: const Icon(Icons.home, color: Colors.white)),
@@ -221,26 +222,11 @@ class _NestPanelContentState extends State<NestPanelContent> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: widget.isOwn ? _ownBody() : _friendNote(),
-        ),
+        if (widget.isOwn) ...[
+          const SizedBox(height: 16),
+          Flexible(child: _ownBody()),
+        ],
       ],
-    );
-  }
-
-  Widget _friendNote() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-        decoration: BoxDecoration(color: CroColors.warmSurface, borderRadius: BorderRadius.circular(12)),
-        child: Text(
-          'Send a bird here and ${widget.nest.username} will find it waiting. You can see the nest '
-          'and its trail color, never what is inside it.',
-          style: const TextStyle(fontSize: 12.5, height: 1.5),
-        ),
-      ),
     );
   }
 
@@ -249,6 +235,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
       return const Center(key: Key('nestPanelResidentsLoading'), child: CircularProgressIndicator());
     }
     return ListView(
+      shrinkWrap: true,
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
       children: [
         if (_deliveredBirds.isNotEmpty) ...[

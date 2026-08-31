@@ -326,9 +326,11 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Click anywhere on the map to place your new nest',
-                      style: TextStyle(fontSize: 12.5, color: Colors.white),
+                    Text(
+                      widget.ownNests.isEmpty
+                          ? 'Click anywhere on the map to place your new nest'
+                          : 'Click anywhere on the map to move your nest',
+                      style: const TextStyle(fontSize: 12.5, color: Colors.white),
                     ),
                     const SizedBox(width: 14),
                     GestureDetector(

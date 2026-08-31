@@ -218,22 +218,55 @@ void main() {
     expect(followed, isTrue);
   });
 
-  testWidgets('a bird at a hub shows "Parked at a public hub, not your nest"', (tester) async {
+  testWidgets('a bird at a hub shows the "At a hub" chip, a progress bar, but no note text', (tester) async {
     final bird = Bird(id: 'b7', userId: 'u1', name: 'Fen', currentNestId: 'h1', isTraveling: false, type: 'Cro');
     await tester.pumpWidget(build(bird));
     await tester.pump();
 
     expect(find.text('At a hub'), findsOneWidget);
-    expect(find.text('Parked at a public hub, not your nest'), findsOneWidget);
+    expect(find.byKey(const Key('birdPanelProgressNote')), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byKey(const Key('birdPanelSendOnward')), findsOneWidget);
+    expect(find.byKey(const Key('birdPanelCallItHome')), findsOneWidget);
   });
 
-  testWidgets('a bird resting at a friend nest shows "Away from your nests"', (tester) async {
+  testWidgets('a bird resting at a friend nest names the owner, with no progress bar or note', (tester) async {
     final bird = Bird(id: 'b8', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
     await tester.pumpWidget(build(bird));
     await tester.pump();
 
-    expect(find.text('Away'), findsOneWidget);
-    expect(find.text('Away from your nests'), findsOneWidget);
+    expect(find.text("At mia's nest"), findsOneWidget);
+    expect(find.text('Away'), findsNothing);
+    expect(find.byKey(const Key('birdPanelProgressNote')), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byKey(const Key('birdPanelSendOnward')), findsOneWidget);
+    expect(find.byKey(const Key('birdPanelCallItHome')), findsOneWidget);
+  });
+
+  testWidgets('"Send onward" from a friend nest offers both own and other friend nests as destinations',
+      (tester) async {
+    var dataChanged = false;
+    final bird = Bird(id: 'b10', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(bird, ownNests: [ownNest, ownNest2], onDataChanged: () => dataChanged = true));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdPanelSendOnward')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
+    await tester.pumpAndSettle();
+    // Both the sender's own nests and the current friend nest's own name should be offered
+    // (f1 itself, the bird's current nest, is excluded) - Cabin (own) is present here.
+    expect(find.text('Cabin').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Cabin').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
+    await tester.pumpAndSettle();
+
+    expect(birdService.lastSendBirdId, 'b10');
+    expect(birdService.lastSendNestId, 'n2');
+    expect(dataChanged, isTrue);
   });
 
   testWidgets('"Call it home" opens the send dialog and calls BirdService.sendBird', (tester) async {

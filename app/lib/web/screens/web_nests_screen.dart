@@ -94,10 +94,11 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Always visible, left-aligned (05_web_ui_updates.md item 6) - no count line, and
-          // no "already have a nest" note. A user still gets exactly one personal nest (see
-          // WaypointService.CreateAsync); past that limit, _placeNest's own snackbar guard
-          // (see WebShellScreen) is what actually stops the add, once they tap the map.
+          // Always visible, left-aligned (05_web_ui_updates.md item 6) - no count line. A
+          // user still gets exactly one personal nest (see WaypointService.CreateAsync);
+          // once they already have one this becomes "Move nest" instead - _placeNest (see
+          // WebShellScreen) relocates the existing one rather than erroring, once they tap
+          // the map.
           OutlinedButton(
             key: const Key('webAddNestButton'),
             onPressed: widget.onStartAddNest,
@@ -105,7 +106,7 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
               foregroundColor: CroColors.deepWaypoint,
               side: BorderSide(color: CroColors.waypointBlue.withValues(alpha: 0.6), width: 1.5),
             ),
-            child: const Text('+ Add a nest'),
+            child: Text(widget.ownNests.isEmpty ? '+ Add a nest' : 'Move nest'),
           ),
           const SizedBox(height: 16),
           if (widget.ownNests.isEmpty)

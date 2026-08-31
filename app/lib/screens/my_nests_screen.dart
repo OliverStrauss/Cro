@@ -114,35 +114,9 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
     }
   }
 
-  // A user gets exactly one personal nest (public or private, never both), enforced
-  // server-side by WaypointService.CreateAsync - "Add a nest" is only ever reachable here
-  // when _nests is empty (see _buildBody), so this always needs to ask which kind. Returns
-  // null if the user backs out of the picker.
-  Future<bool?> _resolveNestKindToAdd() {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Add which kind of nest?'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Private nest'),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Public nest'),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // A user gets exactly one personal nest, always private now - Hubs are the only public
+  // landmark type. Enforced server-side by WaypointService.CreateAsync.
   Future<void> _addNest() async {
-    final isPublic = await _resolveNestKindToAdd();
-    if (isPublic == null || !mounted) {
-      return;
-    }
-
     final point = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute(
         builder: (_) => MapScreen(
@@ -158,9 +132,7 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
 
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => WaypointNameDialog(
-        kindLabel: isPublic ? 'Public nest' : 'Private nest',
-      ),
+      builder: (context) => const WaypointNameDialog(),
     );
     if (name == null || name.trim().isEmpty) {
       return;
@@ -172,7 +144,39 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
-        isPublic: isPublic,
+        isPublic: false,
+      );
+      await _loadNests();
+    } catch (e) {
+      _showToast(e.toString(), isError: true);
+    }
+  }
+
+  // Once a nest already exists, the same "+ Add a nest" row becomes "Move nest" instead
+  // of being hidden - relocates the existing nest to a newly picked point rather than
+  // creating (and erroring on) a second one.
+  Future<void> _moveNest(Waypoint existing) async {
+    final point = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (_) => MapScreen(
+          authState: widget.authState,
+          waypointService: widget.waypointService,
+          pickLocationMode: true,
+          isMovingNest: true,
+        ),
+      ),
+    );
+    if (point == null || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.waypointService.updateWaypoint(
+        widget.authState.token!,
+        existing.id,
+        name: existing.name,
+        latitude: point.latitude,
+        longitude: point.longitude,
       );
       await _loadNests();
     } catch (e) {
@@ -240,19 +244,7 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
           _buildNestRow(nest),
           const SizedBox(height: 12),
         ],
-        if (_nests.isNotEmpty)
-          const Padding(
-            key: Key('nestLimitReachedMessage'),
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: Text(
-                'You already have a nest',
-                style: TextStyle(fontSize: 13.5, color: CroColors.fog),
-              ),
-            ),
-          )
-        else
-          _buildAddNestRow(),
+        _buildAddNestRow(),
       ],
     );
   }
@@ -365,9 +357,10 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
   }
 
   Widget _buildAddNestRow() {
+    final hasNest = _nests.isNotEmpty;
     return GestureDetector(
       key: const Key('addNestButton'),
-      onTap: _addNest,
+      onTap: hasNest ? () => _moveNest(_nests.first) : _addNest,
       child: CustomPaint(
         painter: _DashedRoundedBorderPainter(
           color: CroColors.waypointBlue.withValues(alpha: 0.5),
@@ -378,19 +371,21 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                '+',
-                style: TextStyle(
-                  fontSize: 18,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
-                  color: CroColors.deepWaypoint,
+              if (!hasNest) ...[
+                const Text(
+                  '+',
+                  style: TextStyle(
+                    fontSize: 18,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    color: CroColors.deepWaypoint,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
+                const SizedBox(width: 8),
+              ],
               Text(
-                'Add a nest',
-                style: TextStyle(
+                hasNest ? 'Move nest' : 'Add a nest',
+                style: const TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   color: CroColors.deepWaypoint,

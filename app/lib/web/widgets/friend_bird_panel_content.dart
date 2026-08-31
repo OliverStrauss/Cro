@@ -135,6 +135,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
           avatar: Container(
@@ -148,8 +149,9 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
           subtitle: '${bird.type} · ${BirdType.description(bird.type)} · sent by ${bird.username}',
           onClose: widget.onClose,
         ),
-        Expanded(
+        Flexible(
           child: ListView(
+            shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
             children: [
               _labelValueRow('Flying to', _nameFor(bird.nestToId)),
