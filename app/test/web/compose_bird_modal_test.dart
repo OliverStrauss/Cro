@@ -67,6 +67,32 @@ void main() {
     expect(find.byKey(const Key('composeBirdModal')), findsNothing);
   });
 
+  testWidgets('bird type segmented button switches the submitted type', (tester) async {
+    ComposeBirdResult? submitted;
+    await tester.pumpWidget(build(onSubmit: (r) => submitted = r));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('birdTypeSegmentedButton')), findsOneWidget);
+    final button = tester.widget<SegmentedButton<String>>(find.byKey(const Key('birdTypeSegmentedButton')));
+    expect(button.selected, {'Cro'});
+
+    await tester.tap(find.text('Raven'));
+    await tester.pumpAndSettle();
+
+    // Raven needs both text and an image - only content is filled in here, so Send stays
+    // disabled, which is itself evidence the type switch took effect.
+    await tester.enterText(find.byKey(const Key('composeBirdNameField')), 'Bramble');
+    await tester.enterText(find.byKey(const Key('composeBirdContentField')), 'Note');
+    await tester.tap(find.byKey(const Key('composeBirdDestinationDropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Mia's Cabin (mia)").last);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<TextButton>(find.byKey(const Key('confirmComposeBirdButton'))).onPressed, isNull);
+    expect(submitted, isNull);
+  });
+
   testWidgets('Cancel closes the modal without submitting', (tester) async {
     var submitted = false;
     await tester.pumpWidget(build(onSubmit: (_) => submitted = true));
