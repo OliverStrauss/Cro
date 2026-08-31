@@ -58,6 +58,17 @@ class _NestPanelContentState extends State<NestPanelContent> {
   List<Bird> get _ownIdleBirds => _residents.where((b) => b.userId == _currentUserId).toList();
   List<Bird> get _deliveredBirds => _residents.where((b) => b.userId != _currentUserId).toList();
 
+  // Both lists come back from GET /waypoints/{id}/birds already newest-arrival-first (see
+  // BirdService.GetNestResidentsAsync's OrderByDescending(UpdatedAt)) - same relative-time
+  // convention as hub_message_card.dart's _relativeTime.
+  String _relativeTime(DateTime time) {
+    final elapsed = DateTime.now().difference(time);
+    if (elapsed.inMinutes < 1) return 'just now';
+    if (elapsed.inHours < 1) return '${elapsed.inMinutes}m ago';
+    if (elapsed.inDays < 1) return '${elapsed.inHours}h ago';
+    return '${elapsed.inDays}d ago';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -285,7 +296,12 @@ class _NestPanelContentState extends State<NestPanelContent> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(bird.isRead ? bird.type : 'New · ${bird.type}', style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
+                    Text(
+                      bird.updatedAt == null
+                          ? (bird.isRead ? bird.type : 'New · ${bird.type}')
+                          : '${bird.isRead ? bird.type : 'New · ${bird.type}'} · ${_relativeTime(bird.updatedAt!)}',
+                      style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                    ),
                   ],
                 ),
               ),
@@ -316,7 +332,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(bird.type, style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
+                    Text(
+                      bird.updatedAt == null ? bird.type : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
+                      style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                    ),
                   ],
                 ),
               ),

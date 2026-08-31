@@ -287,44 +287,10 @@ void main() {
     expect(find.text('New Spot'), findsOneWidget);
   });
 
-  testWidgets('add flow skips the kind picker once one slot is already filled', (WidgetTester tester) async {
+  testWidgets('already having a nest hides the add row and shows the limit message', (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [
         Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1, longitude: 1, isPublic: false),
-      ];
-    final authState = AuthState()..login('test-token');
-    await tester.pumpWidget(MaterialApp(
-      home: MyNestsScreen(
-        authState: authState,
-        waypointService: fakeWaypointService,
-        friendsService: _FakeFriendsService(),
-        profileService: _FakeProfileService(),
-      ),
-    ));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Add your public nest'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('addNestButton')));
-    await tester.pumpAndSettle();
-
-    // A private nest already exists, so the only valid kind is public - no picker shown.
-    expect(find.text('Add which kind of nest?'), findsNothing);
-    expect(find.byType(MapScreen), findsOneWidget);
-
-    tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(9, 10));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('waypointNameField')), 'The Library');
-    await tester.tap(find.byKey(const Key('saveWaypointButton')));
-    await tester.pumpAndSettle();
-
-    expect(fakeWaypointService.lastCreatedIsPublic, true);
-  });
-
-  testWidgets('both nest slots full hides the add row', (WidgetTester tester) async {
-    final fakeWaypointService = _FakeWaypointService()
-      ..waypointsToReturn = [
-        Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1, longitude: 1, isPublic: false),
-        Waypoint(id: 'w2', userId: 'u1', name: 'The Library', latitude: 2, longitude: 2, isPublic: true),
       ];
     final authState = AuthState()..login('test-token');
     await tester.pumpWidget(MaterialApp(
@@ -338,6 +304,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('addNestButton')), findsNothing);
-    expect(find.byKey(const Key('bothNestSlotsFullMessage')), findsOneWidget);
+    expect(find.byKey(const Key('nestLimitReachedMessage')), findsOneWidget);
+    expect(find.text('You already have a nest'), findsOneWidget);
   });
 }

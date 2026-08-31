@@ -10,7 +10,7 @@ namespace CroApp.Api.Tests;
 public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
     private readonly HttpClient _client;
 
@@ -44,12 +44,23 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
         _client = configuredFactory.CreateClient();
     }
 
+    // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
+    // see CLAUDE.md's well-known-local-credentials section. Used here to create Hubs for
+    // test setup, since a plain user can no longer be given a second nest of their own to
+    // act as a compose destination.
+    private const string SeedPassword = "correct-horse-battery-staple";
+
     private async Task<string> RegisterAndLoginAsync(string username, string password)
     {
         var createResponse = await _client.PostAsJsonAsync("/users",
             new { Username = username, Email = $"{username}@example.com", Password = password });
         createResponse.EnsureSuccessStatusCode();
 
+        return await LoginAsync(username, password);
+    }
+
+    private async Task<string> LoginAsync(string username, string password)
+    {
         var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = password });
         loginResponse.EnsureSuccessStatusCode();
         var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
@@ -76,6 +87,14 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
             new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<WaypointDto>())!;
+    }
+
+    private async Task<HubDto> CreateHubAsync(string token, string name, double lat, double lng)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token,
+            new { Name = name, Latitude = lat, Longitude = lng }));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<HubDto>())!;
     }
 
     private async Task<BirdDto> ComposeBirdAsync(string token, string originId, string destinationId, bool isPublic)
@@ -112,7 +131,10 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
     {
         var token = await RegisterAndLoginAsync($"react-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: true);
 
         var response = await AddReactionAsync(token, bird.Id, "👍");
@@ -125,12 +147,31 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
         Assert.True(entry.ReactedByMe);
     }
 
+    private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
+
+    private async Task<(string Id, string Token)> RegisterWithIdAsync(string username, string password)
+    {
+        var createResponse = await _client.PostAsJsonAsync("/users",
+            new { Username = username, Email = $"{username}@example.com", Password = password });
+        createResponse.EnsureSuccessStatusCode();
+        var created = await createResponse.Content.ReadFromJsonAsync<UserResponseDto>();
+        return (created!.Id, await LoginAsync(username, password));
+    }
+
     [Fact]
     public async Task ReactingToAPrivateBird_ReturnsBadRequest()
     {
-        var token = await RegisterAndLoginAsync($"react-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
+        var (id, token) = await RegisterWithIdAsync($"react-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
+        var friendUsername = $"react-friend-{Guid.NewGuid():N}";
+        var friendToken = await RegisterAndLoginAsync(friendUsername, "correct-horse-battery-staple");
+
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so a genuinely private bird - landing at a
+        // Hub is inherently public, per BirdService.ComposeAndSendAsync - needs a friend's
+        // nest as its destination instead of a second nest of the same user's own.
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", token, new { Username = friendUsername }));
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{id}/accept", friendToken));
+        var dest = await CreateNestAsync(friendToken, "Friend's Home", 50.0, 50.0, isPublic: false);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: false);
 
         var response = await AddReactionAsync(token, bird.Id, "👍");
@@ -143,7 +184,10 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
     {
         var token = await RegisterAndLoginAsync($"react-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: true);
 
         var response = await AddReactionAsync(token, bird.Id, "🦖");
@@ -156,7 +200,10 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
     {
         var senderToken = await RegisterAndLoginAsync($"react-sender-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var origin = await CreateNestAsync(senderToken, "Home", isPublic: false);
-        var dest = await CreateNestAsync(senderToken, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(senderToken, origin.Id, dest.Id, isPublic: true);
 
         var reactorToken = await RegisterAndLoginAsync($"react-reactor-{Guid.NewGuid():N}", "correct-horse-battery-staple");
@@ -175,7 +222,10 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
     {
         var token = await RegisterAndLoginAsync($"react-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: true);
 
         (await AddReactionAsync(token, bird.Id, "👍")).EnsureSuccessStatusCode();
@@ -193,7 +243,10 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
     {
         var token = await RegisterAndLoginAsync($"react-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var origin = await CreateNestAsync(token, "Home", isPublic: false);
-        var dest = await CreateNestAsync(token, "Away", 50.0, 50.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: true);
 
         (await AddReactionAsync(token, bird.Id, "👍")).EnsureSuccessStatusCode();
@@ -217,6 +270,7 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
 
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
+    private record HubDto(string Id, string Name, double Latitude, double Longitude, string Status, string CreatedByUserId, DateTimeOffset CreatedAt, string? Category, string? ProfilePictureUrl);
     private record BirdDto(string Id, bool IsPublic);
     private record ReactionSummaryDto(string Emoji, int Count, bool ReactedByMe);
 }

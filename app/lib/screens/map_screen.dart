@@ -439,18 +439,9 @@ class MapScreenState extends State<MapScreen>
     }
   }
 
-  // Mirrors MyNestsScreen's _resolveNestKindToAdd - only asks when both slots are open;
-  // otherwise the remaining kind is the only valid choice, and if neither is open there's
-  // nothing to add (handled by the caller before this is invoked).
-  Future<bool?> _resolveNestKindToAdd() async {
-    final hasPrivate = _ownNests.any((n) => !n.isPublic);
-    final hasPublic = _ownNests.any((n) => n.isPublic);
-    if (hasPrivate && !hasPublic) {
-      return true;
-    }
-    if (hasPublic && !hasPrivate) {
-      return false;
-    }
+  // Mirrors MyNestsScreen's _resolveNestKindToAdd - only ever invoked when the caller has
+  // already confirmed there's no existing nest (see handleMapTap), so this always asks.
+  Future<bool?> _resolveNestKindToAdd() {
     return showDialog<bool>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -486,11 +477,9 @@ class MapScreenState extends State<MapScreen>
       return;
     }
 
-    final hasBothNests =
-        _ownNests.any((n) => n.isPublic) && _ownNests.any((n) => !n.isPublic);
-    if (hasBothNests) {
+    if (_ownNests.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Both nest slots are full')),
+        const SnackBar(content: Text('You already have a nest')),
       );
       return;
     }

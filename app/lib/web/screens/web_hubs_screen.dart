@@ -18,6 +18,7 @@ class WebHubsScreen extends StatelessWidget {
   final HubService hubService;
   final ProfileService profileService;
   final VoidCallback onDataChanged;
+  final VoidCallback onStartAddHub;
 
   const WebHubsScreen({
     super.key,
@@ -29,6 +30,7 @@ class WebHubsScreen extends StatelessWidget {
     required this.hubService,
     required this.profileService,
     required this.onDataChanged,
+    required this.onStartAddHub,
   });
 
   @override
@@ -39,6 +41,21 @@ class WebHubsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              const Spacer(),
+              OutlinedButton(
+                key: const Key('webAddHubButton'),
+                onPressed: onStartAddHub,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: CroColors.amberInk,
+                  side: BorderSide(color: CroColors.deliveryAmber.withValues(alpha: 0.6), width: 1.5),
+                ),
+                child: Text(isAdmin ? '+ Add a Hub' : '+ Suggest a Hub'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           if (hubs.isEmpty)
             const Padding(
               key: Key('noHubsMessage'),

@@ -31,6 +31,31 @@ public class CosmosBirdRepository : IBirdRepository
         return results;
     }
 
+    public async Task<List<Bird>> GetManyByUserIdsAsync(IEnumerable<string> userIds)
+    {
+        var ids = userIds.ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // Cross-partition query - friends' birds span many different userId partitions, so
+        // this can't be scoped to a single PartitionKey the way ListByUserIdAsync is. Same
+        // ARRAY_CONTAINS shape as CosmosWaypointRepository.GetManyByUserIdsAsync, used to
+        // fetch every accepted friend's birds in one round trip instead of one per friend.
+        var query = _container.GetItemQueryIterator<Bird>(
+            new QueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(@userIds, c.userId)")
+                .WithParameter("@userIds", ids));
+
+        var results = new List<Bird>();
+        while (query.HasMoreResults)
+        {
+            var page = await query.ReadNextAsync();
+            results.AddRange(page);
+        }
+        return results;
+    }
+
     public async Task<Bird?> GetAsync(string userId, string birdId)
     {
         try

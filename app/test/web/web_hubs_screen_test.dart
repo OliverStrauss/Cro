@@ -57,7 +57,12 @@ void main() {
     authState = AuthState()..login('a.b.c');
   });
 
-  Widget build({List<Hub> hubs = const [], bool isAdmin = false, VoidCallback? onDataChanged}) {
+  Widget build({
+    List<Hub> hubs = const [],
+    bool isAdmin = false,
+    VoidCallback? onDataChanged,
+    VoidCallback? onStartAddHub,
+  }) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
@@ -70,6 +75,7 @@ void main() {
           hubService: hubService,
           profileService: profileService,
           onDataChanged: onDataChanged ?? () {},
+          onStartAddHub: onStartAddHub ?? () {},
         ),
       ),
     );
@@ -87,6 +93,24 @@ void main() {
   testWidgets('non-admins never see the suggested-hubs queue', (tester) async {
     await tester.pumpWidget(build(hubs: [hub]));
     expect(find.text('Suggested hubs'), findsNothing);
+  });
+
+  testWidgets('non-admins see a Suggest a Hub button that calls onStartAddHub', (tester) async {
+    var called = false;
+    await tester.pumpWidget(build(onStartAddHub: () => called = true));
+
+    expect(find.text('+ Suggest a Hub'), findsOneWidget);
+    expect(find.text('+ Add a Hub'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('webAddHubButton')));
+    expect(called, isTrue);
+  });
+
+  testWidgets('admins see an Add a Hub button instead', (tester) async {
+    await tester.pumpWidget(build(isAdmin: true));
+
+    expect(find.text('+ Add a Hub'), findsOneWidget);
+    expect(find.text('+ Suggest a Hub'), findsNothing);
   });
 
   testWidgets('admins see the suggested-hubs queue with the suggester resolved', (tester) async {

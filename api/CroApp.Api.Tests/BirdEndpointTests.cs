@@ -10,7 +10,7 @@ namespace CroApp.Api.Tests;
 public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
     private readonly HttpClient _client;
 
@@ -44,12 +44,23 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         _client = configuredFactory.CreateClient();
     }
 
+    // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
+    // see CLAUDE.md's well-known-local-credentials section. Used here to create a Hub for
+    // test setup, since a plain user can no longer be given a second nest of their own to
+    // act as a compose destination.
+    private const string SeedPassword = "correct-horse-battery-staple";
+
     private async Task<string> RegisterAndLoginAsync(string username, string password)
     {
         var createResponse = await _client.PostAsJsonAsync("/users",
             new { Username = username, Email = $"{username}@example.com", Password = password });
         createResponse.EnsureSuccessStatusCode();
 
+        return await LoginAsync(username, password);
+    }
+
+    private async Task<string> LoginAsync(string username, string password)
+    {
         var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = password });
         loginResponse.EnsureSuccessStatusCode();
         var body = await loginResponse.Content.ReadFromJsonAsync<LoginResponseDto>();
@@ -79,6 +90,14 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
             new { Name = name, Latitude = lat, Longitude = lng, IsPublic = isPublic }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<WaypointDto>())!;
+    }
+
+    private async Task<HubDto> CreateHubAsync(string adminToken, string name, double lat, double lng)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", adminToken,
+            new { Name = name, Latitude = lat, Longitude = lng }));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<HubDto>())!;
     }
 
     private Task<HttpResponseMessage> ComposeBirdAsync(
@@ -139,7 +158,10 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var tokenB = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
 
         var aOrigin = await CreateWaypointAsync(tokenA, "A's Nest", isPublic: false);
-        var aDest = await CreateWaypointAsync(tokenA, "A's Away", 43.0, -94.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of tokenA's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var aDest = await CreateHubAsync(adminToken, $"A's Away Hub {Guid.NewGuid():N}", 43.0, -94.0);
         (await ComposeBirdAsync(tokenA, "Cro", "A's Bird", aOrigin.Id, aDest.Id, content: "hi")).EnsureSuccessStatusCode();
 
         var birdsA = await (await ListBirdsAsync(tokenA)).Content.ReadFromJsonAsync<List<BirdDto>>();
@@ -151,6 +173,7 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
+    private record HubDto(string Id, string Name, double Latitude, double Longitude, string Status, string CreatedByUserId, DateTimeOffset CreatedAt, string? Category, string? ProfilePictureUrl);
     private record BirdDto(
         string Id,
         string UserId,

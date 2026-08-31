@@ -46,6 +46,21 @@ public class BirdService(
         return resolved.Where(b => b.IsTraveling).ToList();
     }
 
+    // Multi-friend analog of ListTravelingAsync for GET /friends/birds - fetches every
+    // given user's birds in a single cross-partition query instead of one ListByUserIdAsync
+    // round trip per friend, same batching GetManyByUserIdsAsync already gives waypoints.
+    // Arrival resolution still runs one bird at a time since each can trigger its own write.
+    public async Task<List<Bird>> ListTravelingForUsersAsync(IEnumerable<string> userIds)
+    {
+        var existing = await birdRepository.GetManyByUserIdsAsync(userIds);
+        var resolved = new List<Bird>();
+        foreach (var bird in existing.Where(b => b.IsTraveling))
+        {
+            resolved.Add(await ResolveArrivalIfDueAsync(bird));
+        }
+        return resolved.Where(b => b.IsTraveling).ToList();
+    }
+
     // Spawns a brand-new bird and sends it in one step - there's no reason left to keep a
     // bird idle-and-unsent the way auto-provisioned birds used to be, since every bird is
     // now deliberately created *in order to* go somewhere. The origin must be caller-owned
@@ -251,7 +266,10 @@ public class BirdService(
             resolved.Add(await ResolveArrivalIfDueAsync(bird));
         }
         // Drop still-inbound birds that were only fetched so resolution could run on them.
-        return resolved.Where(b => b.CurrentNestId == nest.Id).ToList();
+        // Newest arrival first - UpdatedAt is set to the moment a bird actually lands (see
+        // ResolveArrivalIfDueAsync), same "most recent first" convention as a Hub's message
+        // board (CosmosHubMessageRepository's ORDER BY c.createdAt DESC).
+        return resolved.Where(b => b.CurrentNestId == nest.Id).OrderByDescending(b => b.UpdatedAt).ToList();
     }
 
     // Hub analog of GetNestResidentsAsync, deliberately without an owner-gate - nobody owns
@@ -267,7 +285,7 @@ public class BirdService(
         {
             resolved.Add(await ResolveArrivalIfDueAsync(bird));
         }
-        return resolved.Where(b => b.CurrentNestId == hub.Id).ToList();
+        return resolved.Where(b => b.CurrentNestId == hub.Id).OrderByDescending(b => b.UpdatedAt).ToList();
     }
 
     public async Task<Bird> MarkReadAsync(string userId, string birdId)

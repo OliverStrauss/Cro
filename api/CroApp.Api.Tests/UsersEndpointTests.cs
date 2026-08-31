@@ -8,7 +8,7 @@ namespace CroApp.Api.Tests;
 public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
     private readonly HttpClient _client;
 

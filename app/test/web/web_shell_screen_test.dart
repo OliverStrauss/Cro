@@ -69,12 +69,18 @@ class _FakeFriendsService implements FriendsService {
 class _FakeBirdService implements BirdService {
   List<Bird> birdsToReturn = [];
   Map<String, List<Bird>> residentsByNestId = {};
+  String? lastMarkedViewedBirdId;
 
   @override
   Future<List<Bird>> listBirds(String token) async => birdsToReturn;
 
   @override
   Future<List<Bird>> getNestResidents(String token, String nestId) async => residentsByNestId[nestId] ?? [];
+
+  @override
+  Future<void> markBirdViewed(String token, String birdId) async {
+    lastMarkedViewedBirdId = birdId;
+  }
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -205,7 +211,9 @@ void main() {
     expect(find.byKey(const Key('webShellLoading')), findsNothing);
     expect(find.byKey(const Key('webNavMap')), findsOneWidget);
     expect(find.byKey(const Key('yourBirdsDock')), findsOneWidget);
-    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
+    // The right panel only mounts once a nest/hub/bird is selected - with nothing selected
+    // it's absent entirely so the map reclaims the full width.
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
   });
 
   testWidgets('shows an error state with Retry when loading fails', (tester) async {
@@ -260,10 +268,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('webNavFriends')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('webPlaceholder_Friends')), findsOneWidget);
+    expect(find.byKey(const Key('webFriendsScreen')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webNavYou')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webYouScreen')), findsOneWidget);
   });
 
-  testWidgets('tapping an own nest marker opens the nest panel', (tester) async {
+  testWidgets('tapping an own nest marker opens the nest panel, and closing it unmounts the panel', (tester) async {
     setDesktopSize(tester);
     waypointService.waypointsToReturn = [
       Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
@@ -271,25 +283,107 @@ void main() {
     await tester.pumpWidget(buildShell());
     await tester.pumpAndSettle();
 
-    expect(find.text('Journey log'), findsOneWidget);
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
     await tester.tap(find.byKey(const Key('webOwnNestMarker_n1')));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
     expect(find.text('Your nest'), findsOneWidget);
-    expect(find.text('Journey log'), findsNothing);
 
     await tester.tap(find.byKey(const Key('webPanelClose')));
     await tester.pumpAndSettle();
-    expect(find.text('Journey log'), findsOneWidget);
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
   });
 
-  testWidgets('journey log lists fetched events', (tester) async {
+  testWidgets("tapping a friend's public bird marker opens its panel and marks it viewed", (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 1.0, longitude: 2.0),
+    ];
+    friendsService.friendWaypointsToReturn = [
+      Waypoint(
+        id: 'f1',
+        userId: 'u2',
+        name: "Mia's Cabin",
+        latitude: 1.002,
+        longitude: 2.002,
+        username: 'mia',
+        color: '#E53935',
+      ),
+    ];
+    friendsService.friendsBirdsToReturn = [
+      FriendBird(
+        id: 'fb1',
+        userId: 'u2',
+        username: 'mia',
+        color: '#E53935',
+        name: 'Fen',
+        type: 'Cro',
+        nestFromId: 'f1',
+        nestToId: 'n1',
+        departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+        estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+        isPublic: true,
+        content: 'On my way',
+      ),
+    ];
+    // Not pumpAndSettle: a traveling bird starts the map's repeating bob animation, which
+    // never "settles" - bounded pumps instead, same convention map_screen_test.dart uses for
+    // bird marker taps.
+    await tester.pumpWidget(buildShell());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('webContextPanel')), findsNothing);
+    await tester.tap(find.byKey(const Key('webBirdMarker_fb1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
+    expect(find.text('On my way'), findsOneWidget);
+    expect(birdService.lastMarkedViewedBirdId, 'fb1');
+  });
+
+  testWidgets('journey log button opens a popup listing fetched events', (tester) async {
     setDesktopSize(tester);
     eventService.eventsToReturn = [_event('e1', EventKind.birdJoinedFlock, 'Percy joined your flock')];
     await tester.pumpWidget(buildShell());
     await tester.pumpAndSettle();
 
+    expect(find.text('Percy joined your flock'), findsNothing);
+    await tester.tap(find.byKey(const Key('webJourneyLogButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsOneWidget);
     expect(find.text('Percy joined your flock'), findsOneWidget);
+    // Regression check: the popup must size to its own content (380px), not stretch to fill
+    // the whole screen - it lives in an Overlay entry, whose root is forced to fill the
+    // screen unless explicitly wrapped to avoid that (see TopBar's OverlayEntry builders).
+    expect(tester.getSize(find.byKey(const Key('webJourneyLogDropdown'))).width, 380);
+
+    await tester.tap(find.byKey(const Key('webJourneyLogClose')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsNothing);
+  });
+
+  testWidgets('the journey log popup and the notifications dropdown are mutually exclusive', (tester) async {
+    setDesktopSize(tester);
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webJourneyLogButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsNothing);
+    expect(find.byKey(const Key('webNotificationsDropdown')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webJourneyLogButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webNotificationsDropdown')), findsNothing);
+    expect(find.byKey(const Key('webJourneyLogDropdown')), findsOneWidget);
   });
 
   testWidgets('bell shows unread count and mark-all-read clears the dropdown badges', (tester) async {
@@ -309,6 +403,31 @@ void main() {
     await tester.tap(find.byKey(const Key('webMarkAllReadButton')));
     await tester.pumpAndSettle();
     expect(eventService.markAllCalled, isTrue);
+  });
+
+  testWidgets('notification rows show a kind-tinted glyph and a relative-time line', (tester) async {
+    setDesktopSize(tester);
+    eventService.notificationsToReturn = [
+      AppEvent(
+        id: 'n2',
+        kind: EventKind.birdArrivedAtYourNest,
+        displayText: 'Juniper arrived at your Home Roost',
+        isNotification: true,
+        isRead: false,
+        createdAt: DateTime.now().subtract(const Duration(minutes: 4)),
+      ),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Juniper arrived at your Home Roost'), findsOneWidget);
+    expect(find.text('4 minutes ago'), findsOneWidget);
+    expect(find.byIcon(Icons.flutter_dash), findsOneWidget);
+    // Regression check: see the matching note on the journey log popup above.
+    expect(tester.getSize(find.byKey(const Key('webNotificationsDropdown'))).width, 372);
   });
 }
 

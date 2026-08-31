@@ -114,20 +114,11 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
     }
   }
 
-  bool get _hasPrivateNest => _nests.any((n) => !n.isPublic);
-  bool get _hasPublicNest => _nests.any((n) => n.isPublic);
-
-  // Resolves which kind the next "Add a nest" tap should create, without ever touching
-  // the server's 409 cap error for the common path: if a slot is already filled the other
-  // one is the only valid choice, so there's nothing to ask; only when both are empty does
-  // the user need to pick. Returns null if the user backs out of the picker.
-  Future<bool?> _resolveNestKindToAdd() async {
-    if (_hasPrivateNest && !_hasPublicNest) {
-      return true;
-    }
-    if (_hasPublicNest && !_hasPrivateNest) {
-      return false;
-    }
+  // A user gets exactly one personal nest (public or private, never both), enforced
+  // server-side by WaypointService.CreateAsync - "Add a nest" is only ever reachable here
+  // when _nests is empty (see _buildBody), so this always needs to ask which kind. Returns
+  // null if the user backs out of the picker.
+  Future<bool?> _resolveNestKindToAdd() {
     return showDialog<bool>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -249,13 +240,13 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
           _buildNestRow(nest),
           const SizedBox(height: 12),
         ],
-        if (_hasPrivateNest && _hasPublicNest)
+        if (_nests.isNotEmpty)
           const Padding(
-            key: Key('bothNestSlotsFullMessage'),
+            key: Key('nestLimitReachedMessage'),
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Center(
               child: Text(
-                'Both nest slots are full',
+                'You already have a nest',
                 style: TextStyle(fontSize: 13.5, color: CroColors.fog),
               ),
             ),
@@ -398,9 +389,7 @@ class _MyNestsScreenState extends State<MyNestsScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                _hasPrivateNest
-                    ? 'Add your public nest'
-                    : (_hasPublicNest ? 'Add your private nest' : 'Add a nest'),
+                'Add a nest',
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,

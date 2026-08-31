@@ -12,7 +12,7 @@ namespace CroApp.Api.Tests;
 public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
     // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
     // see CLAUDE.md's well-known-local-credentials section.
@@ -155,7 +155,12 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var (_, token) = await RegisterAndLoginAsync(username, "correct-horse-battery-staple");
 
         var origin = await CreateNestAsync(token, "Origin Roost");
-        var destination = await CreateNestAsync(token, "Second Roost", 43.0, -94.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var destinationHubResponse = await CreateHubAsync(adminToken, $"Second Roost {Guid.NewGuid():N}", 43.0, -94.0);
+        destinationHubResponse.EnsureSuccessStatusCode();
+        var destination = (await destinationHubResponse.Content.ReadFromJsonAsync<HubDto>())!;
 
         var composeResponse = await ComposeBirdAsync(token, "Cro", "Percy", origin.Id, destination.Id, content: "Hello");
         composeResponse.EnsureSuccessStatusCode();
@@ -296,7 +301,12 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
 
         var origin = await CreateNestAsync(tokenA, "Isolated Origin");
-        var destination = await CreateNestAsync(tokenA, "Isolated Destination", 40.0, -95.0, isPublic: true);
+        // A user gets exactly one personal nest, so the compose destination here is a Hub
+        // rather than a second nest of the same user's own.
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var destinationHubResponse = await CreateHubAsync(adminToken, $"Isolated Destination {Guid.NewGuid():N}", 40.0, -95.0);
+        destinationHubResponse.EnsureSuccessStatusCode();
+        var destination = (await destinationHubResponse.Content.ReadFromJsonAsync<HubDto>())!;
         var uniqueBirdName = $"Unique-{Guid.NewGuid():N}";
         (await ComposeBirdAsync(tokenA, "Cro", uniqueBirdName, origin.Id, destination.Id, content: "hi")).EnsureSuccessStatusCode();
         await WaitForIndexingAsync();

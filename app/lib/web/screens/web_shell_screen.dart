@@ -4,30 +4,37 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../models/bird.dart';
+import '../../models/friend.dart';
 import '../../models/friend_bird.dart';
 import '../../models/friend_request.dart';
 import '../../models/hub.dart';
 import '../../models/user_profile.dart';
 import '../../models/waypoint.dart';
+import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
 import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
-import '../../theme.dart';
 import '../../utils/jwt_utils.dart';
+import '../../widgets/compose_bird_dialog.dart';
+import '../../widgets/hub_name_dialog.dart';
+import '../../widgets/send_bird_dialog.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import '../models/event.dart';
 import '../services/event_service.dart';
 import '../state/web_shell_controller.dart';
+import '../widgets/compose_bird_modal.dart';
 import '../widgets/context_panel.dart';
 import '../widgets/icon_rail.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/your_birds_dock.dart';
+import 'web_friends_screen.dart';
 import 'web_hubs_screen.dart';
 import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
+import 'web_you_screen.dart';
 
 /// Top-level widget for the web shell (rail + top bar + content + dock + right panel) - the
 /// kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart. Owns every piece of
@@ -42,6 +49,7 @@ class WebShellScreen extends StatefulWidget {
   final HubService? hubService;
   final ProfileService? profileService;
   final EventService? eventService;
+  final BirdReactionService? reactionService;
 
   const WebShellScreen({
     super.key,
@@ -52,6 +60,7 @@ class WebShellScreen extends StatefulWidget {
     this.hubService,
     this.profileService,
     this.eventService,
+    this.reactionService,
   });
 
   @override
@@ -65,18 +74,20 @@ class WebShellScreenState extends State<WebShellScreen> {
   late final HubService _hubService = widget.hubService ?? HubService();
   late final ProfileService _profileService = widget.profileService ?? ProfileService();
   late final EventService _eventService = widget.eventService ?? EventService();
+  late final BirdReactionService _reactionService = widget.reactionService ?? BirdReactionService();
 
   WebNavItem _selectedNav = WebNavItem.map;
-  PanelMode _panelMode = PanelMode.journeyLog;
+  PanelMode? _panelMode;
   Waypoint? _selectedNest;
   bool _selectedNestIsOwn = false;
   Hub? _selectedHub;
   Bird? _selectedBird;
+  FriendBird? _selectedFriendBird;
 
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
-  MapFilter _mapFilter = MapFilter.all;
   bool _addingNest = false;
+  bool _addingHub = false;
 
   final _dockKey = GlobalKey();
   double _dockHeight = 132;
@@ -87,6 +98,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   List<FriendBird> _friendsBirds = [];
   List<Hub> _hubs = [];
   List<FriendRequest> _incomingRequests = [];
+  List<Friend> _friends = [];
   List<AppEvent> _events = [];
   List<AppEvent> _notifications = [];
   String _username = '';
@@ -95,7 +107,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   // Every own nest's current residents (idle birds, including ones delivered by someone
   // else) - GET /birds alone can't see deliveries from other senders, so this is a separate
   // per-nest fetch, same reasoning as the phone app's NestDetailsSheet. Small N (a user has
-  // at most 2 nests), fetched alongside everything else in _loadData.
+  // at most 1 nest), fetched alongside everything else in _loadData.
   Map<String, List<Bird>> _nestResidentsByNestId = {};
 
   bool _isLoading = true;
@@ -158,6 +170,7 @@ class WebShellScreenState extends State<WebShellScreen> {
         _friendsService.getIncomingRequests(token),
         _eventService.listEvents(token),
         _eventService.listNotifications(token),
+        _friendsService.getFriends(token),
         if (userId != null) _profileService.getUser(userId),
       ]);
       setState(() {
@@ -169,8 +182,9 @@ class WebShellScreenState extends State<WebShellScreen> {
         _incomingRequests = results[5] as List<FriendRequest>;
         _events = results[6] as List<AppEvent>;
         _notifications = results[7] as List<AppEvent>;
-        if (results.length > 8) {
-          final profile = results[8] as UserProfile;
+        _friends = results[8] as List<Friend>;
+        if (results.length > 9) {
+          final profile = results[9] as UserProfile;
           _username = profile.username;
           _profilePictureUrl = profile.profilePictureUrl;
           _isAdmin = profile.isAdmin;
@@ -206,6 +220,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedNestIsOwn = _ownNests.any((n) => n.id == nest.id);
       _selectedHub = null;
       _selectedBird = null;
+      _selectedFriendBird = null;
     });
   }
 
@@ -215,6 +230,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedHub = hub;
       _selectedNest = null;
       _selectedBird = null;
+      _selectedFriendBird = null;
     });
   }
 
@@ -224,15 +240,62 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedBird = bird;
       _selectedNest = null;
       _selectedHub = null;
+      _selectedFriendBird = null;
     });
   }
 
-  void _closePanel() {
+  void _selectFriendBird(FriendBird bird) {
     setState(() {
-      _panelMode = PanelMode.journeyLog;
+      _panelMode = PanelMode.friendBird;
+      _selectedFriendBird = bird;
       _selectedNest = null;
       _selectedHub = null;
       _selectedBird = null;
+    });
+    // Only a public bird's marker is tappable at all (see WebMapScreen), so this is never
+    // called for a private one - no guard needed here.
+    if (!bird.hasViewed) _markFriendBirdViewed(bird);
+  }
+
+  Future<void> _markFriendBirdViewed(FriendBird bird) async {
+    try {
+      await _birdService.markBirdViewed(widget.authState.token!, bird.id);
+      if (!mounted) return;
+      setState(() {
+        _friendsBirds = [for (final b in _friendsBirds) b.id == bird.id ? _asViewed(b) : b];
+        if (_selectedFriendBird?.id == bird.id) _selectedFriendBird = _asViewed(_selectedFriendBird!);
+      });
+    } catch (_) {
+      // Best-effort, same "not worth surfacing an error state over" reasoning as
+      // _markAllNotificationsRead - the next full reload reconciles it anyway.
+    }
+  }
+
+  FriendBird _asViewed(FriendBird b) => FriendBird(
+    id: b.id,
+    userId: b.userId,
+    username: b.username,
+    color: b.color,
+    name: b.name,
+    type: b.type,
+    nestFromId: b.nestFromId,
+    nestToId: b.nestToId,
+    departedAt: b.departedAt,
+    estimatedArrivalAt: b.estimatedArrivalAt,
+    isPublic: b.isPublic,
+    content: b.content,
+    audioUrl: b.audioUrl,
+    imageUrl: b.imageUrl,
+    hasViewed: true,
+  );
+
+  void _closePanel() {
+    setState(() {
+      _panelMode = null;
+      _selectedNest = null;
+      _selectedHub = null;
+      _selectedBird = null;
+      _selectedFriendBird = null;
     });
   }
 
@@ -285,24 +348,92 @@ class WebShellScreenState extends State<WebShellScreen> {
   void _startAddNest() {
     setState(() {
       _addingNest = true;
+      _addingHub = false;
       _selectedNav = WebNavItem.map;
     });
   }
 
   void _cancelAddNest() => setState(() => _addingNest = false);
 
+  void _startAddHub() {
+    setState(() {
+      _addingHub = true;
+      _addingNest = false;
+      _selectedNav = WebNavItem.map;
+    });
+  }
+
+  void _cancelAddHub() => setState(() => _addingHub = false);
+
+  Future<void> _placeHub(LatLng point) async {
+    setState(() => _addingHub = false);
+    final result = await showDialog<HubNameDialogResult>(
+      context: context,
+      builder: (context) => const HubNameDialog(),
+    );
+    if (result == null || result.name.trim().isEmpty || !mounted) return;
+
+    try {
+      if (_isAdmin) {
+        await _hubService.createHub(
+          widget.authState.token!,
+          name: result.name.trim(),
+          latitude: point.latitude,
+          longitude: point.longitude,
+          category: result.category,
+        );
+      } else {
+        await _hubService.suggestHub(
+          widget.authState.token!,
+          name: result.name.trim(),
+          latitude: point.latitude,
+          longitude: point.longitude,
+          category: result.category,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sent to admins for review')));
+        }
+      }
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
+  }
+
   Future<void> _placeNest(LatLng point) async {
     setState(() => _addingNest = false);
+    // A user gets exactly one personal nest, enforced server-side by
+    // WaypointService.CreateAsync - checked here too so the picker/name dialogs below never
+    // even open for a no-op add.
+    if (_ownNests.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You already have a nest')),
+      );
+      return;
+    }
+
+    final isPublic = await showDialog<bool>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Add which kind of nest?'),
+        children: [
+          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(false), child: const Text('Private nest')),
+          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(true), child: const Text('Public nest')),
+        ],
+      ),
+    );
+    if (isPublic == null || !mounted) return;
+
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => const WaypointNameDialog(),
+      builder: (context) => WaypointNameDialog(kindLabel: isPublic ? 'Public nest' : 'Private nest'),
     );
     if (name == null || name.trim().isEmpty || !mounted) return;
 
     try {
-      // A user's first nest is their private one; a second is the public one - same
-      // one-private-one-public cap the server enforces (see WaypointService.CreateAsync).
-      final isPublic = _ownNests.any((n) => !n.isPublic);
       await _waypointService.createWaypoint(
         widget.authState.token!,
         name: name.trim(),
@@ -320,11 +451,53 @@ class WebShellScreenState extends State<WebShellScreen> {
   }
 
   void _onComposePressed() {
-    // The compose modal lands in a later PR alongside the rest of the notification/reaction
-    // wiring - a placeholder toast keeps the button from feeling dead in the meantime.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Compose is coming in the next update')),
+    final origins = _ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)).toList();
+    if (origins.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Create a nest first - a new bird needs somewhere to depart from.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return;
+    }
+    final destinations = [
+      ..._ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)),
+      ..._friendWaypoints.map((w) => SendBirdDestination(nestId: w.id, label: '${w.name} (${w.username})')),
+      ..._hubs.map((h) => SendBirdDestination(nestId: h.id, label: '${h.name} (Hub)')),
+    ];
+
+    ComposeBirdModal.show(
+      context,
+      origins: origins,
+      destinations: destinations,
+      onSubmit: _submitCompose,
     );
+  }
+
+  Future<void> _submitCompose(ComposeBirdResult result) async {
+    try {
+      await _birdService.composeAndSendBird(
+        widget.authState.token!,
+        type: result.type,
+        name: result.name,
+        originNestId: result.originNestId,
+        destinationId: result.destinationId,
+        content: result.content,
+        isPublic: result.isPublic,
+        mediaBytes: result.mediaBytes,
+        mediaContentType: result.mediaContentType,
+        mediaFilename: result.mediaFilename,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${result.name} is on its way')));
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
   }
 
   @override
@@ -383,9 +556,12 @@ class WebShellScreenState extends State<WebShellScreen> {
                   subtitle: titles.$2,
                   unreadCount: _notifications.where((n) => !n.isRead).length,
                   notifications: _notifications,
-                  onComposePressed: _onComposePressed,
                   onMarkAllRead: _markAllNotificationsRead,
                   onOpenNotification: _openNotification,
+                  events: _events,
+                  eventsLoading: false,
+                  eventsError: null,
+                  onRetryEvents: _loadData,
                 ),
                 Expanded(
                   child: Stack(
@@ -415,25 +591,29 @@ class WebShellScreenState extends State<WebShellScreen> {
               ],
             ),
           ),
-          ContextPanel(
-            mode: _panelMode,
-            selectedNest: _selectedNest,
-            selectedNestIsOwn: _selectedNestIsOwn,
-            selectedHub: _selectedHub,
-            selectedBird: _selectedBird,
-            onClose: _closePanel,
-            events: _events,
-            eventsLoading: false,
-            eventsError: null,
-            onRetryEvents: _loadData,
-            authState: widget.authState,
-            waypointService: _waypointService,
-            friendsService: _friendsService,
-            birdService: _birdService,
-            hubService: _hubService,
-            profileService: _profileService,
-            onDataChanged: _loadData,
-          ),
+          if (_panelMode != null)
+            ContextPanel(
+              mode: _panelMode!,
+              selectedNest: _selectedNest,
+              selectedNestIsOwn: _selectedNestIsOwn,
+              selectedHub: _selectedHub,
+              selectedBird: _selectedBird,
+              selectedFriendBird: _selectedFriendBird,
+              ownNests: _ownNests,
+              friendWaypoints: _friendWaypoints,
+              hubs: _hubs,
+              onClose: _closePanel,
+              authState: widget.authState,
+              waypointService: _waypointService,
+              friendsService: _friendsService,
+              birdService: _birdService,
+              hubService: _hubService,
+              profileService: _profileService,
+              reactionService: _reactionService,
+              onDataChanged: _loadData,
+              onFollowOnMap: () => _selectNav(WebNavItem.map),
+              onComposePressed: _onComposePressed,
+            ),
         ],
       ),
     );
@@ -450,15 +630,19 @@ class WebShellScreenState extends State<WebShellScreen> {
           hubs: _hubs,
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
+          selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id,
           bottomInset: _dockHeight,
-          filter: _mapFilter,
-          onFilterChanged: (f) => setState(() => _mapFilter = f),
           onSelectNest: _selectNest,
           onSelectHub: _selectHub,
           onSelectBird: _selectBird,
+          onSelectFriendBird: _selectFriendBird,
           addingNest: _addingNest,
           onPlaceNest: _placeNest,
           onCancelAddNest: _cancelAddNest,
+          isAdmin: _isAdmin,
+          addingHub: _addingHub,
+          onPlaceHub: _placeHub,
+          onCancelAddHub: _cancelAddHub,
         );
       case WebNavItem.nests:
         return WebNestsScreen(
@@ -482,17 +666,29 @@ class WebShellScreenState extends State<WebShellScreen> {
           hubService: _hubService,
           profileService: _profileService,
           onDataChanged: _loadData,
+          onStartAddHub: _startAddHub,
         );
       case WebNavItem.friends:
+        return WebFriendsScreen(
+          authState: widget.authState,
+          friendsService: _friendsService,
+          friendWaypoints: _friendWaypoints,
+          onDataChanged: _loadData,
+        );
       case WebNavItem.you:
-        final label = _selectedNav == WebNavItem.friends ? 'Friends' : 'You';
-        return SingleChildScrollView(
-          key: Key('webPlaceholder_$label'),
-          padding: const EdgeInsets.fromLTRB(26, 24, 26, 240),
-          child: Text(
-            '$label is coming in the next update.',
-            style: const TextStyle(fontSize: 14, color: CroColors.fog),
-          ),
+        return WebYouScreen(
+          authState: widget.authState,
+          profileService: _profileService,
+          username: _username,
+          profilePictureUrl: _profilePictureUrl,
+          isAdmin: _isAdmin,
+          birdCount: _birds.length,
+          nestCount: _ownNests.length,
+          friendCount: _friends.length,
+          events: _events,
+          onDataChanged: _loadData,
+          onNavigateFriends: () => _selectNav(WebNavItem.friends),
+          onNavigateHubs: () => _selectNav(WebNavItem.hubs),
         );
     }
   }

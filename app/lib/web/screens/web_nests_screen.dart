@@ -99,15 +99,24 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
-              OutlinedButton(
-                key: const Key('webAddNestButton'),
-                onPressed: widget.onStartAddNest,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: CroColors.deepWaypoint,
-                  side: BorderSide(color: CroColors.waypointBlue.withValues(alpha: 0.6), width: 1.5),
+              // A user gets exactly one personal nest (see WaypointService.CreateAsync) -
+              // once they have it, there's nothing left to add.
+              if (widget.ownNests.isEmpty)
+                OutlinedButton(
+                  key: const Key('webAddNestButton'),
+                  onPressed: widget.onStartAddNest,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: CroColors.deepWaypoint,
+                    side: BorderSide(color: CroColors.waypointBlue.withValues(alpha: 0.6), width: 1.5),
+                  ),
+                  child: const Text('+ Add a nest'),
+                )
+              else
+                const Text(
+                  'You already have a nest',
+                  key: Key('webNestLimitReachedMessage'),
+                  style: TextStyle(fontSize: 12.5, color: CroColors.fog),
                 ),
-                child: const Text('+ Add a nest'),
-              ),
             ],
           ),
           const SizedBox(height: 16),
