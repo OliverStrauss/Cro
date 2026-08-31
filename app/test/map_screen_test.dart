@@ -11,6 +11,7 @@ import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/hub_message.dart';
+import 'package:cro_app/models/hub_picture_suggestion.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/screens/map_screen.dart';
@@ -218,6 +219,43 @@ class _FakeHubService implements HubService {
   Future<void> rejectSuggestion(String token, String hubId) async {
     lastRejectedSuggestionId = hubId;
     suggestionsToReturn = suggestionsToReturn.where((s) => s.id != hubId).toList();
+  }
+
+  List<HubPictureSuggestion> pictureSuggestionsToReturn = [];
+  String? lastSuggestedPictureHubId;
+  String? lastApprovedPictureSuggestionId;
+  String? lastRejectedPictureSuggestionId;
+
+  @override
+  Future<HubPictureSuggestion> suggestHubPicture(
+    String token,
+    String hubId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async {
+    lastSuggestedPictureHubId = hubId;
+    return HubPictureSuggestion(
+      id: 'new-picture-suggestion-1',
+      hubId: hubId,
+      suggestedByUserId: 'u1',
+      blobUrl: 'https://example.com/hub-pictures/new-picture-suggestion-1',
+      createdAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<List<HubPictureSuggestion>> listPictureSuggestions(String token) async => pictureSuggestionsToReturn;
+
+  @override
+  Future<Hub> approvePictureSuggestion(String token, String suggestionId) async {
+    lastApprovedPictureSuggestionId = suggestionId;
+    return hubsToReturn.first;
+  }
+
+  @override
+  Future<void> rejectPictureSuggestion(String token, String suggestionId) async {
+    lastRejectedPictureSuggestionId = suggestionId;
   }
 }
 
@@ -1908,6 +1946,43 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Pub'), findsOneWidget);
+    });
+
+    testWidgets('picking and suggesting a Hub photo from the sheet calls suggestHubPicture', (WidgetTester tester) async {
+      final fakeHubService = _FakeHubService()
+        ..hubsToReturn = [
+          Hub(
+            id: 'h1',
+            name: 'Mucky Duck Pub',
+            latitude: 42.03,
+            longitude: -93.63,
+            status: 'Approved',
+            createdByUserId: 'admin1',
+            category: 'Bar',
+          ),
+        ];
+      final fakeProfileService = _FakeProfileService()
+        ..imageToReturn = XFile.fromData(Uint8List.fromList([1, 2, 3]), path: 'pub.png', mimeType: 'image/png');
+      final authState = AuthState()..login(_fakeJwtFor('u1'));
+      await tester.pumpWidget(MaterialApp(
+        home: MapScreen(
+            authState: authState,
+            waypointService: _FakeWaypointService(),
+            friendsService: _FakeFriendsService(),
+            profileService: fakeProfileService,
+            hubService: fakeHubService,
+            birdService: _FakeBirdService()),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('hubMarker_h1')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('hubPictureButton')));
+      await tester.pumpAndSettle();
+
+      expect(fakeHubService.lastSuggestedPictureHubId, 'h1');
+      expect(find.text('Photo suggestion submitted for review'), findsOneWidget);
     });
 
     testWidgets('shows an unread badge under a Hub marker with unread messages', (WidgetTester tester) async {

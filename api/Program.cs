@@ -87,6 +87,8 @@ builder.Services.AddScoped<IBirdRepository, CosmosBirdRepository>();
 builder.Services.AddScoped<IBirdService, BirdService>();
 builder.Services.AddScoped<IHubRepository, CosmosHubRepository>();
 builder.Services.AddScoped<IHubService, HubService>();
+builder.Services.AddScoped<IHubPictureSuggestionRepository, CosmosHubPictureSuggestionRepository>();
+builder.Services.AddScoped<IHubPictureService, HubPictureService>();
 builder.Services.AddScoped<IHubMessageRepository, CosmosHubMessageRepository>();
 builder.Services.AddScoped<IHubReadStateRepository, CosmosHubReadStateRepository>();
 builder.Services.AddScoped<IBirdReadStateRepository, CosmosBirdReadStateRepository>();
@@ -147,6 +149,10 @@ if (app.Environment.IsDevelopment())
     // "list every approved Hub" (see Hub.cs), which a /status partition keeps
     // single-partition.
     await database.Database.CreateContainerIfNotExistsAsync(opts.HubsContainerName, "/status");
+    // /hubId - the dominant query is "pending photo suggestions for a given hub" plus the
+    // admin moderation feed's "every pending suggestion" (a small cross-partition scan),
+    // same /hubId reasoning as HubMessages below (see HubPictureSuggestion.cs).
+    await database.Database.CreateContainerIfNotExistsAsync(opts.HubPictureSuggestionsContainerName, "/hubId");
     // /birdId, not the reacting user's id - Bird is partitioned by its *sender's* userId,
     // and a reaction from a different user needs its own single-partition read/write path
     // rather than a cross-partition write into the sender's partition (see BirdReaction.cs).
@@ -221,6 +227,10 @@ if (app.Environment.IsDevelopment())
     // Same public-read, dev-only tradeoff as profile-pictures above - a nest's picture is
     // shown to any friend who can already see that nest via /friends/waypoints.
     await blobClient.GetBlobContainerClient(blobOpts.NestPicturesContainerName)
+        .CreateIfNotExistsAsync(PublicAccessType.Blob);
+    // Same tradeoff again - a Hub's picture, shared by both pending suggestions (previewed
+    // in the admin moderation feed) and the approved picture itself.
+    await blobClient.GetBlobContainerClient(blobOpts.HubPicturesContainerName)
         .CreateIfNotExistsAsync(PublicAccessType.Blob);
     // Same tradeoff again - a bird's own avatar.
     await blobClient.GetBlobContainerClient(blobOpts.BirdPicturesContainerName)
@@ -587,6 +597,107 @@ app.MapDelete("/hub-suggestions/{id}", async (string id, ClaimsPrincipal princip
 })
 .RequireAuthorization()
 .WithName("RejectHubSuggestion");
+
+// Any authenticated user can suggest a photo for an existing (Approved) Hub - unlike a
+// Hub location suggestion, this doesn't create a new Hub, just a Pending picture attached
+// to one that already exists. Same admin-approval gate as hub-suggestions above, so a
+// shared/ownerless Hub's picture can't be griefed by an unmoderated upload.
+app.MapPost("/hubs/{id}/picture-suggestions", async (string id, IFormFile file, ClaimsPrincipal principal, IHubPictureService hubPictureService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await using var stream = file.OpenReadStream();
+        var suggestion = await hubPictureService.SuggestAsync(id, userId, stream, file.ContentType, file.Length);
+        return Results.Created($"/hub-picture-suggestions/{suggestion.Id}", suggestion);
+    }
+    catch (HubPictureServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.DisableAntiforgery()
+.WithName("SuggestHubPicture");
+
+// The admin moderation feed - same caller-lookup-then-IsAdmin gate as GET /hub-suggestions.
+app.MapGet("/hub-picture-suggestions", async (ClaimsPrincipal principal, IHubPictureService hubPictureService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var caller = await userRepo.GetByIdAsync(userId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    return Results.Ok(await hubPictureService.ListPendingAsync());
+})
+.RequireAuthorization()
+.WithName("ListHubPictureSuggestions");
+
+app.MapPost("/hub-picture-suggestions/{id}/approve", async (string id, ClaimsPrincipal principal, IHubPictureService hubPictureService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var caller = await userRepo.GetByIdAsync(userId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        var hub = await hubPictureService.ApproveAsync(id);
+        return Results.Ok(hub);
+    }
+    catch (HubPictureServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("ApproveHubPictureSuggestion");
+
+app.MapDelete("/hub-picture-suggestions/{id}", async (string id, ClaimsPrincipal principal, IHubPictureService hubPictureService, IUserRepository userRepo) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var caller = await userRepo.GetByIdAsync(userId);
+    if (caller is null || !caller.IsAdmin)
+    {
+        return Results.Forbid();
+    }
+
+    try
+    {
+        await hubPictureService.RejectAsync(id);
+        return Results.NoContent();
+    }
+    catch (HubPictureServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("RejectHubPictureSuggestion");
 
 app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
 {

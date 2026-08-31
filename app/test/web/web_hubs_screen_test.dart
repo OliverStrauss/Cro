@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cro_app/models/hub.dart';
+import 'package:cro_app/models/hub_picture_suggestion.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/services/hub_service.dart';
 import 'package:cro_app/services/profile_service.dart';
@@ -10,9 +11,16 @@ import 'package:cro_app/theme.dart';
 import 'package:cro_app/web/screens/web_hubs_screen.dart';
 
 class _FakeHubService implements HubService {
+  List<Hub> hubsToReturn = [];
   List<Hub> suggestionsToReturn = [];
+  List<HubPictureSuggestion> pictureSuggestionsToReturn = [];
   String? lastApprovedId;
   String? lastRejectedId;
+  String? lastApprovedPictureId;
+  String? lastRejectedPictureId;
+
+  @override
+  Future<List<Hub>> listHubs(String token) async => hubsToReturn;
 
   @override
   Future<List<Hub>> listSuggestions(String token) async => suggestionsToReturn;
@@ -26,6 +34,20 @@ class _FakeHubService implements HubService {
   @override
   Future<void> rejectSuggestion(String token, String hubId) async {
     lastRejectedId = hubId;
+  }
+
+  @override
+  Future<List<HubPictureSuggestion>> listPictureSuggestions(String token) async => pictureSuggestionsToReturn;
+
+  @override
+  Future<Hub> approvePictureSuggestion(String token, String suggestionId) async {
+    lastApprovedPictureId = suggestionId;
+    return hubsToReturn.first;
+  }
+
+  @override
+  Future<void> rejectPictureSuggestion(String token, String suggestionId) async {
+    lastRejectedPictureId = suggestionId;
   }
 
   @override

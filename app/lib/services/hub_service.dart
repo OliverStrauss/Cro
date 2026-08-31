@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../config.dart';
 import '../models/hub.dart';
 import '../models/hub_message.dart';
+import '../models/hub_picture_suggestion.dart';
 
 class HubException implements Exception {
   final String message;
@@ -205,6 +207,92 @@ class HubService {
 
     if (response.statusCode != 204) {
       throw HubException(_errorMessage(response, 'Could not reject suggestion'));
+    }
+  }
+
+  // Any authenticated user can suggest a photo for an existing Hub - the server holds it
+  // as Pending until an admin approves or rejects it via the methods below, same
+  // suggest/moderate shape as suggestHub/listSuggestions above.
+  Future<HubPictureSuggestion> suggestHubPicture(
+    String token,
+    String hubId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/hubs/$hubId/picture-suggestions'))
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: MediaType.parse(contentType),
+      ));
+
+    final http.StreamedResponse streamedResponse;
+    try {
+      streamedResponse = await request.send();
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode != 201) {
+      throw HubException(_errorMessage(response, 'Could not suggest a photo'));
+    }
+    return HubPictureSuggestion.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // Admin-only moderation feed - the server returns 403 for a non-admin caller.
+  Future<List<HubPictureSuggestion>> listPictureSuggestions(String token) async {
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse('$apiBaseUrl/hub-picture-suggestions'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw HubException(_errorMessage(response, 'Could not load photo suggestions'));
+    }
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => HubPictureSuggestion.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Hub> approvePictureSuggestion(String token, String suggestionId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$apiBaseUrl/hub-picture-suggestions/$suggestionId/approve'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw HubException(_errorMessage(response, 'Could not approve photo suggestion'));
+    }
+    return Hub.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> rejectPictureSuggestion(String token, String suggestionId) async {
+    final http.Response response;
+    try {
+      response = await http.delete(
+        Uri.parse('$apiBaseUrl/hub-picture-suggestions/$suggestionId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw HubException('Could not reach the server');
+    }
+
+    if (response.statusCode != 204) {
+      throw HubException(_errorMessage(response, 'Could not reject photo suggestion'));
     }
   }
 
