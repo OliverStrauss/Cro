@@ -92,32 +92,18 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                '${widget.ownNests.length} nest${widget.ownNests.length == 1 ? '' : 's'} of your own',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              // A user gets exactly one personal nest (see WaypointService.CreateAsync) -
-              // once they have it, there's nothing left to add.
-              if (widget.ownNests.isEmpty)
-                OutlinedButton(
-                  key: const Key('webAddNestButton'),
-                  onPressed: widget.onStartAddNest,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: CroColors.deepWaypoint,
-                    side: BorderSide(color: CroColors.waypointBlue.withValues(alpha: 0.6), width: 1.5),
-                  ),
-                  child: const Text('+ Add a nest'),
-                )
-              else
-                const Text(
-                  'You already have a nest',
-                  key: Key('webNestLimitReachedMessage'),
-                  style: TextStyle(fontSize: 12.5, color: CroColors.fog),
-                ),
-            ],
+          // Always visible, left-aligned (05_web_ui_updates.md item 6) - no count line, and
+          // no "already have a nest" note. A user still gets exactly one personal nest (see
+          // WaypointService.CreateAsync); past that limit, _placeNest's own snackbar guard
+          // (see WebShellScreen) is what actually stops the add, once they tap the map.
+          OutlinedButton(
+            key: const Key('webAddNestButton'),
+            onPressed: widget.onStartAddNest,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: CroColors.deepWaypoint,
+              side: BorderSide(color: CroColors.waypointBlue.withValues(alpha: 0.6), width: 1.5),
+            ),
+            child: const Text('+ Add a nest'),
           ),
           const SizedBox(height: 16),
           if (widget.ownNests.isEmpty)
