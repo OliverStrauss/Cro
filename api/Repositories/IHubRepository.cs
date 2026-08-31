@@ -8,5 +8,6 @@ public interface IHubRepository
     Task<List<Hub>> ListByStatusAsync(string status);
     Task<Hub?> GetAsync(string hubId);
     Task<Hub> CreateAsync(Hub hub);
+    Task<Hub> UpdateAsync(Hub hub);
     Task DeleteAsync(string hubId, string status);
 }

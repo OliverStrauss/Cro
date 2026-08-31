@@ -76,6 +76,14 @@ public class CosmosHubRepository : IHubRepository
         return response.Resource;
     }
 
+    // Status (the partition key) never changes here - only used to update fields like
+    // ProfilePictureUrl on an already-Approved Hub (see HubPictureService.ApproveAsync).
+    public async Task<Hub> UpdateAsync(Hub hub)
+    {
+        var response = await _container.UpsertItemAsync(hub, new PartitionKey(hub.Status));
+        return response.Resource;
+    }
+
     public async Task DeleteAsync(string hubId, string status)
     {
         await _container.DeleteItemAsync<Hub>(hubId, new PartitionKey(status));

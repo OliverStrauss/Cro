@@ -278,6 +278,8 @@ class MapScreenState extends State<MapScreen>
       latitude: hub.latitude,
       longitude: hub.longitude,
       authState: widget.authState,
+      hubService: widget.hubService,
+      profileService: widget.profileService,
     );
   }
 
