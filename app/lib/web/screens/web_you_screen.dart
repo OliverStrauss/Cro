@@ -80,7 +80,9 @@ class _WebYouScreenState extends State<WebYouScreen> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       key: const Key('webYouScreen'),
-      padding: const EdgeInsets.fromLTRB(26, 24, 26, 240),
+      // Top padding keeps content clear of the floating actions cluster (no top bar - see
+      // 05_web_ui_updates.md item 1).
+      padding: const EdgeInsets.fromLTRB(26, 74, 26, 240),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: Column(

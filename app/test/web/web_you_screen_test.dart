@@ -96,6 +96,11 @@ void main() {
     expect(wentToHubs, isTrue);
 
     expect(authState.isLoggedIn, isTrue);
+    // The screen's extra top padding (clearing the floating actions cluster - see
+    // 05_web_ui_updates.md item 1) pushes this last settings row below the default test
+    // viewport, so it needs scrolling into view before it's hit-testable.
+    await tester.ensureVisible(find.byKey(const Key('webSettingsSignOut')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('webSettingsSignOut')));
     expect(authState.isLoggedIn, isFalse);
   });
