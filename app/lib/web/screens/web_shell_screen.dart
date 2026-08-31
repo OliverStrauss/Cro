@@ -97,6 +97,9 @@ class WebShellScreenState extends State<WebShellScreen> {
   List<Bird> _birds = [];
   List<FriendBird> _friendsBirds = [];
   List<Hub> _hubs = [];
+  // Keyed by hubId - drives the "!" badge on a Hub's map marker (see WebMapScreen). Mirrors
+  // the phone app's MapScreen._hubUnreadCounts.
+  Map<String, int> _hubUnreadCounts = {};
   List<FriendRequest> _incomingRequests = [];
   List<Friend> _friends = [];
   List<AppEvent> _events = [];
@@ -138,11 +141,13 @@ class WebShellScreenState extends State<WebShellScreen> {
       final results = await Future.wait([
         _birdService.listBirds(token),
         _friendsService.getFriendsBirds(token),
+        _hubService.getUnreadCounts(token),
       ]);
       if (!mounted) return;
       setState(() {
         _birds = results[0] as List<Bird>;
         _friendsBirds = results[1] as List<FriendBird>;
+        _hubUnreadCounts = results[2] as Map<String, int>;
       });
     } catch (_) {
       // Swallow - same "a blip on a silent background poll shouldn't blank an
@@ -167,6 +172,7 @@ class WebShellScreenState extends State<WebShellScreen> {
         _birdService.listBirds(token),
         _friendsService.getFriendsBirds(token),
         _hubService.listHubs(token),
+        _hubService.getUnreadCounts(token),
         _friendsService.getIncomingRequests(token),
         _eventService.listEvents(token),
         _eventService.listNotifications(token),
@@ -179,12 +185,13 @@ class WebShellScreenState extends State<WebShellScreen> {
         _birds = results[2] as List<Bird>;
         _friendsBirds = results[3] as List<FriendBird>;
         _hubs = results[4] as List<Hub>;
-        _incomingRequests = results[5] as List<FriendRequest>;
-        _events = results[6] as List<AppEvent>;
-        _notifications = results[7] as List<AppEvent>;
-        _friends = results[8] as List<Friend>;
-        if (results.length > 9) {
-          final profile = results[9] as UserProfile;
+        _hubUnreadCounts = results[5] as Map<String, int>;
+        _incomingRequests = results[6] as List<FriendRequest>;
+        _events = results[7] as List<AppEvent>;
+        _notifications = results[8] as List<AppEvent>;
+        _friends = results[9] as List<Friend>;
+        if (results.length > 10) {
+          final profile = results[10] as UserProfile;
           _username = profile.username;
           _profilePictureUrl = profile.profilePictureUrl;
           _isAdmin = profile.isAdmin;
@@ -232,6 +239,19 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedBird = null;
       _selectedFriendBird = null;
     });
+    if ((_hubUnreadCounts[hub.id] ?? 0) > 0) _markHubRead(hub.id);
+  }
+
+  Future<void> _markHubRead(String hubId) async {
+    // Optimistic - clear the marker badge immediately rather than waiting on the round trip,
+    // same "not worth surfacing an error state over" reasoning as _markFriendBirdViewed; the
+    // next poll reconciles it either way.
+    setState(() => _hubUnreadCounts = {..._hubUnreadCounts, hubId: 0});
+    try {
+      await _hubService.markHubRead(widget.authState.token!, hubId);
+    } catch (_) {
+      // Best-effort.
+    }
   }
 
   void _selectBird(Bird bird) {
@@ -628,6 +648,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           birds: _birds,
           friendsBirds: _friendsBirds,
           hubs: _hubs,
+          hubUnreadCounts: _hubUnreadCounts,
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
           selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id,
