@@ -88,7 +88,7 @@ public class BirdComposeEndpointTests : IClassFixture<WebApplicationFactory<Prog
     private async Task<HubDto> CreateHubAsync(string adminToken, string name, double lat = 42.03, double lng = -93.63)
     {
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", adminToken,
-            new { Name = name, Latitude = lat, Longitude = lng, Category = "Library" }));
+            new { Name = name, Latitude = lat, Longitude = lng, Category = "Landmark" }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<HubDto>())!;
     }

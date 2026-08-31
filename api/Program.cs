@@ -481,6 +481,11 @@ app.MapPost("/hubs", async (SetHubRequest req, ClaimsPrincipal principal, IHubSe
         return Results.Forbid();
     }
 
+    if (!HubCategoryCatalog.IsValid(req.Category))
+    {
+        return Results.Json(new { error = $"Unknown category '{req.Category}'." }, statusCode: 400);
+    }
+
     var saved = await hubService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude, req.Category);
     return Results.Created($"/hubs/{saved.Id}", saved);
 })
@@ -496,6 +501,11 @@ app.MapPost("/hub-suggestions", async (SetHubRequest req, ClaimsPrincipal princi
     if (userId is null)
     {
         return Results.Unauthorized();
+    }
+
+    if (!HubCategoryCatalog.IsValid(req.Category))
+    {
+        return Results.Json(new { error = $"Unknown category '{req.Category}'." }, statusCode: 400);
     }
 
     var saved = await hubService.SuggestAsync(userId, req.Name, req.Latitude, req.Longitude, req.Category);
@@ -1479,7 +1489,7 @@ record LoginResponse(string Token, DateTimeOffset ExpiresAt);
 // IsPublic is only honored by CreateWaypoint - UpdateWaypoint reuses this same DTO but
 // ignores the field entirely, since a nest's kind is not editable after creation.
 record SetWaypointRequest(string Name, double Latitude, double Longitude, bool IsPublic = false);
-record SetHubRequest(string Name, double Latitude, double Longitude, string? Category);
+record SetHubRequest(string Name, double Latitude, double Longitude, string Category);
 record SendBirdRequest(string NestId, string? Content);
 record RenameBirdRequest(string Name);
 record SendFriendRequestRequest(string Username);

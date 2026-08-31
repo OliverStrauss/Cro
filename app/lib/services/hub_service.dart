@@ -42,7 +42,7 @@ class HubService {
     required String name,
     required double latitude,
     required double longitude,
-    String? category,
+    required String category,
   }) async {
     final http.Response response;
     try {
@@ -131,7 +131,7 @@ class HubService {
     required String name,
     required double latitude,
     required double longitude,
-    String? category,
+    required String category,
   }) async {
     final http.Response response;
     try {

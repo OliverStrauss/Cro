@@ -95,7 +95,7 @@ public class BirdEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     private async Task<HubDto> CreateHubAsync(string adminToken, string name, double lat, double lng)
     {
         var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", adminToken,
-            new { Name = name, Latitude = lat, Longitude = lng }));
+            new { Name = name, Latitude = lat, Longitude = lng, Category = "Landmark" }));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<HubDto>())!;
     }
