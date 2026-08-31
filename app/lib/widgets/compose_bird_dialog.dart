@@ -207,22 +207,19 @@ class _ComposeBirdFormState extends State<ComposeBirdForm> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 8,
-          children: [
-            for (final type in BirdType.all)
-              ChoiceChip(
-                key: Key('birdTypeChip_$type'),
-                label: Text(type),
-                selected: _type == type,
-                onSelected: (_) => setState(() {
-                  _type = type;
-                  _audioBytes = null;
-                  _imageBytes = null;
-                  _imageFilename = null;
-                }),
-              ),
+        SegmentedButton<String>(
+          key: const Key('birdTypeSegmentedButton'),
+          segments: [
+            for (final type in BirdType.all) ButtonSegment(value: type, label: Text(type)),
           ],
+          selected: {_type},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) => setState(() {
+            _type = selection.first;
+            _audioBytes = null;
+            _imageBytes = null;
+            _imageFilename = null;
+          }),
         ),
         const SizedBox(height: 4),
         Text(
