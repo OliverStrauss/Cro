@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 /// The white pill marker shared by nest and Hub map markers - a ringed/tinted avatar plus a
-/// name + one-line subtitle, with a colored border when selected. Hub markers pass a larger
-/// corner radius (14) than nest markers (30, i.e. fully rounded) per the design spec.
+/// name + one-line subtitle, with a colored border when selected. Both nest and Hub markers
+/// pass `compact: true` now (smaller padding/gap/text than the pre-05_web_ui_updates.md
+/// default, which read as oversized once seen live) - Hub markers additionally use a smaller
+/// `borderRadius` (11, boxier) and avatar than nest markers (default 30, fully rounded) so
+/// nests still read as primary.
 class MapMarkerPill extends StatelessWidget {
   final Widget avatar;
   final String name;
@@ -10,6 +13,7 @@ class MapMarkerPill extends StatelessWidget {
   final bool selected;
   final Color selectionColor;
   final double borderRadius;
+  final bool compact;
   final VoidCallback onTap;
 
   const MapMarkerPill({
@@ -21,6 +25,7 @@ class MapMarkerPill extends StatelessWidget {
     required this.selectionColor,
     required this.onTap,
     this.borderRadius = 30,
+    this.compact = false,
   });
 
   @override
@@ -29,7 +34,7 @@ class MapMarkerPill extends StatelessWidget {
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 200),
-        padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+        padding: compact ? const EdgeInsets.fromLTRB(5, 5, 10, 5) : const EdgeInsets.fromLTRB(6, 6, 14, 6),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.93),
           borderRadius: BorderRadius.circular(borderRadius),
@@ -40,7 +45,7 @@ class MapMarkerPill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             avatar,
-            const SizedBox(width: 9),
+            SizedBox(width: compact ? 7 : 9),
             Flexible(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -50,13 +55,13 @@ class MapMarkerPill extends StatelessWidget {
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    style: TextStyle(fontSize: compact ? 11.5 : 13, fontWeight: FontWeight.w700),
                   ),
                   Text(
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                    style: TextStyle(fontSize: compact ? 10 : 11, color: const Color(0xFF6B7280)),
                   ),
                 ],
               ),

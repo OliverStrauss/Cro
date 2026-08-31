@@ -222,17 +222,22 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                     key: Key('webOwnNestMarker_${nest.id}'),
                     point: LatLng(nest.latitude, nest.longitude),
                     width: 180,
-                    height: 60,
+                    height: 46,
                     child: MapMarkerPill(
+                      compact: true,
                       selected: widget.selectedNestId == nest.id,
                       selectionColor: CroColors.waypointBlue,
                       onTap: () => widget.onSelectNest(nest),
+                      // Still fully-rounded (the default borderRadius of 30) and still
+                      // larger than a Hub's marker (radius 15 vs Hub's 12) - nests read
+                      // first - but shrunk down from the original 38px avatar after seeing
+                      // it live felt oversized next to the rest of the map.
                       avatar: CircleAvatar(
-                        radius: 19,
+                        radius: 15,
                         backgroundColor: CroColors.waypointBlue,
                         child: Text(
                           nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
                       ),
                       name: nest.name,
@@ -244,17 +249,18 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                     key: Key('webFriendNestMarker_${fw.id}'),
                     point: LatLng(fw.latitude, fw.longitude),
                     width: 180,
-                    height: 60,
+                    height: 46,
                     child: MapMarkerPill(
+                      compact: true,
                       selected: widget.selectedNestId == fw.id,
                       selectionColor: hexToColor(fw.color ?? '#6B7280'),
                       onTap: () => widget.onSelectNest(fw),
                       avatar: CircleAvatar(
-                        radius: 19,
+                        radius: 15,
                         backgroundColor: hexToColor(fw.color ?? '#6B7280'),
                         child: Text(
                           fw.name.isEmpty ? '?' : fw.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
                       ),
                       name: fw.name,
