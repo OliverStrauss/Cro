@@ -27,8 +27,8 @@ import '../services/event_service.dart';
 import '../state/web_shell_controller.dart';
 import '../widgets/compose_bird_modal.dart';
 import '../widgets/context_panel.dart';
+import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
-import '../widgets/top_bar.dart';
 import '../widgets/your_birds_dock.dart';
 import 'web_friends_screen.dart';
 import 'web_hubs_screen.dart';
@@ -36,11 +36,13 @@ import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
 import 'web_you_screen.dart';
 
-/// Top-level widget for the web shell (rail + top bar + content + dock + right panel) - the
-/// kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart. Owns every piece of
-/// shell state (nav selection, panel selection, dock filter/expanded, map filter) the same
-/// way HomeScreen owns tab selection: one StatefulWidget, plain setState, no state-mgmt
-/// package (none exists anywhere else in this codebase).
+/// Top-level widget for the web shell (rail + content + floating actions cluster + dock +
+/// right panel) - the kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart.
+/// There is no top bar: the floating actions cluster (journey log / bell) and the dock both
+/// overlay the content column instead (see 05_web_ui_updates.md item 1). Owns
+/// every piece of shell state (nav selection, panel selection, dock filter/expanded, map
+/// filter) the same way HomeScreen owns tab selection: one StatefulWidget, plain setState,
+/// no state-mgmt package (none exists anywhere else in this codebase).
 class WebShellScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService? waypointService;
@@ -97,6 +99,9 @@ class WebShellScreenState extends State<WebShellScreen> {
   List<Bird> _birds = [];
   List<FriendBird> _friendsBirds = [];
   List<Hub> _hubs = [];
+  // Keyed by hubId - drives the "!" badge on a Hub's map marker (see WebMapScreen). Mirrors
+  // the phone app's MapScreen._hubUnreadCounts.
+  Map<String, int> _hubUnreadCounts = {};
   List<FriendRequest> _incomingRequests = [];
   List<Friend> _friends = [];
   List<AppEvent> _events = [];
@@ -138,11 +143,13 @@ class WebShellScreenState extends State<WebShellScreen> {
       final results = await Future.wait([
         _birdService.listBirds(token),
         _friendsService.getFriendsBirds(token),
+        _hubService.getUnreadCounts(token),
       ]);
       if (!mounted) return;
       setState(() {
         _birds = results[0] as List<Bird>;
         _friendsBirds = results[1] as List<FriendBird>;
+        _hubUnreadCounts = results[2] as Map<String, int>;
       });
     } catch (_) {
       // Swallow - same "a blip on a silent background poll shouldn't blank an
@@ -167,6 +174,7 @@ class WebShellScreenState extends State<WebShellScreen> {
         _birdService.listBirds(token),
         _friendsService.getFriendsBirds(token),
         _hubService.listHubs(token),
+        _hubService.getUnreadCounts(token),
         _friendsService.getIncomingRequests(token),
         _eventService.listEvents(token),
         _eventService.listNotifications(token),
@@ -179,12 +187,13 @@ class WebShellScreenState extends State<WebShellScreen> {
         _birds = results[2] as List<Bird>;
         _friendsBirds = results[3] as List<FriendBird>;
         _hubs = results[4] as List<Hub>;
-        _incomingRequests = results[5] as List<FriendRequest>;
-        _events = results[6] as List<AppEvent>;
-        _notifications = results[7] as List<AppEvent>;
-        _friends = results[8] as List<Friend>;
-        if (results.length > 9) {
-          final profile = results[9] as UserProfile;
+        _hubUnreadCounts = results[5] as Map<String, int>;
+        _incomingRequests = results[6] as List<FriendRequest>;
+        _events = results[7] as List<AppEvent>;
+        _notifications = results[8] as List<AppEvent>;
+        _friends = results[9] as List<Friend>;
+        if (results.length > 10) {
+          final profile = results[10] as UserProfile;
           _username = profile.username;
           _profilePictureUrl = profile.profilePictureUrl;
           _isAdmin = profile.isAdmin;
@@ -232,6 +241,19 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedBird = null;
       _selectedFriendBird = null;
     });
+    if ((_hubUnreadCounts[hub.id] ?? 0) > 0) _markHubRead(hub.id);
+  }
+
+  Future<void> _markHubRead(String hubId) async {
+    // Optimistic - clear the marker badge immediately rather than waiting on the round trip,
+    // same "not worth surfacing an error state over" reasoning as _markFriendBirdViewed; the
+    // next poll reconciles it either way.
+    setState(() => _hubUnreadCounts = {..._hubUnreadCounts, hubId: 0});
+    try {
+      await _hubService.markHubRead(widget.authState.token!, hubId);
+    } catch (_) {
+      // Best-effort.
+    }
   }
 
   void _selectBird(Bird bird) {
@@ -528,14 +550,6 @@ class WebShellScreenState extends State<WebShellScreen> {
       );
     }
 
-    final titles = switch (_selectedNav) {
-      WebNavItem.map => ('Map', 'Everything your flock can reach'),
-      WebNavItem.nests => ('Nests', 'Your roosts and the ones your friends keep'),
-      WebNavItem.hubs => ('Hubs', 'Public landmarks with a shared board'),
-      WebNavItem.friends => ('Friends', 'Who you can send to, and who is asking'),
-      WebNavItem.you => ('You', 'Your keeper account'),
-    };
-
     return Scaffold(
       body: Row(
         children: [
@@ -549,43 +563,39 @@ class WebShellScreenState extends State<WebShellScreen> {
             onAvatarTap: () => _selectNav(WebNavItem.you),
           ),
           Expanded(
-            child: Column(
+            child: Stack(
               children: [
-                TopBar(
-                  title: titles.$1,
-                  subtitle: titles.$2,
-                  unreadCount: _notifications.where((n) => !n.isRead).length,
-                  notifications: _notifications,
-                  onMarkAllRead: _markAllNotificationsRead,
-                  onOpenNotification: _openNotification,
-                  events: _events,
-                  eventsLoading: false,
-                  eventsError: null,
-                  onRetryEvents: _loadData,
+                Positioned.fill(child: _buildActiveScreen()),
+                Positioned(
+                  top: 18,
+                  right: 22,
+                  child: FloatingActionsCluster(
+                    unreadCount: _notifications.where((n) => !n.isRead).length,
+                    notifications: _notifications,
+                    onMarkAllRead: _markAllNotificationsRead,
+                    onOpenNotification: _openNotification,
+                    events: _events,
+                    eventsLoading: false,
+                    eventsError: null,
+                    onRetryEvents: _loadData,
+                  ),
                 ),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(child: _buildActiveScreen()),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: YourBirdsDock(
-                          key: _dockKey,
-                          birds: _birds,
-                          ownNests: _ownNests,
-                          friendWaypoints: _friendWaypoints,
-                          hubs: _hubs,
-                          filter: _dockFilter,
-                          onFilterChanged: (f) => setState(() => _dockFilter = f),
-                          expanded: _dockExpanded,
-                          onToggleExpanded: () => setState(() => _dockExpanded = !_dockExpanded),
-                          onBirdTap: _selectBird,
-                          onComposePressed: _onComposePressed,
-                        ),
-                      ),
-                    ],
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: YourBirdsDock(
+                    key: _dockKey,
+                    birds: _birds,
+                    ownNests: _ownNests,
+                    friendWaypoints: _friendWaypoints,
+                    hubs: _hubs,
+                    filter: _dockFilter,
+                    onFilterChanged: (f) => setState(() => _dockFilter = f),
+                    expanded: _dockExpanded,
+                    onToggleExpanded: () => setState(() => _dockExpanded = !_dockExpanded),
+                    onBirdTap: _selectBird,
+                    onComposePressed: _onComposePressed,
                   ),
                 ),
               ],
@@ -629,6 +639,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           friendsBirds: _friendsBirds,
           hubs: _hubs,
           friends: _friends,
+          hubUnreadCounts: _hubUnreadCounts,
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
           selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id,

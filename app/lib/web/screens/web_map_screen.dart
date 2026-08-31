@@ -27,6 +27,9 @@ class WebMapScreen extends StatefulWidget {
   // Only used for the Trails legend's per-friend rows (username + trail color) -
   // WebShellScreen already loads this for the Friends screen and rail badge.
   final List<Friend> friends;
+  // Keyed by hubId - drives a Hub marker's "!" badge (only shown when > 0), same signal the
+  // phone app's MapScreen already fetches via HubService.getUnreadCounts.
+  final Map<String, int> hubUnreadCounts;
   final String? selectedNestId;
   final String? selectedHubId;
   // Whichever bird's panel is currently open (own or a friend's) - that marker gets a glow
@@ -69,6 +72,7 @@ class WebMapScreen extends StatefulWidget {
     required this.friendsBirds,
     required this.hubs,
     this.friends = const [],
+    this.hubUnreadCounts = const {},
     required this.selectedNestId,
     required this.selectedHubId,
     this.selectedBirdId,
@@ -203,46 +207,43 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
             MarkerLayer(
               markers: [
                 for (final hub in widget.hubs)
-                    Marker(
-                      key: Key('webHubMarker_${hub.id}'),
-                      point: LatLng(hub.latitude, hub.longitude),
-                      width: 180,
-                      height: 60,
-                      child: MapMarkerPill(
-                        borderRadius: 14,
+                  Marker(
+                    key: Key('webHubMarker_${hub.id}'),
+                    point: LatLng(hub.latitude, hub.longitude),
+                    width: 34,
+                    height: 34,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => widget.onSelectHub(hub),
+                      child: _HubMarkerDot(
+                        key: Key('webHubMarkerDot_${hub.id}'),
+                        initial: hub.name.isEmpty ? '?' : hub.name[0].toUpperCase(),
+                        hasUnread: (widget.hubUnreadCounts[hub.id] ?? 0) > 0,
                         selected: widget.selectedHubId == hub.id,
-                        selectionColor: CroColors.deliveryAmber,
-                        onTap: () => widget.onSelectHub(hub),
-                        avatar: Container(
-                          width: 34,
-                          height: 34,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(color: CroColors.deliveryAmber, borderRadius: BorderRadius.circular(11)),
-                          child: Text(
-                            hub.name.isEmpty ? '?' : hub.name[0].toUpperCase(),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
-                          ),
-                        ),
-                        name: hub.name,
-                        subtitle: hub.category ?? 'Landmark',
                       ),
                     ),
+                  ),
                 for (final nest in widget.ownNests)
                   Marker(
                     key: Key('webOwnNestMarker_${nest.id}'),
                     point: LatLng(nest.latitude, nest.longitude),
                     width: 180,
-                    height: 60,
+                    height: 46,
                     child: MapMarkerPill(
+                      compact: true,
                       selected: widget.selectedNestId == nest.id,
                       selectionColor: CroColors.waypointBlue,
                       onTap: () => widget.onSelectNest(nest),
+                      // Still fully-rounded (the default borderRadius of 30) and still
+                      // larger than a Hub's marker (radius 15 vs Hub's 12) - nests read
+                      // first - but shrunk down from the original 38px avatar after seeing
+                      // it live felt oversized next to the rest of the map.
                       avatar: CircleAvatar(
-                        radius: 19,
+                        radius: 15,
                         backgroundColor: CroColors.waypointBlue,
                         child: Text(
                           nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
                       ),
                       name: nest.name,
@@ -254,17 +255,18 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                     key: Key('webFriendNestMarker_${fw.id}'),
                     point: LatLng(fw.latitude, fw.longitude),
                     width: 180,
-                    height: 60,
+                    height: 46,
                     child: MapMarkerPill(
+                      compact: true,
                       selected: widget.selectedNestId == fw.id,
                       selectionColor: hexToColor(fw.color ?? '#6B7280'),
                       onTap: () => widget.onSelectNest(fw),
                       avatar: CircleAvatar(
-                        radius: 19,
+                        radius: 15,
                         backgroundColor: hexToColor(fw.color ?? '#6B7280'),
                         child: Text(
                           fw.name.isEmpty ? '?' : fw.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
                       ),
                       name: fw.name,
@@ -498,6 +500,73 @@ class _BirdMarkerDot extends StatelessWidget {
                   color: hasViewed ? CroColors.fog : CroColors.deliveryAmber,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 1),
+                ),
+                child: const Text(
+                  '!',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white, height: 1),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A Hub marker: same dot-plus-badge language as a friend's public bird marker
+/// (_BirdMarkerDot) rather than the old name/category pill - a Hub carries no heading, so the
+/// badge is the only thing that changes, and only appears at all when there's something
+/// unread (no grey "read" state the way a bird's public badge has, since a Hub's badge isn't
+/// also standing in for "this is public").
+class _HubMarkerDot extends StatelessWidget {
+  final String initial;
+  final bool hasUnread;
+  final bool selected;
+
+  const _HubMarkerDot({super.key, required this.initial, this.hasUnread = false, this.selected = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (selected)
+            Container(
+              key: const Key('webHubMarkerGlow'),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: CroColors.deliveryAmber.withValues(alpha: 0.9), blurRadius: 14, spreadRadius: 3)],
+              ),
+            ),
+          Container(
+            width: 22,
+            height: 22,
+            decoration: const BoxDecoration(
+              color: CroColors.deliveryAmber,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Color(0x4D2B2F33), blurRadius: 6, offset: Offset(0, 2))],
+            ),
+            alignment: Alignment.center,
+            child: Text(initial, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+          ),
+          if (hasUnread)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                key: const Key('webHubUnreadBadge'),
+                width: 13,
+                height: 13,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: CroColors.deliveryAmber,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
                 ),
                 child: const Text(
                   '!',
