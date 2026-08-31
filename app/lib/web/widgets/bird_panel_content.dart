@@ -195,6 +195,10 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       friendWaypoints: widget.friendWaypoints,
       hubs: widget.hubs,
     );
+    // A bird sitting on a public Hub board is already visible to anyone who opens that
+    // Hub (see HubPanelContent/HubMessageCard) - sealing it here too, just because the
+    // bird itself wasn't composed as isPublic, would be misleading rather than protective.
+    final showContent = bird.isPublic || view?.state == BirdDockState.hub;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -275,11 +279,11 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            bird.isPublic ? 'What it carries' : 'Sealed until it lands',
+                            showContent ? 'What it carries' : 'Sealed until it lands',
                             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          if (bird.isPublic) ...[
+                          if (showContent) ...[
                             BirdPayloadView(
                               content: bird.content,
                               imageUrl: bird.imageUrl,

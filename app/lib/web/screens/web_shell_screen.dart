@@ -227,6 +227,10 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectNest(Waypoint nest) {
     setState(() {
+      // The panel only ever renders on the Map tab now (it floats over the map itself) -
+      // a selection made from elsewhere (the Nests screen, the dock) jumps there so the
+      // panel it opens is actually visible.
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.nest;
       _selectedNest = nest;
       _selectedNestIsOwn = _ownNests.any((n) => n.id == nest.id);
@@ -238,6 +242,7 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectHub(Hub hub) {
     setState(() {
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.hub;
       _selectedHub = hub;
       _selectedNest = null;
@@ -261,6 +266,7 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectBird(Bird bird) {
     setState(() {
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.bird;
       _selectedBird = bird;
       _selectedNest = null;
@@ -271,6 +277,7 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectFriendBird(FriendBird bird) {
     setState(() {
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.friendBird;
       _selectedFriendBird = bird;
       _selectedNest = null;
@@ -559,12 +566,6 @@ class WebShellScreenState extends State<WebShellScreen> {
 
     return Scaffold(
       body: Row(
-        // ContextPanel now hugs its content's height instead of always filling the screen
-        // (see NestPanelContent/HubPanelContent/BirdPanelContent/FriendBirdPanelContent's
-        // mainAxisSize.min) - crossAxisAlignment.start keeps it flush against the top-right
-        // corner instead of the Row's default vertical centering. IconRail fills to the
-        // Row's max height on its own regardless of this.
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconRail(
             selected: _selectedNav,
@@ -593,6 +594,43 @@ class WebShellScreenState extends State<WebShellScreen> {
                     onRetryEvents: _loadData,
                   ),
                 ),
+                // Floats directly over the map instead of sitting in its own Row column, so
+                // the map stays visible around/behind it rather than a grey Scaffold body
+                // showing through below a content-hugged panel - and only on the Map tab
+                // itself, since a nest/hub/bird selection is only ever made from the map.
+                if (_selectedNav == WebNavItem.map && _panelMode != null)
+                  Positioned(
+                    top: 90,
+                    right: 22,
+                    child: ConstrainedBox(
+                      // Loose (not tight) max, so the panel still hugs shorter content -
+                      // Positioned itself would force an exact fill if both top and bottom
+                      // were pinned instead.
+                      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height - 90 - _dockHeight - 20),
+                      child: ContextPanel(
+                        mode: _panelMode!,
+                        selectedNest: _selectedNest,
+                        selectedNestIsOwn: _selectedNestIsOwn,
+                        selectedHub: _selectedHub,
+                        selectedBird: _selectedBird,
+                        selectedFriendBird: _selectedFriendBird,
+                        ownNests: _ownNests,
+                        friendWaypoints: _friendWaypoints,
+                        hubs: _hubs,
+                        onClose: _closePanel,
+                        authState: widget.authState,
+                        waypointService: _waypointService,
+                        friendsService: _friendsService,
+                        birdService: _birdService,
+                        hubService: _hubService,
+                        profileService: _profileService,
+                        reactionService: _reactionService,
+                        onDataChanged: _loadData,
+                        onFollowOnMap: () => _selectNav(WebNavItem.map),
+                        onComposePressed: _onComposePressed,
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -617,29 +655,6 @@ class WebShellScreenState extends State<WebShellScreen> {
               ],
             ),
           ),
-          if (_panelMode != null)
-            ContextPanel(
-              mode: _panelMode!,
-              selectedNest: _selectedNest,
-              selectedNestIsOwn: _selectedNestIsOwn,
-              selectedHub: _selectedHub,
-              selectedBird: _selectedBird,
-              selectedFriendBird: _selectedFriendBird,
-              ownNests: _ownNests,
-              friendWaypoints: _friendWaypoints,
-              hubs: _hubs,
-              onClose: _closePanel,
-              authState: widget.authState,
-              waypointService: _waypointService,
-              friendsService: _friendsService,
-              birdService: _birdService,
-              hubService: _hubService,
-              profileService: _profileService,
-              reactionService: _reactionService,
-              onDataChanged: _loadData,
-              onFollowOnMap: () => _selectNav(WebNavItem.map),
-              onComposePressed: _onComposePressed,
-            ),
         ],
       ),
     );

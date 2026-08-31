@@ -70,12 +70,17 @@ class ContextPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Floats over the map (see WebShellScreen) rather than sitting in its own Row column,
+    // so rounded corners + a shadow read as a card over the map instead of a flush-edge
+    // sidebar - same floating-card language as FloatingActionsCluster.
     return Container(
       key: const Key('webContextPanel'),
       width: 392,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(left: BorderSide(color: CroColors.ink.withValues(alpha: 0.08))),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.16), blurRadius: 20, offset: const Offset(0, 8))],
       ),
       child: switch (mode) {
         PanelMode.nest when selectedNest != null => NestPanelContent(

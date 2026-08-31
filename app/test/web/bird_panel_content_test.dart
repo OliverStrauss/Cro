@@ -230,6 +230,27 @@ void main() {
     expect(find.byKey(const Key('birdPanelCallItHome')), findsOneWidget);
   });
 
+  testWidgets('a private bird parked at a hub still shows its content, not "Sealed until it lands"',
+      (tester) async {
+    final bird = Bird(
+      id: 'b11',
+      userId: 'u1',
+      name: 'Fen',
+      currentNestId: 'h1',
+      isTraveling: false,
+      type: 'Cro',
+      isPublic: false,
+      content: 'left at the lighthouse',
+    );
+    await tester.pumpWidget(build(bird));
+    await tester.pump();
+
+    expect(find.text('What it carries'), findsOneWidget);
+    expect(find.text('left at the lighthouse'), findsOneWidget);
+    expect(find.text('Sealed until it lands'), findsNothing);
+    expect(find.text('This bird is private. The message stays sealed until it reaches its nest.'), findsNothing);
+  });
+
   testWidgets('a bird resting at a friend nest names the owner, with no progress bar or note', (tester) async {
     final bird = Bird(id: 'b8', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
     await tester.pumpWidget(build(bird));
