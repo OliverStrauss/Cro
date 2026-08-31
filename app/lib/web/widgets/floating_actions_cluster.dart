@@ -4,12 +4,15 @@ import '../../theme.dart';
 import '../models/event.dart';
 import 'journey_log_panel.dart';
 
-/// The floating top-right action cluster (Send a bird / Journey log / notification bell)
-/// that replaced the old 70px top bar - see 05_web_ui_updates.md item 1. It's positioned by
-/// its caller (WebShellScreen) as an overlay inside the content column's own Stack, so it
-/// never overlaps the right-hand context panel the way a full-width header would have.
-/// Every screen's title/subtitle and the "Live" polling indicator went away with the bar
-/// itself - polling still runs, it's just no longer advertised in the UI.
+/// The floating top-right action cluster (journey log / notification bell) that replaced
+/// the old 70px top bar - see 05_web_ui_updates.md item 1. It's positioned by its caller
+/// (WebShellScreen) as an overlay inside the content column's own Stack, so it never overlaps
+/// the right-hand context panel the way a full-width header would have. Every screen's
+/// title/subtitle and the "Live" polling indicator went away with the bar itself - polling
+/// still runs, it's just no longer advertised in the UI. A "Send a bird" button briefly lived
+/// here too (matching the design doc), but every screen already has its own compose entry
+/// point (the dock's "+" card, the context panel, a nest's resident-bird tiles) so it was
+/// just a duplicate - same call the pre-redesign top bar made, restored after seeing it live.
 class FloatingActionsCluster extends StatefulWidget {
   final int unreadCount;
   final List<AppEvent> notifications;
@@ -19,7 +22,6 @@ class FloatingActionsCluster extends StatefulWidget {
   final bool eventsLoading;
   final String? eventsError;
   final VoidCallback onRetryEvents;
-  final VoidCallback onComposePressed;
 
   const FloatingActionsCluster({
     super.key,
@@ -31,7 +33,6 @@ class FloatingActionsCluster extends StatefulWidget {
     required this.eventsLoading,
     required this.eventsError,
     required this.onRetryEvents,
-    required this.onComposePressed,
   });
 
   @override
@@ -221,33 +222,6 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(11),
-            boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4))],
-          ),
-          child: Material(
-            color: CroColors.waypointBlue,
-            borderRadius: BorderRadius.circular(11),
-            child: InkWell(
-              key: const Key('webSendBirdButton'),
-              borderRadius: BorderRadius.circular(11),
-              onTap: widget.onComposePressed,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text('Send a bird', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
         TapRegion(
           groupId: _journeyGroup,
           child: CompositedTransformTarget(

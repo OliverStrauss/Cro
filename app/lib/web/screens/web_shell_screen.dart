@@ -558,7 +558,6 @@ class WebShellScreenState extends State<WebShellScreen> {
                     eventsLoading: false,
                     eventsError: null,
                     onRetryEvents: _loadData,
-                    onComposePressed: _onComposePressed,
                   ),
                 ),
                 Positioned(
