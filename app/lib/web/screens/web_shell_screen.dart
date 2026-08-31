@@ -88,6 +88,9 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
+  // Hidden/shown is independent of expanded/less-detail (05_web_ui_updates.md item 7) - a
+  // per-session choice, not persisted, same as every other piece of shell UI state here.
+  bool _dockHidden = false;
   bool _addingNest = false;
   bool _addingHub = false;
 
@@ -594,6 +597,9 @@ class WebShellScreenState extends State<WebShellScreen> {
                     onFilterChanged: (f) => setState(() => _dockFilter = f),
                     expanded: _dockExpanded,
                     onToggleExpanded: () => setState(() => _dockExpanded = !_dockExpanded),
+                    hidden: _dockHidden,
+                    onHide: () => setState(() => _dockHidden = true),
+                    onShow: () => setState(() => _dockHidden = false),
                     onBirdTap: _selectBird,
                     onComposePressed: _onComposePressed,
                   ),
