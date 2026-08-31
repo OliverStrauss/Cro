@@ -20,8 +20,9 @@ import 'panel_header.dart';
 const _webReactionEmojis = ['🕊️', '🌿', '⭐', '🔥'];
 
 /// The bird detail panel body - adapted from the phone app's BirdDetailsSheet: where/when,
-/// a progress bar, the payload (sealed if private), a reaction row for public birds, and a
-/// state-dependent footer action. Only the caller's own birds are selectable in this pass
+/// a progress bar, the payload (always visible - it's always the caller's own bird), a
+/// reaction row for public birds, and a state-dependent footer action. Only the caller's
+/// own birds are selectable in this pass
 /// (see WebMapScreen/YourBirdsDock), so the sender is always "you" - a friend's bird would
 /// need a different data shape (FriendBird, not Bird) this panel doesn't handle yet.
 class BirdPanelContent extends StatefulWidget {
@@ -121,11 +122,12 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     return hours > 0 ? 'Arrives in ${hours}h ${minutes}m' : 'Arrives in ${minutes}m';
   }
 
+  // Only ever called for flight/home - hub/away show neither the bar nor this note, since
+  // the header chip already says where the bird landed.
   String _progressNote(DockBirdView view) => switch (view.state) {
     BirdDockState.flight => '${(view.progress * 100).round()}% of the way there',
-    BirdDockState.hub => 'Parked at a public hub, not your nest',
-    BirdDockState.away => 'Away from your nests',
     BirdDockState.home => 'Home and rested',
+    _ => '',
   };
 
   Future<void> _callItHome() async {
@@ -152,6 +154,39 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     }
   }
 
+  // Relays the bird from wherever it's currently parked (a hub or a friend's nest) onward
+  // to a different friend's nest (or back to one of the sender's own), each hop carrying
+  // its own message - mirrors NestPanelContent._openSendFlow's destination list, just built
+  // from the lists already passed into this panel instead of re-fetched.
+  Future<void> _sendOnward() async {
+    final bird = widget.bird;
+    final destinations = [
+      ...widget.ownNests
+          .where((n) => n.id != bird.currentNestId)
+          .map((n) => SendBirdDestination(nestId: n.id, label: n.name)),
+      ...widget.friendWaypoints
+          .where((n) => n.id != bird.currentNestId)
+          .map((n) => SendBirdDestination(nestId: n.id, label: '${n.name} (${n.username})')),
+    ];
+    final result = await showDialog<SendBirdResult>(
+      context: context,
+      builder: (_) => SendBirdDialog(destinations: destinations),
+    );
+    if (result == null || !mounted) return;
+
+    try {
+      await widget.birdService.sendBird(widget.authState.token!, bird.id, nestId: result.nestId, content: result.content);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${bird.name} is on its way')));
+      widget.onDataChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bird = widget.bird;
@@ -161,9 +196,14 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       friendWaypoints: widget.friendWaypoints,
       hubs: widget.hubs,
     );
+    // This panel only ever shows the caller's own bird (see the class doc comment) and
+    // GET /birds never withholds Content/AudioUrl/ImageUrl the way GET /friends/birds does
+    // for someone else's - IsPublic only ever gates whether *other* people can see it
+    // (reactions, a friend's/Hub view), never the sender's own read of their own message.
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
           avatar: Container(
@@ -191,7 +231,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                 ),
           onClose: widget.onClose,
         ),
-        Expanded(
+        Flexible(
           child: view == null
               ? const Center(
                   key: Key('birdPanelUnplaceable'),
@@ -205,27 +245,33 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                   ),
                 )
               : ListView(
+                  shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
                   children: [
                     _labelValueRow(bird.isTraveling ? 'Flying to' : 'Resting at', view.hostName),
                     const SizedBox(height: 8),
                     _labelValueRow('Arrival', bird.isTraveling ? _etaText : 'Sitting there'),
                     const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: LinearProgressIndicator(
-                        value: view.progress,
-                        minHeight: 6,
-                        backgroundColor: CroColors.ink.withValues(alpha: 0.08),
-                        valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
+                    // The bird's already arrived at this state - no bar (away) and no note
+                    // under it (hub/away), since the header chip already says where it is.
+                    if (view.state != BirdDockState.away) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: view.progress,
+                          minHeight: 6,
+                          backgroundColor: CroColors.ink.withValues(alpha: 0.08),
+                          valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _progressNote(view),
-                      key: const Key('birdPanelProgressNote'),
-                      style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-                    ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (view.state == BirdDockState.flight || view.state == BirdDockState.home)
+                      Text(
+                        _progressNote(view),
+                        key: const Key('birdPanelProgressNote'),
+                        style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                      ),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -233,24 +279,18 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            bird.isPublic ? 'What it carries' : 'Sealed until it lands',
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                          const Text(
+                            'What it carries',
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          if (bird.isPublic) ...[
-                            BirdPayloadView(
-                              content: bird.content,
-                              imageUrl: bird.imageUrl,
-                              audioUrl: bird.type == BirdType.parrot ? null : bird.audioUrl,
-                            ),
-                            if (bird.type == BirdType.parrot && bird.audioUrl != null)
-                              _ParrotWaveform(audioUrl: bird.audioUrl!, color: Theme.of(context).colorScheme.primary),
-                          ] else
-                            const Text(
-                              'This bird is private. The message stays sealed until it reaches its nest.',
-                              style: TextStyle(fontSize: 12.5, color: CroColors.fog),
-                            ),
+                          BirdPayloadView(
+                            content: bird.content,
+                            imageUrl: bird.imageUrl,
+                            audioUrl: bird.type == BirdType.parrot ? null : bird.audioUrl,
+                          ),
+                          if (bird.type == BirdType.parrot && bird.audioUrl != null)
+                            _ParrotWaveform(audioUrl: bird.audioUrl!, color: Theme.of(context).colorScheme.primary),
                         ],
                       ),
                     ),
@@ -289,12 +329,24 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       fg: Colors.white,
       onTap: widget.onComposePressed,
     ),
-    BirdDockState.away || BirdDockState.hub => _actionButton(
-      keyName: 'birdPanelCallItHome',
-      label: 'Call it home',
-      bg: CroColors.waypointBlue,
-      fg: Colors.white,
-      onTap: _callItHome,
+    BirdDockState.away || BirdDockState.hub => Column(
+      children: [
+        _actionButton(
+          keyName: 'birdPanelSendOnward',
+          label: 'Send onward',
+          bg: CroColors.waypointBlue,
+          fg: Colors.white,
+          onTap: _sendOnward,
+        ),
+        const SizedBox(height: 8),
+        _actionButton(
+          keyName: 'birdPanelCallItHome',
+          label: 'Call it home',
+          bg: CroColors.warmSurface,
+          fg: CroColors.deepWaypoint,
+          onTap: _callItHome,
+        ),
+      ],
     ),
   };
 

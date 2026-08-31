@@ -445,11 +445,6 @@ void main() {
     tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
     await tester.pumpAndSettle();
 
-    // Neither slot is filled yet, so the kind picker appears before the name dialog.
-    expect(find.text('Add which kind of nest?'), findsOneWidget);
-    await tester.tap(find.text('Private nest'));
-    await tester.pumpAndSettle();
-
     expect(find.byKey(const Key('waypointNameField')), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('waypointNameField')), 'Front Porch');
@@ -1223,7 +1218,10 @@ void main() {
     expect(find.text('hello world'), findsOneWidget);
   });
 
-  testWidgets('an own private in-flight bird\'s message is not shown in the details sheet', (WidgetTester tester) async {
+  testWidgets('an own private in-flight bird\'s message can still be read by its sender', (WidgetTester tester) async {
+    // GET /birds never withholds content from its own sender regardless of isPublic - only
+    // a friend's still-private bird actually has it withheld (see the next test below).
+    // isPublic still gates the reaction row, which shouldn't appear for a private bird.
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [
         Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0),
@@ -1250,8 +1248,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byKey(const Key('birdPayloadContent')), findsNothing);
-    expect(find.text('top secret'), findsNothing);
+    expect(find.byKey(const Key('birdPayloadContent')), findsOneWidget);
+    expect(find.text('top secret'), findsOneWidget);
+    expect(find.byKey(const Key('birdReactionRow')), findsNothing);
   });
 
   testWidgets('a friend\'s public in-flight bird\'s message can be read from the details sheet',
@@ -1304,6 +1303,60 @@ void main() {
 
     expect(find.byKey(const Key('birdPayloadContent')), findsOneWidget);
     expect(find.text('hi from friendo'), findsOneWidget);
+  });
+
+  testWidgets('a friend\'s private in-flight bird\'s message is not shown - only the sender and recipient can read it',
+      (WidgetTester tester) async {
+    // Unlike an own bird, GET /friends/birds actually nulls out content/audioUrl/imageUrl
+    // server-side for a still-private one - this fake mirrors that by simply never setting
+    // content, matching what the real endpoint would return.
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0)];
+    final fakeFriendsService = _FakeFriendsService()
+      ..friendWaypointsToReturn = [
+        Waypoint(
+            id: 'fw1',
+            userId: 'friend1',
+            name: "Friend's Nest",
+            latitude: 1.002,
+            longitude: 2.002,
+            username: 'friendo',
+            color: '#1E88E5'),
+      ]
+      ..friendsBirdsToReturn = [
+        FriendBird(
+          id: 'fb2',
+          userId: 'friend1',
+          username: 'friendo',
+          color: '#1E88E5',
+          name: "Friendo's Secret",
+          type: 'Sparrow',
+          nestFromId: 'fw1',
+          nestToId: 'w1',
+          departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+          isPublic: false,
+        ),
+      ];
+    final authState = AuthState()..login(_fakeJwtFor('u1'));
+    await tester.pumpWidget(MaterialApp(
+      home: MapScreen(
+          authState: authState,
+          waypointService: fakeWaypointService,
+          friendsService: fakeFriendsService,
+          profileService: _FakeProfileService(),
+          hubService: _FakeHubService(),
+          birdService: _FakeBirdService()),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdMarker_fb2')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('birdPayloadContent')), findsNothing);
+    expect(find.byKey(const Key('birdReactionRow')), findsNothing);
   });
 
   testWidgets('renders a flight-path line and moving marker for a friend\'s in-flight bird, colored by sender',
@@ -1813,11 +1866,6 @@ void main() {
       await tester.pumpAndSettle();
 
       tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(1, 2));
-      await tester.pumpAndSettle();
-
-      // Neither nest slot is filled yet, so the kind picker appears before the name dialog.
-      expect(find.text('Add which kind of nest?'), findsOneWidget);
-      await tester.tap(find.text('Private nest'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('waypointNameField')), findsOneWidget);

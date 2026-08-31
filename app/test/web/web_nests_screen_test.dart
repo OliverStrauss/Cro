@@ -102,14 +102,15 @@ void main() {
     expect(called, isTrue);
   });
 
-  testWidgets('"+ Add a nest" stays visible even after the user already has one', (tester) async {
+  testWidgets('the add-nest button relabels to "Move nest" once the user already has one', (tester) async {
     // 05_web_ui_updates.md item 6: no count line, no "already have a nest" note - the button
-    // is unconditional; WebShellScreen._placeNest's own snackbar guard is what actually stops
-    // a second nest, once the user taps the map.
+    // is unconditional; WebShellScreen._placeNest now relocates the existing nest instead of
+    // erroring, once the user taps the map.
     var called = false;
     await tester.pumpWidget(build(ownNests: [ownNest], onStartAddNest: () => called = true));
     expect(find.text('You already have a nest'), findsNothing);
-    expect(find.textContaining('nest of your own'), findsNothing);
+    expect(find.text('+ Add a nest'), findsNothing);
+    expect(find.text('Move nest'), findsOneWidget);
     await tester.tap(find.byKey(const Key('webAddNestButton')));
     expect(called, isTrue);
   });

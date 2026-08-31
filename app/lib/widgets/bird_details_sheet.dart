@@ -22,10 +22,10 @@ class BirdDetailsSheet extends StatefulWidget {
   final DateTime estimatedArrivalAt;
   final bool isPublic;
   final String token;
-  // A private bird's message stays a surprise until it's delivered - only ever populated
-  // (by either GET /birds for the caller's own, or GET /friends/birds for a friend's, both
-  // of which withhold these for a still-private bird) when isPublic is true, same rule
-  // reactions already follow.
+  // GET /birds (the caller's own) never withholds these regardless of isPublic - the sender
+  // can always read their own message. Only GET /friends/birds withholds them for a friend's
+  // still-private bird, so null here means "actually withheld" only for a friend's; see
+  // showPayload in build().
   final String? content;
   final String? audioUrl;
   final String? imageUrl;
@@ -173,6 +173,12 @@ class _BirdDetailsSheetState extends State<BirdDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // The caller's own bird always carries its real content/audioUrl/imageUrl here (GET
+    // /birds never withholds these) regardless of isPublic - only a *friend's* still-private
+    // bird actually has them nulled out server-side (GET /friends/birds). So presence of any
+    // payload field is itself the right signal for whether there's anything to show, not
+    // isPublic alone - that only still gates the separate reaction row below.
+    final showPayload = widget.isPublic || widget.content != null || widget.audioUrl != null || widget.imageUrl != null;
     return Container(
       key: const Key('birdDetailsSheet'),
       decoration: const BoxDecoration(
@@ -272,7 +278,7 @@ class _BirdDetailsSheetState extends State<BirdDetailsSheet> {
                 valueColor: AlwaysStoppedAnimation<Color>(widget.color),
               ),
             ),
-            if (widget.isPublic) ...[
+            if (showPayload) ...[
               const SizedBox(height: 16),
               const Divider(height: 1),
               const SizedBox(height: 12),
@@ -284,6 +290,8 @@ class _BirdDetailsSheetState extends State<BirdDetailsSheet> {
                   imageUrl: widget.imageUrl,
                 ),
               ),
+            ],
+            if (widget.isPublic) ...[
               const SizedBox(height: 16),
               const Divider(height: 1),
               const SizedBox(height: 12),

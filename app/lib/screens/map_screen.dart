@@ -49,6 +49,9 @@ class MapScreen extends StatefulWidget {
   // When true, this screen is a location-picker pushed from My Nests: tapping the map pops
   // the tapped LatLng back to the caller instead of opening the name-and-save flow itself.
   final bool pickLocationMode;
+  // Display-only, only meaningful alongside pickLocationMode: distinguishes the AppBar
+  // copy for relocating an existing nest ("Move nest") from placing a brand-new one.
+  final bool isMovingNest;
   // Set when this screen is pushed from "My Nests" via tapping a specific nest row - centers
   // the map there at a close-in zoom instead of the usual "first own nest, zoomed out to 13"
   // default, so tapping a nest actually takes you to it rather than just the general area.
@@ -63,6 +66,7 @@ class MapScreen extends StatefulWidget {
     BirdService? birdService,
     HubService? hubService,
     this.pickLocationMode = false,
+    this.isMovingNest = false,
     this.focusPoint,
   }) : waypointService = waypointService ?? WaypointService(),
        friendsService = friendsService ?? FriendsService(),
@@ -439,27 +443,6 @@ class MapScreenState extends State<MapScreen>
     }
   }
 
-  // Mirrors MyNestsScreen's _resolveNestKindToAdd - only ever invoked when the caller has
-  // already confirmed there's no existing nest (see handleMapTap), so this always asks.
-  Future<bool?> _resolveNestKindToAdd() {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Add which kind of nest?'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Private nest'),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Public nest'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @visibleForTesting
   Future<void> handleMapTap(LatLng point) async {
     if (widget.pickLocationMode) {
@@ -477,6 +460,10 @@ class MapScreenState extends State<MapScreen>
       return;
     }
 
+    // A user gets exactly one nest, always private now (Hubs are the only public landmark
+    // type). This screen has no "move" affordance of its own (an untargeted map tap could
+    // otherwise silently relocate an existing nest) - moving happens via MyNestsScreen's
+    // explicit "Move nest" row, which pushes this same screen in pickLocationMode instead.
     if (_ownNests.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You already have a nest')),
@@ -484,16 +471,9 @@ class MapScreenState extends State<MapScreen>
       return;
     }
 
-    final isPublic = await _resolveNestKindToAdd();
-    if (isPublic == null || !mounted) {
-      return;
-    }
-
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => WaypointNameDialog(
-        kindLabel: isPublic ? 'Public nest' : 'Private nest',
-      ),
+      builder: (context) => const WaypointNameDialog(),
     );
     if (name == null || name.trim().isEmpty) {
       return;
@@ -505,7 +485,7 @@ class MapScreenState extends State<MapScreen>
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
-        isPublic: isPublic,
+        isPublic: false,
       );
       setState(() => _ownNests = [..._ownNests, saved]);
     } catch (e) {
@@ -522,7 +502,9 @@ class MapScreenState extends State<MapScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.pickLocationMode ? 'Tap a spot for your new nest' : 'Map',
+          widget.pickLocationMode
+              ? (widget.isMovingNest ? 'Tap a spot to move your nest' : 'Tap a spot for your new nest')
+              : 'Map',
         ),
         actions: widget.pickLocationMode
             ? null
@@ -1034,8 +1016,10 @@ class _TravelingBird {
   final DateTime departedAt;
   final DateTime estimatedArrivalAt;
   final bool isPublic;
-  // Only ever populated when isPublic - a private bird's message stays a surprise until
-  // it's delivered, same rule GET /birds and GET /friends/birds already enforce server-side.
+  // Always populated for the caller's own bird (GET /birds never withholds it) regardless
+  // of isPublic; only null here for a friend's still-private bird, which GET /friends/birds
+  // actually withholds server-side - see BirdDetailsSheet's showPayload for how that's told
+  // apart from a genuinely empty message.
   final String? content;
   final String? audioUrl;
   final String? imageUrl;

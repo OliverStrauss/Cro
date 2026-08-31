@@ -227,6 +227,10 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectNest(Waypoint nest) {
     setState(() {
+      // The panel only ever renders on the Map tab now (it floats over the map itself) -
+      // a selection made from elsewhere (the Nests screen, the dock) jumps there so the
+      // panel it opens is actually visible.
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.nest;
       _selectedNest = nest;
       _selectedNestIsOwn = _ownNests.any((n) => n.id == nest.id);
@@ -238,6 +242,7 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectHub(Hub hub) {
     setState(() {
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.hub;
       _selectedHub = hub;
       _selectedNest = null;
@@ -261,6 +266,7 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectBird(Bird bird) {
     setState(() {
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.bird;
       _selectedBird = bird;
       _selectedNest = null;
@@ -271,6 +277,7 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectFriendBird(FriendBird bird) {
     setState(() {
+      _selectedNav = WebNavItem.map;
       _panelMode = PanelMode.friendBird;
       _selectedFriendBird = bird;
       _selectedNest = null;
@@ -428,33 +435,37 @@ class WebShellScreenState extends State<WebShellScreen> {
     }
   }
 
+  // A user gets exactly one personal nest, always private now (Hubs are the only public
+  // landmark type), enforced server-side by WaypointService.CreateAsync. Once one already
+  // exists, placing a new point moves it instead of erroring - see _startAddNest/
+  // WebNestsScreen's "+ Add a nest" row, which becomes "Move nest" once _ownNests is
+  // non-empty but arms the same _addingNest flow either way.
   Future<void> _placeNest(LatLng point) async {
     setState(() => _addingNest = false);
-    // A user gets exactly one personal nest, enforced server-side by
-    // WaypointService.CreateAsync - checked here too so the picker/name dialogs below never
-    // even open for a no-op add.
+
     if (_ownNests.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You already have a nest')),
-      );
+      final existing = _ownNests.first;
+      try {
+        await _waypointService.updateWaypoint(
+          widget.authState.token!,
+          existing.id,
+          name: existing.name,
+          latitude: point.latitude,
+          longitude: point.longitude,
+        );
+        await _loadData();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
       return;
     }
 
-    final isPublic = await showDialog<bool>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Add which kind of nest?'),
-        children: [
-          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(false), child: const Text('Private nest')),
-          SimpleDialogOption(onPressed: () => Navigator.of(context).pop(true), child: const Text('Public nest')),
-        ],
-      ),
-    );
-    if (isPublic == null || !mounted) return;
-
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => WaypointNameDialog(kindLabel: isPublic ? 'Public nest' : 'Private nest'),
+      builder: (context) => const WaypointNameDialog(),
     );
     if (name == null || name.trim().isEmpty || !mounted) return;
 
@@ -464,7 +475,7 @@ class WebShellScreenState extends State<WebShellScreen> {
         name: name.trim(),
         latitude: point.latitude,
         longitude: point.longitude,
-        isPublic: isPublic,
+        isPublic: false,
       );
       await _loadData();
     } catch (e) {
@@ -583,6 +594,44 @@ class WebShellScreenState extends State<WebShellScreen> {
                     onRetryEvents: _loadData,
                   ),
                 ),
+                // Floats directly over the map instead of sitting in its own Row column, so
+                // the map stays visible around/behind it rather than a grey Scaffold body
+                // showing through below a content-hugged panel - and only on the Map tab
+                // itself, since a nest/hub/bird selection is only ever made from the map.
+                if (_selectedNav == WebNavItem.map && _panelMode != null)
+                  Positioned(
+                    top: 90,
+                    right: 22,
+                    child: ConstrainedBox(
+                      // Loose (not tight) max, so the panel still hugs shorter content -
+                      // Positioned itself would force an exact fill if both top and bottom
+                      // were pinned instead.
+                      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height - 90 - _dockHeight - 20),
+                      child: ContextPanel(
+                        mode: _panelMode!,
+                        selectedNest: _selectedNest,
+                        selectedNestIsOwn: _selectedNestIsOwn,
+                        selectedHub: _selectedHub,
+                        selectedBird: _selectedBird,
+                        selectedFriendBird: _selectedFriendBird,
+                        ownBirds: _birds,
+                        ownNests: _ownNests,
+                        friendWaypoints: _friendWaypoints,
+                        hubs: _hubs,
+                        onClose: _closePanel,
+                        authState: widget.authState,
+                        waypointService: _waypointService,
+                        friendsService: _friendsService,
+                        birdService: _birdService,
+                        hubService: _hubService,
+                        profileService: _profileService,
+                        reactionService: _reactionService,
+                        onDataChanged: _loadData,
+                        onFollowOnMap: () => _selectNav(WebNavItem.map),
+                        onComposePressed: _onComposePressed,
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -607,29 +656,6 @@ class WebShellScreenState extends State<WebShellScreen> {
               ],
             ),
           ),
-          if (_panelMode != null)
-            ContextPanel(
-              mode: _panelMode!,
-              selectedNest: _selectedNest,
-              selectedNestIsOwn: _selectedNestIsOwn,
-              selectedHub: _selectedHub,
-              selectedBird: _selectedBird,
-              selectedFriendBird: _selectedFriendBird,
-              ownNests: _ownNests,
-              friendWaypoints: _friendWaypoints,
-              hubs: _hubs,
-              onClose: _closePanel,
-              authState: widget.authState,
-              waypointService: _waypointService,
-              friendsService: _friendsService,
-              birdService: _birdService,
-              hubService: _hubService,
-              profileService: _profileService,
-              reactionService: _reactionService,
-              onDataChanged: _loadData,
-              onFollowOnMap: () => _selectNav(WebNavItem.map),
-              onComposePressed: _onComposePressed,
-            ),
         ],
       ),
     );

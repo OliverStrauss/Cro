@@ -15,6 +15,9 @@ class DockBirdView {
   final Bird bird;
   final BirdDockState state;
   final String hostName;
+  // Only set for BirdDockState.away (landed at a friend's nest) - names whose nest it's
+  // parked at in the amber status chip, e.g. "At Jordan's nest".
+  final String? hostUsername;
   final String hostInitial;
   final bool hostIsHub;
   final Color hostColor;
@@ -25,6 +28,7 @@ class DockBirdView {
     required this.bird,
     required this.state,
     required this.hostName,
+    this.hostUsername,
     required this.hostInitial,
     required this.hostIsHub,
     required this.hostColor,
@@ -103,6 +107,7 @@ class DockBirdView {
         bird: bird,
         state: isHome ? BirdDockState.home : BirdDockState.away,
         hostName: currentNest.name,
+        hostUsername: isHome ? null : currentNest.username,
         hostInitial: currentNest.name.isEmpty ? '?' : currentNest.name[0].toUpperCase(),
         hostIsHub: false,
         hostColor: isHome ? CroColors.waypointBlue : hexToColor(currentNest.color!),
@@ -138,7 +143,7 @@ class DockBirdView {
   String get stateLabel => switch (state) {
     BirdDockState.home => 'Home',
     BirdDockState.flight => 'In flight',
-    BirdDockState.away => 'Away',
+    BirdDockState.away => hostUsername == null ? 'Away' : "At $hostUsername's nest",
     BirdDockState.hub => 'At a hub',
   };
 

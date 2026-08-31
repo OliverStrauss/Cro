@@ -4,8 +4,10 @@ class Waypoint {
   final String name;
   final double latitude;
   final double longitude;
-  // Set once at creation and not editable afterward - a user has exactly one private
-  // (isPublic == false) and one public (isPublic == true) nest at a time.
+  // Set once at creation and not editable afterward. A user gets exactly one personal nest
+  // total, always private (isPublic == false) now that nest creation no longer offers a
+  // public choice - Hubs are the only public landmark type. Older nests created back when
+  // the choice existed may still be true.
   final bool isPublic;
   // Only present when this Waypoint represents a friend's nest (from
   // GET /friends/waypoints) rather than the signed-in user's own (from GET /waypoints).

@@ -264,11 +264,6 @@ void main() {
     await tester.tap(find.byKey(const Key('addNestButton')));
     await tester.pumpAndSettle();
 
-    // Neither slot is filled yet, so the kind picker appears before the map does.
-    expect(find.text('Add which kind of nest?'), findsOneWidget);
-    await tester.tap(find.text('Private nest'));
-    await tester.pumpAndSettle();
-
     expect(find.byType(MapScreen), findsOneWidget);
 
     tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(9, 10));
@@ -287,7 +282,8 @@ void main() {
     expect(find.text('New Spot'), findsOneWidget);
   });
 
-  testWidgets('already having a nest hides the add row and shows the limit message', (WidgetTester tester) async {
+  testWidgets('already having a nest relabels the add row to "Move nest" instead of hiding it',
+      (WidgetTester tester) async {
     final fakeWaypointService = _FakeWaypointService()
       ..waypointsToReturn = [
         Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1, longitude: 1, isPublic: false),
@@ -303,8 +299,40 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('addNestButton')), findsNothing);
-    expect(find.byKey(const Key('nestLimitReachedMessage')), findsOneWidget);
-    expect(find.text('You already have a nest'), findsOneWidget);
+    expect(find.byKey(const Key('addNestButton')), findsOneWidget);
+    expect(find.text('Move nest'), findsOneWidget);
+    expect(find.text('Add a nest'), findsNothing);
+  });
+
+  testWidgets('moving an existing nest picks a new spot and relocates it in place (same id/name)',
+      (WidgetTester tester) async {
+    final fakeWaypointService = _FakeWaypointService()
+      ..waypointsToReturn = [
+        Waypoint(id: 'w1', userId: 'u1', name: 'Backyard', latitude: 1, longitude: 1, isPublic: false),
+      ];
+    final authState = AuthState()..login('test-token');
+    await tester.pumpWidget(MaterialApp(
+      home: MyNestsScreen(
+        authState: authState,
+        waypointService: fakeWaypointService,
+        friendsService: _FakeFriendsService(),
+        profileService: _FakeProfileService(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('addNestButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MapScreen), findsOneWidget);
+    final mapScreen = tester.widget<MapScreen>(find.byType(MapScreen));
+    expect(mapScreen.isMovingNest, true);
+
+    tester.state<MapScreenState>(find.byType(MapScreen)).handleMapTap(const LatLng(9, 10));
+    await tester.pumpAndSettle();
+
+    expect(fakeWaypointService.lastUpdatedId, 'w1');
+    expect(fakeWaypointService.lastUpdatedName, 'Backyard');
+    expect(find.byType(MyNestsScreen), findsOneWidget);
   });
 }
