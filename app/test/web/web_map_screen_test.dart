@@ -42,6 +42,10 @@ void main() {
     bool isAdmin = false,
     bool addingHub = false,
     VoidCallback? onCancelAddHub,
+    List<Hub> hubs = const [],
+    Map<String, int> hubUnreadCounts = const {},
+    String? selectedHubId,
+    ValueChanged<Hub>? onSelectHub,
   }) {
     return MaterialApp(
       theme: croTheme,
@@ -51,13 +55,14 @@ void main() {
           friendWaypoints: [friendNest],
           birds: const [],
           friendsBirds: friendsBirds,
-          hubs: const <Hub>[],
+          hubs: hubs,
+          hubUnreadCounts: hubUnreadCounts,
           selectedNestId: null,
-          selectedHubId: null,
+          selectedHubId: selectedHubId,
           selectedBirdId: selectedBirdId,
           bottomInset: 132,
           onSelectNest: (_) {},
-          onSelectHub: (_) {},
+          onSelectHub: onSelectHub ?? (_) {},
           onSelectBird: (_) {},
           onSelectFriendBird: onSelectFriendBird ?? (_) {},
           isAdmin: isAdmin,
@@ -151,5 +156,42 @@ void main() {
 
     await tester.tap(find.byKey(const Key('webCancelAddHub')));
     expect(cancelled, isTrue);
+  });
+
+  // Well clear of ownNest (1.0, 2.0) and friendNest (1.002, 2.002) - those two sit close
+  // enough together that a wider nest marker pill can otherwise occlude a hub dot tapped in
+  // the same test.
+  final hub = Hub(id: 'h1', name: 'Lighthouse', latitude: 1.05, longitude: 2.05, status: 'Approved', createdByUserId: 'admin');
+
+  testWidgets('a Hub marker shows the "!" badge only when it has unread messages', (tester) async {
+    await tester.pumpWidget(buildMap(hubs: [hub], hubUnreadCounts: {'h1': 2}));
+    await tester.pump();
+    expect(find.byKey(const Key('webHubUnreadBadge')), findsOneWidget);
+
+    await tester.pumpWidget(buildMap(hubs: [hub], hubUnreadCounts: {'h1': 0}));
+    await tester.pump();
+    expect(find.byKey(const Key('webHubUnreadBadge')), findsNothing);
+
+    await tester.pumpWidget(buildMap(hubs: [hub]));
+    await tester.pump();
+    expect(find.byKey(const Key('webHubUnreadBadge')), findsNothing);
+  });
+
+  testWidgets('tapping a Hub marker calls onSelectHub, and selecting it glows the marker', (tester) async {
+    Hub? tapped;
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(buildMap(hubs: [hub], onSelectHub: (h) => tapped = h));
+    await tester.pump();
+
+    expect(find.byKey(const Key('webHubMarkerGlow')), findsNothing);
+    await tester.tap(find.byKey(const Key('webHubMarker_h1')));
+    expect(tapped?.id, 'h1');
+
+    await tester.pumpWidget(buildMap(hubs: [hub], selectedHubId: 'h1'));
+    await tester.pump();
+    expect(find.byKey(const Key('webHubMarkerGlow')), findsOneWidget);
   });
 }

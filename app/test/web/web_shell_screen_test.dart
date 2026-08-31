@@ -89,12 +89,22 @@ class _FakeBirdService implements BirdService {
 
 class _FakeHubService implements HubService {
   List<Hub> hubsToReturn = [];
+  Map<String, int> unreadCountsToReturn = {};
+  String? lastMarkedReadHubId;
 
   @override
   Future<List<Hub>> listHubs(String token) async => hubsToReturn;
 
   @override
   Future<List<HubMessage>> listMessages(String token, String hubId) async => [];
+
+  @override
+  Future<Map<String, int>> getUnreadCounts(String token) async => unreadCountsToReturn;
+
+  @override
+  Future<void> markHubRead(String token, String hubId) async {
+    lastMarkedReadHubId = hubId;
+  }
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -293,6 +303,28 @@ void main() {
     await tester.tap(find.byKey(const Key('webPanelClose')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('webContextPanel')), findsNothing);
+  });
+
+  testWidgets('tapping an unread Hub marker opens its panel and marks it read', (tester) async {
+    setDesktopSize(tester);
+    hubService.hubsToReturn = [
+      // No own nests are set up in this test, so the map defaults to its Ames, Iowa center
+      // (see WebMapScreen._amesCenter) - place the hub there so it's actually on screen.
+      Hub(id: 'h1', name: 'Lighthouse', latitude: 42.0308, longitude: -93.6319, status: 'Approved', createdByUserId: 'admin'),
+    ];
+    hubService.unreadCountsToReturn = {'h1': 3};
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webHubUnreadBadge')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webHubMarker_h1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
+    expect(hubService.lastMarkedReadHubId, 'h1');
+    // Optimistically cleared locally, without waiting on the next poll.
+    expect(find.byKey(const Key('webHubUnreadBadge')), findsNothing);
   });
 
   testWidgets("tapping a friend's public bird marker opens its panel and marks it viewed", (tester) async {
