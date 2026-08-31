@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 /// The white pill marker shared by nest and Hub map markers - a ringed/tinted avatar plus a
-/// name + one-line subtitle, with a colored border when selected. Hub markers pass `compact:
-/// true` (smaller padding/gap/text, radius 11) so they read as secondary to nest markers,
-/// which keep the fully-rounded, larger default treatment (radius 30) - see
-/// 05_web_ui_updates.md item 3.
+/// name + one-line subtitle, with a colored border when selected. Both nest and Hub markers
+/// pass `compact: true` now (smaller padding/gap/text than the pre-05_web_ui_updates.md
+/// default, which read as oversized once seen live) - Hub markers additionally use a smaller
+/// `borderRadius` (11, boxier) and avatar than nest markers (default 30, fully rounded) so
+/// nests still read as primary.
 class MapMarkerPill extends StatelessWidget {
   final Widget avatar;
   final String name;
