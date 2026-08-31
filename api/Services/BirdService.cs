@@ -144,10 +144,11 @@ public class BirdService(
             AudioUrl: audioUrl,
             ImageUrl: imageUrl,
             ProfilePictureUrl: null,
-            // Landing at a Hub is inherently public - a Hub-bound bird ignores whatever the
-            // compose form's toggle said, same "if you send it there, it's public" rule the
-            // Hub message board enforces.
-            IsPublic: destination.IsHub || isPublic,
+            // A Hub-bound bird can stay private - the compose form's toggle is respected the
+            // same as for any other destination. The Hub message board (see HubMessage.cs)
+            // always shows every arrival regardless of this flag; IsPublic only controls
+            // masking on the live "who's here" view (GetHubResidentBirds).
+            IsPublic: isPublic,
             NestFromName: origin.Name,
             NestToName: destination.Name);
         var created = await birdRepository.CreateAsync(bird);
@@ -204,9 +205,9 @@ public class BirdService(
             EstimatedArrivalAt = now.AddHours(hours),
             IsRead = true, // not delivered yet - nothing to read
             UpdatedAt = now,
-            // Same "landing at a Hub is inherently public" rule as ComposeAndSendAsync -
-            // once true, IsPublic never needs to flip back false on a later resend elsewhere.
-            IsPublic = destination.IsHub || bird.IsPublic,
+            // A resend keeps the bird's existing IsPublic value, same as ComposeAndSendAsync -
+            // a Hub-bound resend no longer forces it true (see that method's comment).
+            IsPublic = bird.IsPublic,
             NestFromName = origin.Name,
             NestToName = destination.Name,
         };
@@ -360,8 +361,8 @@ public class BirdService(
         arrived = await birdRepository.UpdateAsync(arrived);
         await eventService.RecordBirdArrivalAsync(arrived);
 
-        // ComposeAndSendAsync/SendAsync already force IsPublic=true for anything Hub-bound,
-        // so no separate public check is needed here - every arrival at a Hub is board-worthy.
+        // No IsPublic check here - every arrival at a Hub is board-worthy regardless of
+        // whether the bird itself is public (see GET /hubs/{id}/messages in Program.cs).
         // Best-effort: a failed board write must never fail the caller's actual query just
         // because this secondary write hiccuped.
         var landedHub = await hubRepository.GetAsync(arrived.NestToId ?? string.Empty);

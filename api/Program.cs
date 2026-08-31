@@ -589,9 +589,9 @@ app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBir
     try
     {
         var residents = await birdService.GetHubResidentsAsync(id);
-        // Mask payload behind IsPublic, same rule GET /friends/birds already applies -
-        // ComposeAndSendAsync/SendAsync force IsPublic=true for anything Hub-bound, but this
-        // keeps the endpoint honest for any bird that landed here before that rule existed.
+        // Mask payload behind IsPublic, same rule GET /friends/birds already applies - a
+        // Hub-bound bird can be non-public now (see BirdService.ComposeAndSendAsync), so
+        // this live "who's here" view hides its content for everyone until it's public.
         var results = residents.Select(bird => new
         {
             bird.Id,
@@ -616,9 +616,9 @@ app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBir
 
 // The Hub message board - durable history of everything that's ever landed at this Hub,
 // independent of GetHubResidentBirds' live "who's currently here" snapshot (see
-// HubMessage.cs). Every row is already public by construction (ComposeAndSendAsync/
-// SendAsync force IsPublic=true for anything Hub-bound before a HubMessage is ever
-// written), so no masking is needed here the way GetHubResidentBirds needs above.
+// HubMessage.cs). Deliberately not masked by IsPublic the way GetHubResidentBirds is
+// above - a Hub-bound bird can be non-public, but the board is a public log of everything
+// that's ever arrived here regardless, so every row shows in full.
 app.MapGet("/hubs/{id}/messages", async (string id, ClaimsPrincipal principal, IHubMessageRepository hubMessageRepository, IHubRepository hubRepository, IUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
