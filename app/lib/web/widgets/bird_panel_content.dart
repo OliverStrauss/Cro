@@ -130,19 +130,13 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     _ => '',
   };
 
+  // A user has exactly one own nest (WaypointService.CreateAsync rejects a second), so
+  // "home" is unambiguous - straight there, no destination-picker dialog.
   Future<void> _callItHome() async {
-    final destinations = widget.ownNests
-        .where((n) => n.id != widget.bird.currentNestId)
-        .map((n) => SendBirdDestination(nestId: n.id, label: n.name))
-        .toList();
-    final result = await showDialog<SendBirdResult>(
-      context: context,
-      builder: (_) => SendBirdDialog(destinations: destinations),
-    );
-    if (result == null || !mounted) return;
+    if (widget.ownNests.isEmpty || !mounted) return;
 
     try {
-      await widget.birdService.sendBird(widget.authState.token!, widget.bird.id, nestId: result.nestId, content: result.content);
+      await widget.birdService.sendBird(widget.authState.token!, widget.bird.id, nestId: widget.ownNests.first.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${widget.bird.name} is on its way home')));
       widget.onDataChanged();
