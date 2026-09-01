@@ -293,26 +293,18 @@ void main() {
     expect(dataChanged, isTrue);
   });
 
-  testWidgets('"Call it home" opens the send dialog and calls BirdService.sendBird', (tester) async {
+  testWidgets('"Call it home" sends straight to the own nest with no dialog', (tester) async {
     var dataChanged = false;
     final bird = Bird(id: 'b9', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
-    await tester.pumpWidget(build(bird, ownNests: [ownNest, ownNest2], onDataChanged: () => dataChanged = true));
+    await tester.pumpWidget(build(bird, ownNests: [ownNest], onDataChanged: () => dataChanged = true));
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('birdPanelCallItHome')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('sendBirdDestinationDropdown')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Cabin').last);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
-    await tester.pumpAndSettle();
-
+    expect(find.byKey(const Key('sendBirdDestinationDropdown')), findsNothing);
     expect(birdService.lastSendBirdId, 'b9');
-    expect(birdService.lastSendNestId, 'n2');
+    expect(birdService.lastSendNestId, ownNest.id);
     expect(dataChanged, isTrue);
   });
 }
