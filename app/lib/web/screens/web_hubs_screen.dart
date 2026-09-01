@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../models/hub.dart';
+import '../../models/hub_category.dart';
 import '../../services/hub_service.dart';
 import '../../services/profile_service.dart';
 import '../../state/auth_state.dart';
 import '../../theme.dart';
+import '../../widgets/avatar_with_fallback.dart';
 import '../widgets/hub_suggestions_panel.dart';
 
 /// The Hubs screen: approved hub cards in a grid, plus (admin only) the suggested-hubs
@@ -127,31 +129,26 @@ class _HubCard extends StatelessWidget {
           border: Border.all(color: selected ? CroColors.deliveryAmber.withValues(alpha: 0.6) : CroColors.ink.withValues(alpha: 0.06)),
           boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
         ),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: CroColors.deliveryAmber, borderRadius: BorderRadius.circular(14)),
-              child: Text(
-                hub.name.isEmpty ? '?' : hub.name[0].toUpperCase(),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
-              ),
+            AvatarWithFallback(
+              imageUrl: hub.profilePictureUrl,
+              initialsSource: hub.name,
+              fallbackIcon: HubCategory.iconFor(hub.category),
+              radius: 18,
             ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(hub.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(hub.category ?? 'Landmark', style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
-                ],
-              ),
+            const SizedBox(height: 4),
+            Text(
+              hub.name,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
-            const Text('View board →', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+            const SizedBox(height: 1),
+            const Text('View board →', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
           ],
         ),
       ),

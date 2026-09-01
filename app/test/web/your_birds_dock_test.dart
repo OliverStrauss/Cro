@@ -126,10 +126,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the trailing "send a new bird" card is always present', (tester) async {
+  testWidgets('the trailing "send a new bird" card is present while under the 5-bird cap', (tester) async {
     await tester.pumpWidget(buildDock(birds: []));
     await tester.pump();
     expect(find.byKey(const Key('dockAddBirdCard')), findsOneWidget);
+  });
+
+  testWidgets('the trailing "send a new bird" card is hidden once the 5-bird cap is reached', (tester) async {
+    final birds = List.generate(
+      5,
+      (i) => Bird(id: 'b$i', userId: 'u1', name: 'Bird $i', currentNestId: 'n1', isTraveling: false, type: 'Cro'),
+    );
+    await tester.pumpWidget(buildDock(birds: birds));
+    await tester.pump();
+    expect(find.byKey(const Key('dockAddBirdCard')), findsNothing);
   });
 
   testWidgets('tapping Hide swaps the dock for the collapsed Show pill', (tester) async {

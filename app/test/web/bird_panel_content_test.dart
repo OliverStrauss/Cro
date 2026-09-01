@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/bird_reaction.dart';
@@ -44,6 +45,9 @@ class _FakeBirdService implements BirdService {
   String? lastSendBirdId;
   String? lastSendNestId;
   String? lastSendContent;
+  String? lastRenamedBirdId;
+  String? lastRenamedTo;
+  String? lastDeletedBirdId;
 
   @override
   Future<Bird> sendBird(String token, String birdId, {required String nestId, String? content}) async {
@@ -52,6 +56,24 @@ class _FakeBirdService implements BirdService {
     lastSendContent = content;
     return Bird(id: birdId, userId: 'u1', name: 'Sent', currentNestId: nestId, isTraveling: true, type: 'Cro');
   }
+
+  @override
+  Future<Bird> renameBird(String token, String birdId, String name) async {
+    lastRenamedBirdId = birdId;
+    lastRenamedTo = name;
+    return Bird(id: birdId, userId: 'u1', name: name, currentNestId: 'n1', isTraveling: false, type: 'Cro');
+  }
+
+  @override
+  Future<void> deleteBird(String token, String birdId) async {
+    lastDeletedBirdId = birdId;
+  }
+
+  // image_picker's platform channel isn't available in the widget test harness - returning
+  // null here simulates the user backing out of the picker, same as _FakeProfileService
+  // elsewhere in this suite.
+  @override
+  Future<XFile?> pickImage() async => null;
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -87,7 +109,6 @@ void main() {
     VoidCallback? onClose,
     VoidCallback? onDataChanged,
     VoidCallback? onFollowOnMap,
-    VoidCallback? onComposePressed,
     List<Waypoint>? ownNests,
   }) {
     return MaterialApp(
@@ -104,7 +125,6 @@ void main() {
           onClose: onClose ?? () {},
           onDataChanged: onDataChanged ?? () {},
           onFollowOnMap: onFollowOnMap ?? () {},
-          onComposePressed: onComposePressed ?? () {},
         ),
       ),
     );
@@ -180,9 +200,8 @@ void main() {
   });
 
   testWidgets('a home bird shows the Home chip, "Home and rested" note, and Send footer button', (tester) async {
-    var composed = false;
     final bird = Bird(id: 'b5', userId: 'u1', name: 'Willa', currentNestId: 'n1', isTraveling: false, type: 'Cro');
-    await tester.pumpWidget(build(bird, onComposePressed: () => composed = true));
+    await tester.pumpWidget(build(bird, ownNests: [ownNest, ownNest2]));
     await tester.pump();
 
     expect(find.byKey(const Key('birdPanelStateChip')), findsOneWidget);
@@ -192,8 +211,61 @@ void main() {
     expect(find.byKey(const Key('birdPanelSendSomewhere')), findsOneWidget);
     expect(find.text('Send this bird somewhere'), findsOneWidget);
 
+    // Tapping it should send this specific bird via a destination picker, not open the
+    // unrelated new-bird composer.
     await tester.tap(find.byKey(const Key('birdPanelSendSomewhere')));
-    expect(composed, isTrue);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cabin').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
+    await tester.pumpAndSettle();
+
+    expect(birdService.lastSendBirdId, 'b5');
+    expect(birdService.lastSendNestId, 'n2');
+  });
+
+  testWidgets('renaming a bird calls BirdService.renameBird and refreshes', (tester) async {
+    var dataChanged = false;
+    final bird = Bird(id: 'b12', userId: 'u1', name: 'Willa', currentNestId: 'n1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(bird, onDataChanged: () => dataChanged = true));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdPanelRenameButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('birdPanelNameField')), 'Willow');
+    await tester.tap(find.byKey(const Key('birdPanelSaveNameButton')));
+    await tester.pumpAndSettle();
+
+    expect(birdService.lastRenamedBirdId, 'b12');
+    expect(birdService.lastRenamedTo, 'Willow');
+    expect(dataChanged, isTrue);
+  });
+
+  testWidgets('deleting a bird requires a second confirming tap, then closes the panel', (tester) async {
+    var dataChanged = false;
+    var closed = false;
+    final bird = Bird(id: 'b13', userId: 'u1', name: 'Willa', currentNestId: 'n1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(
+      bird,
+      onDataChanged: () => dataChanged = true,
+      onClose: () => closed = true,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('birdPanelDeleteButton')));
+    await tester.pump();
+    expect(birdService.lastDeletedBirdId, isNull);
+    expect(find.text('Confirm?'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('birdPanelDeleteButton')));
+    await tester.pump();
+
+    expect(birdService.lastDeletedBirdId, 'b13');
+    expect(dataChanged, isTrue);
+    expect(closed, isTrue);
   });
 
   testWidgets('an in-flight bird shows the In flight chip, a percent note, and Follow footer button', (tester) async {

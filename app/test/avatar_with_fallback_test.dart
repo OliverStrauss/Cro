@@ -45,4 +45,29 @@ void main() {
     final decoration = container.decoration as BoxDecoration;
     expect(decoration.border, Border.all(color: Colors.teal, width: 3));
   });
+
+  testWidgets('shows fallbackIcon instead of initials when there is no image', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: AvatarWithFallback(
+          imageUrl: null,
+          initialsSource: 'Backyard',
+          fallbackIcon: Icons.park_rounded,
+        ),
+      ),
+    ));
+
+    expect(find.byIcon(Icons.park_rounded), findsOneWidget);
+    expect(find.text('B'), findsNothing);
+  });
+
+  testWidgets('with no fallbackIcon, initials are shown as before', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: AvatarWithFallback(imageUrl: null, initialsSource: 'Backyard'),
+      ),
+    ));
+
+    expect(find.text('B'), findsOneWidget);
+  });
 }
