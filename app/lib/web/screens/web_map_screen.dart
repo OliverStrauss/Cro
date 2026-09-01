@@ -6,10 +6,12 @@ import '../../models/bird.dart';
 import '../../models/friend.dart';
 import '../../models/friend_bird.dart';
 import '../../models/hub.dart';
+import '../../models/hub_category.dart';
 import '../../models/waypoint.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../utils/flight_path_math.dart';
+import '../../widgets/avatar_with_fallback.dart';
 import '../widgets/map_marker_pill.dart';
 
 const _amesCenter = LatLng(42.0308, -93.6319);
@@ -217,7 +219,9 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                       onTap: () => widget.onSelectHub(hub),
                       child: _HubMarkerDot(
                         key: Key('webHubMarkerDot_${hub.id}'),
-                        initial: hub.name.isEmpty ? '?' : hub.name[0].toUpperCase(),
+                        name: hub.name,
+                        profilePictureUrl: hub.profilePictureUrl,
+                        category: hub.category,
                         hasUnread: (widget.hubUnreadCounts[hub.id] ?? 0) > 0,
                         selected: widget.selectedHubId == hub.id,
                       ),
@@ -521,11 +525,20 @@ class _BirdMarkerDot extends StatelessWidget {
 /// unread (no grey "read" state the way a bird's public badge has, since a Hub's badge isn't
 /// also standing in for "this is public").
 class _HubMarkerDot extends StatelessWidget {
-  final String initial;
+  final String name;
+  final String? profilePictureUrl;
+  final String? category;
   final bool hasUnread;
   final bool selected;
 
-  const _HubMarkerDot({super.key, required this.initial, this.hasUnread = false, this.selected = false});
+  const _HubMarkerDot({
+    super.key,
+    required this.name,
+    this.profilePictureUrl,
+    this.category,
+    this.hasUnread = false,
+    this.selected = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -546,15 +559,18 @@ class _HubMarkerDot extends StatelessWidget {
               ),
             ),
           Container(
-            width: 22,
-            height: 22,
             decoration: const BoxDecoration(
-              color: CroColors.deliveryAmber,
               shape: BoxShape.circle,
               boxShadow: [BoxShadow(color: Color(0x4D2B2F33), blurRadius: 6, offset: Offset(0, 2))],
             ),
-            alignment: Alignment.center,
-            child: Text(initial, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+            child: AvatarWithFallback(
+              imageUrl: profilePictureUrl,
+              initialsSource: name,
+              fallbackIcon: HubCategory.iconFor(category),
+              fallbackBackgroundColor: CroColors.deliveryAmber,
+              fallbackIconColor: Colors.white,
+              radius: 11,
+            ),
           ),
           if (hasUnread)
             Positioned(

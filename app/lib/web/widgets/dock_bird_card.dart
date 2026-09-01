@@ -5,6 +5,7 @@ import '../../models/hub.dart';
 import '../../models/waypoint.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
+import '../../widgets/avatar_with_fallback.dart';
 
 enum BirdDockState { home, flight, away, hub }
 
@@ -197,14 +198,10 @@ class DockBirdCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
+                AvatarWithFallback(
+                  imageUrl: view.bird.profilePictureUrl,
+                  initialsSource: view.bird.name,
+                  radius: 16,
                 ),
                 const SizedBox(width: 9),
                 Expanded(

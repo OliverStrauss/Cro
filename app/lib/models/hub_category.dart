@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 // The fixed set of category labels a Hub can be tagged with, mirroring
 // api/Services/HubCategoryCatalog.cs. Kept manually in sync with the backend, same
 // convention as BirdType in bird.dart.
@@ -11,4 +13,17 @@ class HubCategory {
   static const other = 'Other';
 
   static const all = [housing, iowaState, bar, park, business, landmark, other];
+
+  // Default avatar icon shown for a hub with no approved photo yet.
+  static const Map<String, IconData> icons = {
+    housing: Icons.home_rounded,
+    iowaState: Icons.school_rounded,
+    bar: Icons.local_bar_rounded,
+    park: Icons.park_rounded,
+    business: Icons.storefront_rounded,
+    landmark: Icons.location_city_rounded,
+    other: Icons.place_rounded,
+  };
+
+  static IconData iconFor(String? category) => icons[category] ?? icons[landmark]!;
 }

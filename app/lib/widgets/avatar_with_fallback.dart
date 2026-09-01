@@ -10,6 +10,14 @@ class AvatarWithFallback extends StatefulWidget {
   final Key? avatarKey;
   final bool hasBorder;
   final Color? borderColor;
+  // When set, shown instead of the initials text whenever there's no image (e.g. a
+  // category icon for a hub with no approved photo yet). Other callers leave this null
+  // and keep the original initials-only fallback.
+  final IconData? fallbackIcon;
+  // Fill color behind the initials/fallbackIcon (unused once an image is showing). Null
+  // keeps CircleAvatar's own default, matching every caller before this was added.
+  final Color? fallbackBackgroundColor;
+  final Color? fallbackIconColor;
 
   const AvatarWithFallback({
     super.key,
@@ -19,6 +27,9 @@ class AvatarWithFallback extends StatefulWidget {
     this.avatarKey,
     this.hasBorder = false,
     this.borderColor,
+    this.fallbackIcon,
+    this.fallbackBackgroundColor,
+    this.fallbackIconColor,
   });
 
   @override
@@ -50,6 +61,7 @@ class _AvatarWithFallbackState extends State<AvatarWithFallback> {
     final avatar = CircleAvatar(
       key: widget.avatarKey,
       radius: widget.radius,
+      backgroundColor: showImage ? null : widget.fallbackBackgroundColor,
       backgroundImage: showImage ? NetworkImage(url) : null,
       // CircleAvatar asserts backgroundImage != null || onBackgroundImageError == null,
       // so this must be gated on the exact same condition as backgroundImage above -
@@ -59,7 +71,11 @@ class _AvatarWithFallbackState extends State<AvatarWithFallback> {
               if (mounted) setState(() => _pictureFailedToLoad = true);
             }
           : null,
-      child: showImage ? null : Text(_initials, style: TextStyle(fontSize: widget.radius * 0.6)),
+      child: showImage
+          ? null
+          : (widget.fallbackIcon != null
+                ? Icon(widget.fallbackIcon, size: widget.radius, color: widget.fallbackIconColor)
+                : Text(_initials, style: TextStyle(fontSize: widget.radius * 0.6, color: widget.fallbackIconColor))),
     );
 
     if (!widget.hasBorder) {

@@ -19,6 +19,7 @@ class _FakeFriendsService implements FriendsService {
   List<UserSearchResult> searchResults = [];
   String? lastAcceptedId;
   String? lastSentRequestUsername;
+  String? lastMadeAdminId;
 
   @override
   Future<List<Friend>> getFriends(String token) async => friends;
@@ -58,6 +59,11 @@ class _FakeFriendsService implements FriendsService {
   Future<void> unblockUser(String token, String userId) async {}
 
   @override
+  Future<void> makeAdmin(String token, String userId) async {
+    lastMadeAdminId = userId;
+  }
+
+  @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName} is not used by WebFriendsScreen');
 }
@@ -71,7 +77,11 @@ void main() {
     authState = AuthState()..login('a.b.c');
   });
 
-  Widget build({List<Waypoint> friendWaypoints = const [], VoidCallback? onDataChanged}) {
+  Widget build({
+    List<Waypoint> friendWaypoints = const [],
+    bool isAdmin = false,
+    VoidCallback? onDataChanged,
+  }) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
@@ -79,6 +89,7 @@ void main() {
           authState: authState,
           friendsService: friendsService,
           friendWaypoints: friendWaypoints,
+          isAdmin: isAdmin,
           onDataChanged: onDataChanged ?? () {},
         ),
       ),
@@ -140,5 +151,36 @@ void main() {
 
     expect(find.byKey(const Key('webOutgoingRow_u6')), findsOneWidget);
     expect(find.byKey(const Key('webBlockedRow_u7')), findsOneWidget);
+  });
+
+  testWidgets('a non-admin caller sees no make-admin button', (tester) async {
+    friendsService.friends = [Friend(userId: 'u2', username: 'mia')];
+    await tester.pumpWidget(build());
+    await tester.pump();
+
+    expect(find.byKey(const Key('webMakeAdminButton_u2')), findsNothing);
+  });
+
+  testWidgets('an admin caller can promote a non-admin friend to admin', (tester) async {
+    friendsService.friends = [Friend(userId: 'u2', username: 'mia')];
+    await tester.pumpWidget(build(isAdmin: true));
+    await tester.pump();
+
+    expect(find.byKey(const Key('webMakeAdminButton_u2')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('webMakeAdminButton_u2')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmMakeAdminButton')));
+    await tester.pumpAndSettle();
+
+    expect(friendsService.lastMadeAdminId, 'u2');
+  });
+
+  testWidgets('an admin caller sees no make-admin button for a friend who is already admin', (tester) async {
+    friendsService.friends = [Friend(userId: 'u2', username: 'mia', isAdmin: true)];
+    await tester.pumpWidget(build(isAdmin: true));
+    await tester.pump();
+
+    expect(find.byKey(const Key('webMakeAdminButton_u2')), findsNothing);
   });
 }

@@ -9,6 +9,7 @@ import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
 import '../../state/auth_state.dart';
 import '../../theme.dart';
+import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/bird_payload_view.dart';
 import '../../widgets/send_bird_dialog.dart';
 import 'dock_bird_card.dart';
@@ -36,7 +37,6 @@ class BirdPanelContent extends StatefulWidget {
   final VoidCallback onClose;
   final VoidCallback onDataChanged;
   final VoidCallback onFollowOnMap;
-  final VoidCallback onComposePressed;
 
   const BirdPanelContent({
     super.key,
@@ -50,7 +50,6 @@ class BirdPanelContent extends StatefulWidget {
     required this.onClose,
     required this.onDataChanged,
     required this.onFollowOnMap,
-    required this.onComposePressed,
   });
 
   @override
@@ -60,6 +59,10 @@ class BirdPanelContent extends StatefulWidget {
 class _BirdPanelContentState extends State<BirdPanelContent> {
   List<BirdReactionSummary> _reactions = [];
   bool _isLoadingReactions = false;
+  bool _isUploadingPicture = false;
+  // Awaiting a second tap on Delete before it actually deletes - same two-tap pattern as
+  // the phone app's birds_screen.dart and this app's own nest screens.
+  bool _confirmingDelete = false;
 
   @override
   void initState() {
@@ -187,6 +190,84 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     }
   }
 
+  Future<void> _renameBird() async {
+    final controller = TextEditingController(text: widget.bird.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename this bird'),
+        content: TextField(
+          key: const Key('birdPanelNameField'),
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+            key: const Key('birdPanelSaveNameButton'),
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || newName.trim().isEmpty || !mounted) return;
+
+    try {
+      await widget.birdService.renameBird(widget.authState.token!, widget.bird.id, newName.trim());
+      widget.onDataChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
+  }
+
+  Future<void> _handleDeleteTap() async {
+    if (!_confirmingDelete) {
+      setState(() => _confirmingDelete = true);
+      return;
+    }
+    setState(() => _confirmingDelete = false);
+
+    try {
+      await widget.birdService.deleteBird(widget.authState.token!, widget.bird.id);
+      widget.onDataChanged();
+      widget.onClose();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
+  }
+
+  Future<void> _pickAndUploadPicture() async {
+    try {
+      final image = await widget.birdService.pickImage();
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      setState(() => _isUploadingPicture = true);
+      await widget.birdService.uploadBirdPicture(
+        widget.authState.token!,
+        widget.bird.id,
+        bytes,
+        filename: image.name,
+        contentType: image.mimeType ?? 'image/jpeg',
+      );
+      widget.onDataChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    } finally {
+      if (mounted) setState(() => _isUploadingPicture = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bird = widget.bird;
@@ -206,12 +287,22 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
-          avatar: Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: const Icon(Icons.arrow_forward_rounded, size: 22, color: Colors.white),
+          avatar: GestureDetector(
+            key: const Key('birdPanelAvatar'),
+            onTap: _isUploadingPicture ? null : _pickAndUploadPicture,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AvatarWithFallback(
+                  imageUrl: bird.profilePictureUrl,
+                  initialsSource: bird.name,
+                  radius: 25,
+                  hasBorder: true,
+                  borderColor: Theme.of(context).colorScheme.primary,
+                ),
+                if (_isUploadingPicture) const CircularProgressIndicator(),
+              ],
+            ),
           ),
           title: bird.name,
           subtitle: '${bird.type} · ${BirdType.description(bird.type)} · sent by you',
@@ -248,6 +339,32 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
                   children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          key: const Key('birdPanelRenameButton'),
+                          onTap: _renameBird,
+                          child: const Text(
+                            'Rename',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog),
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        GestureDetector(
+                          key: const Key('birdPanelDeleteButton'),
+                          onTap: _handleDeleteTap,
+                          child: Text(
+                            _confirmingDelete ? 'Confirm?' : 'Delete',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _confirmingDelete ? Theme.of(context).colorScheme.error : CroColors.fog,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     _labelValueRow(bird.isTraveling ? 'Flying to' : 'Resting at', view.hostName),
                     const SizedBox(height: 8),
                     _labelValueRow('Arrival', bird.isTraveling ? _etaText : 'Sitting there'),
@@ -327,7 +444,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       label: 'Send this bird somewhere',
       bg: CroColors.waypointBlue,
       fg: Colors.white,
-      onTap: widget.onComposePressed,
+      onTap: _sendOnward,
     ),
     BirdDockState.away || BirdDockState.hub => Column(
       children: [
