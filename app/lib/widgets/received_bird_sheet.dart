@@ -170,11 +170,19 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                 ),
               ),
               const SizedBox(height: 18),
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: const Text(
-                  'Close',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+              Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: const Key('receivedBirdCloseButton'),
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Text(
+                      'Close',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                    ),
+                  ),
                 ),
               ),
             ],

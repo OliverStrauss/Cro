@@ -52,10 +52,20 @@ class JourneyLogPanel extends StatelessWidget {
                   ],
                 ),
               ),
-              GestureDetector(
-                key: const Key('webJourneyLogClose'),
-                onTap: onClose,
-                child: const Icon(Icons.close, size: 16, color: CroColors.fog),
+              Tooltip(
+                message: 'Close',
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    key: const Key('webJourneyLogClose'),
+                    customBorder: const CircleBorder(),
+                    onTap: onClose,
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(Icons.close, size: 16, color: CroColors.fog),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

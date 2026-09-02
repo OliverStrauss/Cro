@@ -281,21 +281,28 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
-          avatar: GestureDetector(
-            key: const Key('birdPanelAvatar'),
-            onTap: _isUploadingPicture ? null : _pickAndUploadPicture,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AvatarWithFallback(
-                  imageUrl: bird.profilePictureUrl,
-                  initialsSource: bird.name,
-                  radius: 25,
-                  hasBorder: true,
-                  borderColor: Theme.of(context).colorScheme.primary,
+          avatar: Tooltip(
+            message: 'Change picture',
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                key: const Key('birdPanelAvatar'),
+                customBorder: const CircleBorder(),
+                onTap: _isUploadingPicture ? null : _pickAndUploadPicture,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AvatarWithFallback(
+                      imageUrl: bird.profilePictureUrl,
+                      initialsSource: bird.name,
+                      radius: 25,
+                      hasBorder: true,
+                      borderColor: Theme.of(context).colorScheme.primary,
+                    ),
+                    if (_isUploadingPicture) const CircularProgressIndicator(),
+                  ],
                 ),
-                if (_isUploadingPicture) const CircularProgressIndicator(),
-              ],
+              ),
             ),
           ),
           title: bird.name,
@@ -335,24 +342,38 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                   children: [
                     Row(
                       children: [
-                        GestureDetector(
-                          key: const Key('birdPanelRenameButton'),
-                          onTap: _renameBird,
-                          child: const Text(
-                            'Rename',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog),
+                        Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            key: const Key('birdPanelRenameButton'),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: _renameBird,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              child: Text(
+                                'Rename',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 18),
-                        GestureDetector(
-                          key: const Key('birdPanelDeleteButton'),
-                          onTap: _handleDeleteTap,
-                          child: Text(
-                            _confirmingDelete ? 'Confirm?' : 'Delete',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: _confirmingDelete ? Theme.of(context).colorScheme.error : CroColors.fog,
+                        const SizedBox(width: 10),
+                        Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            key: const Key('birdPanelDeleteButton'),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: _handleDeleteTap,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              child: Text(
+                                _confirmingDelete ? 'Confirm?' : 'Delete',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _confirmingDelete ? Theme.of(context).colorScheme.error : CroColors.fog,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -437,7 +458,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       keyName: 'birdPanelSendSomewhere',
       label: 'Send this bird somewhere',
       bg: CroColors.waypointBlue,
-      fg: Colors.white,
+      fg: CroColors.surface,
       onTap: _sendOnward,
     ),
     BirdDockState.away || BirdDockState.hub => Column(
@@ -446,7 +467,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
           keyName: 'birdPanelSendOnward',
           label: 'Send onward',
           bg: CroColors.waypointBlue,
-          fg: Colors.white,
+          fg: CroColors.surface,
           onTap: _sendOnward,
         ),
         const SizedBox(height: 8),
@@ -468,14 +489,17 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     required Color fg,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      key: Key(keyName),
-      onTap: onTap,
-      child: Container(
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: Key(keyName),
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Center(child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg))),
+        ),
       ),
     );
   }
@@ -485,7 +509,15 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       children: [
         Text(label, style: const TextStyle(fontSize: 12.5, color: CroColors.fog)),
         const Spacer(),
-        Text(value, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+        ),
       ],
     );
   }
@@ -494,25 +526,29 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     final summary = _reactionFor(emoji);
     final count = summary?.count ?? 0;
     final mine = summary?.reactedByMe ?? false;
-    return GestureDetector(
-      key: Key('webReactionChip_$emoji'),
-      onTap: _isLoadingReactions ? null : () => _toggleReaction(emoji),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: mine ? CroColors.waypointBlue.withValues(alpha: 0.16) : CroColors.altSurface,
-          border: Border.all(color: mine ? CroColors.waypointBlue.withValues(alpha: 0.5) : CroColors.ink.withValues(alpha: 0.1)),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 14)),
-            if (count > 0) ...[
-              const SizedBox(width: 5),
-              Text('$count', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: mine ? CroColors.deepWaypoint : CroColors.fog)),
+    return Material(
+      color: mine ? CroColors.waypointBlue.withValues(alpha: 0.16) : CroColors.altSurface,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        key: Key('webReactionChip_$emoji'),
+        borderRadius: BorderRadius.circular(20),
+        onTap: _isLoadingReactions ? null : () => _toggleReaction(emoji),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            border: Border.all(color: mine ? CroColors.waypointBlue.withValues(alpha: 0.5) : CroColors.ink.withValues(alpha: 0.1)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 14)),
+              if (count > 0) ...[
+                const SizedBox(width: 5),
+                Text('$count', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: mine ? CroColors.deepWaypoint : CroColors.fog)),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -579,15 +615,23 @@ class _ParrotWaveformState extends State<_ParrotWaveform> {
       padding: const EdgeInsets.only(top: 11),
       child: Row(
         children: [
-          GestureDetector(
-            key: const Key('birdPanelWaveformPlay'),
-            onTap: _toggle,
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
-              alignment: Alignment.center,
-              child: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 18, color: Colors.white),
+          Tooltip(
+            message: _isPlaying ? 'Pause' : 'Play',
+            child: Material(
+              color: widget.color,
+              shape: const CircleBorder(),
+              child: InkWell(
+                key: const Key('birdPanelWaveformPlay'),
+                customBorder: const CircleBorder(),
+                onTap: _toggle,
+                child: SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: Center(
+                    child: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 18, color: CroColors.surface),
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 11),

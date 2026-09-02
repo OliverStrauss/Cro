@@ -41,7 +41,7 @@ class IconRail extends StatelessWidget {
               width: 34,
               height: 34,
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: CroColors.surface,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(17),
                   topRight: Radius.circular(17),
@@ -92,13 +92,20 @@ class IconRail extends StatelessWidget {
           const Spacer(),
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: GestureDetector(
-              key: const Key('webAvatarButton'),
-              onTap: onAvatarTap,
-              child: AvatarWithFallback(
-                imageUrl: profilePictureUrl,
-                initialsSource: initialsSource,
-                radius: 21,
+            child: Tooltip(
+              message: 'Your profile',
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: const Key('webAvatarButton'),
+                  customBorder: const CircleBorder(),
+                  onTap: onAvatarTap,
+                  child: AvatarWithFallback(
+                    imageUrl: profilePictureUrl,
+                    initialsSource: initialsSource,
+                    radius: 21,
+                  ),
+                ),
               ),
             ),
           ),
@@ -126,11 +133,11 @@ class _RailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? Colors.white : Colors.white.withValues(alpha: 0.72);
+    final fg = selected ? CroColors.surface : CroColors.surface.withValues(alpha: 0.72);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Material(
-        color: selected ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
+        color: selected ? CroColors.surface.withValues(alpha: 0.2) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -170,7 +177,7 @@ class _RailItem extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: CroColors.surface,
                         ),
                       ),
                     ),

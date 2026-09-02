@@ -212,7 +212,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
       key: Key('hubSuggestion_${suggestion.id}'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
       ),
@@ -245,20 +245,27 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
           ),
           TextButton(
             key: Key('approveSuggestionButton_${suggestion.id}'),
-            style: TextButton.styleFrom(foregroundColor: Colors.white, backgroundColor: CroColors.success),
+            style: TextButton.styleFrom(foregroundColor: CroColors.surface, backgroundColor: CroColors.success),
             onPressed: () => _approve(suggestion),
             child: const Text('Approve'),
           ),
           const SizedBox(width: 8),
-          GestureDetector(
-            key: Key('rejectSuggestionButton_${suggestion.id}'),
-            onTap: () => _handleReject(suggestion),
-            child: Text(
-              isConfirming ? 'Confirm?' : 'Reject',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: Key('rejectSuggestionButton_${suggestion.id}'),
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => _handleReject(suggestion),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text(
+                  isConfirming ? 'Confirm?' : 'Reject',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
+                  ),
+                ),
               ),
             ),
           ),
@@ -275,7 +282,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
       key: Key('hubPictureSuggestion_${suggestion.id}'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
       ),
@@ -310,20 +317,27 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
           ),
           TextButton(
             key: Key('approvePictureSuggestionButton_${suggestion.id}'),
-            style: TextButton.styleFrom(foregroundColor: Colors.white, backgroundColor: CroColors.success),
+            style: TextButton.styleFrom(foregroundColor: CroColors.surface, backgroundColor: CroColors.success),
             onPressed: () => _approvePicture(suggestion),
             child: const Text('Approve'),
           ),
           const SizedBox(width: 8),
-          GestureDetector(
-            key: Key('rejectPictureSuggestionButton_${suggestion.id}'),
-            onTap: () => _handleRejectPicture(suggestion),
-            child: Text(
-              isConfirming ? 'Confirm?' : 'Reject',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: Key('rejectPictureSuggestionButton_${suggestion.id}'),
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => _handleRejectPicture(suggestion),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text(
+                  isConfirming ? 'Confirm?' : 'Reject',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
+                  ),
+                ),
               ),
             ),
           ),

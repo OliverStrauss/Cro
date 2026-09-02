@@ -65,6 +65,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   key: const Key('usernameField'),
                   controller: _usernameController,
                   decoration: const InputDecoration(labelText: 'Username'),
+                  autofillHints: const [AutofillHints.username],
+                  autocorrect: false,
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -72,6 +74,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _passwordController,
                   decoration: const InputDecoration(labelText: 'Password'),
                   obscureText: true,
+                  autofillHints: const [AutofillHints.password],
+                  autocorrect: false,
+                  enableSuggestions: false,
                   onSubmitted: (_) => _isLoading ? null : _submit(),
                 ),
                 const SizedBox(height: 24),

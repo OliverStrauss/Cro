@@ -36,7 +36,7 @@ class ComposeBirdModal extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       key: const Key('composeBirdModal'),
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),

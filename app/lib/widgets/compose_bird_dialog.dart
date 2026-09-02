@@ -150,6 +150,39 @@ class _ComposeBirdFormState extends State<ComposeBirdForm> {
       _destinationId != null &&
       _payloadIsValid;
 
+  bool get _hasUnsavedInput =>
+      _nameController.text.trim().isNotEmpty ||
+      _contentController.text.trim().isNotEmpty ||
+      _audioBytes != null ||
+      _imageBytes != null;
+
+  Future<void> _handleCancel() async {
+    if (!_hasUnsavedInput) {
+      widget.onCancel();
+      return;
+    }
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard this bird?'),
+        content: const Text("What you've entered so far will be lost."),
+        actions: [
+          TextButton(
+            key: const Key('keepEditingComposeBirdButton'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            key: const Key('discardComposeBirdButton'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (discard == true) widget.onCancel();
+  }
+
   Future<void> _toggleRecording() async {
     if (_isRecording) {
       await _recorder.stop();
@@ -267,7 +300,7 @@ class _ComposeBirdFormState extends State<ComposeBirdForm> {
           children: [
             TextButton(
               key: const Key('cancelComposeBirdButton'),
-              onPressed: widget.onCancel,
+              onPressed: _handleCancel,
               child: const Text('Cancel'),
             ),
             const SizedBox(width: 8),
@@ -302,10 +335,11 @@ class _ComposeBirdFormState extends State<ComposeBirdForm> {
                 key: const Key('composeBirdRecordButton'),
                 icon: Icon(_isRecording ? Icons.stop_circle : Icons.mic),
                 color: _isRecording ? Theme.of(context).colorScheme.error : null,
+                tooltip: _isRecording ? 'Stop recording' : 'Record',
                 onPressed: _toggleRecording,
               ),
               Text(
-                _isRecording ? 'Recording...' : (_audioBytes != null ? 'Clip recorded' : 'Tap to record'),
+                _isRecording ? 'Recording…' : (_audioBytes != null ? 'Clip recorded' : 'Tap to record'),
               ),
             ],
           ),
@@ -317,6 +351,7 @@ class _ComposeBirdFormState extends State<ComposeBirdForm> {
               IconButton(
                 key: const Key('composeBirdPickImageButton'),
                 icon: const Icon(Icons.image),
+                tooltip: 'Choose image',
                 onPressed: _pickImage,
               ),
               Text(_imageFilename ?? 'No image chosen'),
@@ -338,6 +373,7 @@ class _ComposeBirdFormState extends State<ComposeBirdForm> {
               IconButton(
                 key: const Key('composeBirdPickImageButton'),
                 icon: const Icon(Icons.image),
+                tooltip: 'Choose image',
                 onPressed: _pickImage,
               ),
               Text(_imageFilename ?? 'No image chosen'),
