@@ -94,6 +94,7 @@ class ContextPanel extends StatelessWidget {
           onClose: onClose,
           waypointService: waypointService,
           friendsService: friendsService,
+          hubService: hubService,
           birdService: birdService,
           profileService: profileService,
           onChanged: onDataChanged,

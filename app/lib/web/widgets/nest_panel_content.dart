@@ -4,6 +4,7 @@ import '../../models/bird.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_service.dart';
 import '../../services/friends_service.dart';
+import '../../services/hub_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
@@ -34,6 +35,7 @@ class NestPanelContent extends StatefulWidget {
   final VoidCallback onClose;
   final WaypointService waypointService;
   final FriendsService friendsService;
+  final HubService hubService;
   final BirdService birdService;
   final ProfileService profileService;
   // Called after a successful rename/send so the shell can refresh its own nest/bird lists
@@ -49,6 +51,7 @@ class NestPanelContent extends StatefulWidget {
     required this.onClose,
     required this.waypointService,
     required this.friendsService,
+    required this.hubService,
     required this.birdService,
     required this.profileService,
     required this.onChanged,
@@ -171,9 +174,11 @@ class _NestPanelContentState extends State<NestPanelContent> {
       ]);
       final ownNests = results[0].where((w) => w.id != widget.nest.id);
       final friendNests = results[1].where((w) => w.id != widget.nest.id);
+      final hubs = await widget.hubService.listHubs(token);
       final destinations = [
         ...ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)),
         ...friendNests.map((w) => SendBirdDestination(nestId: w.id, label: '${w.name} (${w.username})')),
+        ...hubs.map((h) => SendBirdDestination(nestId: h.id, label: '${h.name} (Hub)')),
       ];
 
       if (!mounted) return;
