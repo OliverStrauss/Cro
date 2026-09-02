@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../state/auth_state.dart';
+import '../theme.dart';
+import '../widgets/auth_error_banner.dart';
+import '../widgets/auth_shell.dart';
+import '../widgets/auth_text_field.dart';
 
 class SignUpScreen extends StatefulWidget {
   final AuthState authState;
@@ -13,6 +17,7 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -30,6 +35,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _submit() async {
+    if (_formKey.currentState?.validate() != true) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -53,62 +59,81 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Sign up for Cro')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 320),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const Key('usernameField'),
-                  controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Username'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('emailField'),
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('passwordField'),
-                  controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
-                  onSubmitted: (_) => _isLoading ? null : _submit(),
-                ),
-                const SizedBox(height: 24),
-                if (_errorMessage != null) ...[
-                  Text(
-                    _errorMessage!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Sign up'),
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  key: const Key('goToLoginButton'),
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Already have an account? Log in'),
-                ),
-              ],
-            ),
+    return AuthShell(
+      heading: 'Join Cro',
+      subheading: 'Create an account and send your first cro on its way.',
+      footer: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Text('Already have an account?', style: TextStyle(fontSize: 12.5, color: CroColors.fog)),
+          TextButton(
+            key: const Key('goToLoginButton'),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: Size.zero),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Log in', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
           ),
+        ],
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AuthTextField(
+              fieldKey: const Key('usernameField'),
+              controller: _usernameController,
+              label: 'Username',
+              icon: Icons.person_outline,
+              textInputAction: TextInputAction.next,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Choose a username' : null,
+            ),
+            const SizedBox(height: 14),
+            AuthTextField(
+              fieldKey: const Key('emailField'),
+              controller: _emailController,
+              label: 'Email',
+              icon: Icons.alternate_email,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+            ),
+            const SizedBox(height: 14),
+            AuthTextField(
+              fieldKey: const Key('passwordField'),
+              controller: _passwordController,
+              label: 'Password',
+              icon: Icons.lock_outline,
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              validator: (v) => (v == null || v.isEmpty) ? 'Choose a password' : null,
+              onSubmitted: (_) => _isLoading ? null : _submit(),
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 16),
+              AuthErrorBanner(message: _errorMessage!),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: CroColors.waypointBlue,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Sign up', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
         ),
       ),
     );

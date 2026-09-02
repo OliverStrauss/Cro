@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme.dart';
 import '../../widgets/avatar_with_fallback.dart';
+import '../../widgets/cro_logo_mark.dart';
 import '../state/web_shell_controller.dart';
 
 /// The 76px icon rail: logo, Map/Nests/Hubs/Friends/You nav (no Birds item - the dock
@@ -35,22 +36,7 @@ class IconRail extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 20),
-          Transform.rotate(
-            angle: -0.78,
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(17),
-                  topRight: Radius.circular(17),
-                  bottomLeft: Radius.circular(17),
-                  bottomRight: Radius.circular(4),
-                ),
-              ),
-            ),
-          ),
+          const CroLogoMark(),
           const SizedBox(height: 18),
           _RailItem(
             key: const Key('webNavMap'),
