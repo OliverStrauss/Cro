@@ -118,38 +118,42 @@ class _HubCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      key: Key('webHubCard_${hub.id}'),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? CroColors.deliveryAmber.withValues(alpha: 0.6) : CroColors.ink.withValues(alpha: 0.06)),
-          boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AvatarWithFallback(
-              imageUrl: hub.profilePictureUrl,
-              initialsSource: hub.name,
-              fallbackIcon: HubCategory.iconFor(hub.category),
-              radius: 18,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              hub.name,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 1),
-            const Text('View board →', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
-          ],
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: Key('webHubCard_${hub.id}'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: selected ? CroColors.deliveryAmber.withValues(alpha: 0.6) : CroColors.ink.withValues(alpha: 0.06)),
+            boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AvatarWithFallback(
+                imageUrl: hub.profilePictureUrl,
+                initialsSource: hub.name,
+                fallbackIcon: HubCategory.iconFor(hub.category),
+                radius: 18,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hub.name,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 1),
+              const Text('View board →', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+            ],
+          ),
         ),
       ),
     );

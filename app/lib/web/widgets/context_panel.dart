@@ -80,7 +80,7 @@ class ContextPanel extends StatelessWidget {
       width: 392,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.16), blurRadius: 20, offset: const Offset(0, 8))],
       ),

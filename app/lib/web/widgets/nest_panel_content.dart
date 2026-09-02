@@ -210,7 +210,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
       mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
-          avatar: CircleAvatar(radius: 26, backgroundColor: color, child: const Icon(Icons.home, color: Colors.white)),
+          avatar: CircleAvatar(radius: 26, backgroundColor: color, child: const Icon(Icons.home, color: CroColors.surface)),
           title: widget.isOwn ? 'Your nest' : "${nest.username}'s nest",
           subtitle: _name,
           onClose: widget.onClose,
@@ -225,12 +225,19 @@ class _NestPanelContentState extends State<NestPanelContent> {
               ),
               if (widget.isOwn) ...[
                 const SizedBox(width: 10),
-                GestureDetector(
-                  key: const Key('webRenameNestButton'),
-                  onTap: _rename,
-                  child: const Text(
-                    'Rename',
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    key: const Key('webRenameNestButton'),
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: _rename,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: Text(
+                        'Rename',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -294,43 +301,47 @@ class _NestPanelContentState extends State<NestPanelContent> {
   Widget _deliveredRow(Bird bird) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: GestureDetector(
-        key: Key('nestPanelDelivered_${bird.id}'),
-        onTap: () => _openReceivedBird(bird),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFDF7F0),
-            border: Border.all(color: CroColors.deliveryAmber.withValues(alpha: 0.45)),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: const Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(
-                      bird.updatedAt == null
-                          ? (bird.isRead ? bird.type : 'New · ${bird.type}')
-                          : '${bird.isRead ? bird.type : 'New · ${bird.type}'} · ${_relativeTime(bird.updatedAt!)}',
-                      style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-                    ),
-                  ],
+      child: Material(
+        color: CroColors.warmTint,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          key: Key('nestPanelDelivered_${bird.id}'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openReceivedBird(bird),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+            decoration: BoxDecoration(
+              border: Border.all(color: CroColors.deliveryAmber.withValues(alpha: 0.45)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.arrow_forward_rounded, size: 14, color: CroColors.surface),
                 ),
-              ),
-              const Text('Read', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: CroColors.amberInk)),
-            ],
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text(
+                        bird.updatedAt == null
+                            ? (bird.isRead ? bird.type : 'New · ${bird.type}')
+                            : '${bird.isRead ? bird.type : 'New · ${bird.type}'} · ${_relativeTime(bird.updatedAt!)}',
+                        style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                      ),
+                    ],
+                  ),
+                ),
+                const Text('Read', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: CroColors.amberInk)),
+              ],
+            ),
           ),
         ),
       ),
@@ -340,31 +351,35 @@ class _NestPanelContentState extends State<NestPanelContent> {
   Widget _residentRow(Bird bird) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: GestureDetector(
-        key: Key('nestPanelResident_${bird.id}'),
-        onTap: () => _openSendFlow(bird),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-          decoration: BoxDecoration(color: CroColors.warmSurface, borderRadius: BorderRadius.circular(12)),
-          child: Row(
-            children: [
-              Container(width: 28, height: 28, decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle)),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(
-                      bird.updatedAt == null ? bird.type : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
-                      style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-                    ),
-                  ],
+      child: Material(
+        color: CroColors.warmSurface,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          key: Key('nestPanelResident_${bird.id}'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openSendFlow(bird),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            child: Row(
+              children: [
+                Container(width: 28, height: 28, decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle)),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text(
+                        bird.updatedAt == null ? bird.type : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
+                        style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Text('Send →', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
-            ],
+                const Text('Send →', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+              ],
+            ),
           ),
         ),
       ),

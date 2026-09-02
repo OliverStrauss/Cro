@@ -29,9 +29,12 @@ class WebMapScreen extends StatefulWidget {
   // Only used for the Trails legend's per-friend rows (username + trail color) -
   // WebShellScreen already loads this for the Friends screen and rail badge.
   final List<Friend> friends;
-  // Keyed by hubId - drives a Hub marker's "!" badge (only shown when > 0), same signal the
-  // phone app's MapScreen already fetches via HubService.getUnreadCounts.
+  // Keyed by hubId - drives a Hub marker's unread-count badge (only shown when > 0), same
+  // signal the phone app's MapScreen already fetches via HubService.getUnreadCounts.
   final Map<String, int> hubUnreadCounts;
+  // Keyed by own nest id - drives that nest marker's unread-count badge, same residents data
+  // WebNestsScreen already uses for its "N waiting" pill (see WebShellData.load()).
+  final Map<String, List<Bird>> nestResidentsByNestId;
   final String? selectedNestId;
   final String? selectedHubId;
   // Whichever bird's panel is currently open (own or a friend's) - that marker gets a glow
@@ -75,6 +78,7 @@ class WebMapScreen extends StatefulWidget {
     required this.hubs,
     this.friends = const [],
     this.hubUnreadCounts = const {},
+    this.nestResidentsByNestId = const {},
     required this.selectedNestId,
     required this.selectedHubId,
     this.selectedBirdId,
@@ -103,6 +107,11 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _bobController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _syncBob();
   }
 
@@ -112,8 +121,11 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
     _syncBob();
   }
 
+  // Respects "reduce motion" (MediaQuery.disableAnimations) - the bob loop is decorative, not
+  // informational, so it's simply skipped rather than given a reduced-motion variant.
   void _syncBob() {
-    final hasTraveling = widget.birds.any((b) => b.isTraveling) || widget.friendsBirds.isNotEmpty;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final hasTraveling = !reduceMotion && (widget.birds.any((b) => b.isTraveling) || widget.friendsBirds.isNotEmpty);
     if (hasTraveling && !_bobController.isAnimating) {
       _bobController.repeat(reverse: true);
     } else if (!hasTraveling && _bobController.isAnimating) {
@@ -126,6 +138,9 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
     _bobController.dispose();
     super.dispose();
   }
+
+  int _ownNestUnreadCount(Waypoint nest) =>
+      (widget.nestResidentsByNestId[nest.id] ?? const []).where((b) => !b.isRead).length;
 
   List<_MapFlight> _resolveFlights() {
     final nestsById = <String, Waypoint>{
@@ -214,16 +229,22 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                     point: LatLng(hub.latitude, hub.longitude),
                     width: 34,
                     height: 34,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => widget.onSelectHub(hub),
-                      child: _HubMarkerDot(
-                        key: Key('webHubMarkerDot_${hub.id}'),
-                        name: hub.name,
-                        profilePictureUrl: hub.profilePictureUrl,
-                        category: hub.category,
-                        hasUnread: (widget.hubUnreadCounts[hub.id] ?? 0) > 0,
-                        selected: widget.selectedHubId == hub.id,
+                    child: Tooltip(
+                      message: hub.name,
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => widget.onSelectHub(hub),
+                          child: _HubMarkerDot(
+                            key: Key('webHubMarkerDot_${hub.id}'),
+                            name: hub.name,
+                            profilePictureUrl: hub.profilePictureUrl,
+                            category: hub.category,
+                            unreadCount: widget.hubUnreadCounts[hub.id] ?? 0,
+                            selected: widget.selectedHubId == hub.id,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -242,13 +263,27 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                       // larger than a Hub's marker (radius 15 vs Hub's 12) - nests read
                       // first - but shrunk down from the original 38px avatar after seeing
                       // it live felt oversized next to the rest of the map.
-                      avatar: CircleAvatar(
-                        radius: 15,
-                        backgroundColor: CroColors.waypointBlue,
-                        child: Text(
-                          nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
-                        ),
+                      avatar: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          CircleAvatar(
+                            radius: 15,
+                            backgroundColor: CroColors.waypointBlue,
+                            child: Text(
+                              nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.surface),
+                            ),
+                          ),
+                          if (_ownNestUnreadCount(nest) > 0)
+                            Positioned(
+                              bottom: -2,
+                              right: -2,
+                              child: _UnreadCountBadge(
+                                badgeKey: Key('webNestUnreadBadge_${nest.id}'),
+                                count: _ownNestUnreadCount(nest),
+                              ),
+                            ),
+                        ],
                       ),
                       name: nest.name,
                       subtitle: '${widget.birds.where((b) => !b.isTraveling && b.currentNestId == nest.id).length} of yours here',
@@ -270,7 +305,7 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                         backgroundColor: hexToColor(fw.color ?? '#6B7280'),
                         child: Text(
                           fw.name.isEmpty ? '?' : fw.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.surface),
                         ),
                       ),
                       name: fw.name,
@@ -289,25 +324,31 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                     ),
                     width: 34,
                     height: 34,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: f.ownBird != null
-                          ? () => widget.onSelectBird(f.ownBird!)
-                          : (f.isPublicFriendBird ? () => widget.onSelectFriendBird(f.friendBird!) : null),
-                      child: AnimatedBuilder(
-                        animation: _bobController,
-                        builder: (context, child) => Transform.translate(offset: Offset(0, -4 * _bobController.value), child: child),
-                        child: _BirdMarkerDot(
-                          key: Key('webBirdMarkerDot_${f.id}'),
-                          color: f.color,
-                          heading: bearingDegrees(
-                            origin: f.origin,
-                            destination: f.destination,
-                            fraction: elapsedFraction(departedAt: f.departedAt, estimatedArrivalAt: f.estimatedArrivalAt, now: now),
+                    child: Tooltip(
+                      message: f.ownBird?.name ?? f.friendBird?.name ?? 'Bird',
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: f.ownBird != null
+                              ? () => widget.onSelectBird(f.ownBird!)
+                              : (f.isPublicFriendBird ? () => widget.onSelectFriendBird(f.friendBird!) : null),
+                          child: AnimatedBuilder(
+                            animation: _bobController,
+                            builder: (context, child) => Transform.translate(offset: Offset(0, -4 * _bobController.value), child: child),
+                            child: _BirdMarkerDot(
+                              key: Key('webBirdMarkerDot_${f.id}'),
+                              color: f.color,
+                              heading: bearingDegrees(
+                                origin: f.origin,
+                                destination: f.destination,
+                                fraction: elapsedFraction(departedAt: f.departedAt, estimatedArrivalAt: f.estimatedArrivalAt, now: now),
+                              ),
+                              isPublic: f.isPublicFriendBird,
+                              hasViewed: f.hasViewed,
+                              selected: f.id == widget.selectedBirdId,
+                            ),
                           ),
-                          isPublic: f.isPublicFriendBird,
-                          hasViewed: f.hasViewed,
-                          selected: f.id == widget.selectedBirdId,
                         ),
                       ),
                     ),
@@ -334,15 +375,22 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                       widget.ownNests.isEmpty
                           ? 'Click anywhere on the map to place your new nest'
                           : 'Click anywhere on the map to move your nest',
-                      style: const TextStyle(fontSize: 12.5, color: Colors.white),
+                      style: const TextStyle(fontSize: 12.5, color: CroColors.surface),
                     ),
                     const SizedBox(width: 14),
-                    GestureDetector(
-                      key: const Key('webCancelAddNest'),
-                      onTap: widget.onCancelAddNest,
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
+                    Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        key: const Key('webCancelAddNest'),
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: widget.onCancelAddNest,
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -367,15 +415,22 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                       widget.isAdmin
                           ? 'Click anywhere on the map to place your new Hub'
                           : 'Click anywhere on the map to suggest a Hub location',
-                      style: const TextStyle(fontSize: 12.5, color: Colors.white),
+                      style: const TextStyle(fontSize: 12.5, color: CroColors.surface),
                     ),
                     const SizedBox(width: 14),
-                    GestureDetector(
-                      key: const Key('webCancelAddHub'),
-                      onTap: widget.onCancelAddHub,
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
+                    Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        key: const Key('webCancelAddHub'),
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: widget.onCancelAddHub,
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -409,7 +464,7 @@ class _TrailsLegend extends StatelessWidget {
       key: const Key('webMapTrailsLegend'),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.93),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.93),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 3))],
       ),
@@ -491,7 +546,7 @@ class _BirdMarkerDot extends StatelessWidget {
             turns: heading / 360,
             duration: const Duration(milliseconds: 500),
             curve: Curves.easeInOut,
-            child: const Icon(Icons.arrow_drop_up, size: 16, color: Colors.white),
+            child: const Icon(Icons.arrow_drop_up, size: 16, color: CroColors.surface),
           ),
           if (isPublic)
             Positioned(
@@ -505,15 +560,44 @@ class _BirdMarkerDot extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: hasViewed ? CroColors.fog : CroColors.deliveryAmber,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1),
+                  border: Border.all(color: CroColors.surface, width: 1),
                 ),
                 child: const Text(
                   '!',
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white, height: 1),
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: CroColors.surface, height: 1),
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// The small amber "unread" circle shared by a Hub marker and an own-nest marker - bottom-right
+/// of the avatar, showing the real count (capped at "9+" - these badges are 13px, too small for
+/// more digits) rather than just a presence dot.
+class _UnreadCountBadge extends StatelessWidget {
+  final Key badgeKey;
+  final int count;
+
+  const _UnreadCountBadge({required this.badgeKey, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: badgeKey,
+      width: 13,
+      height: 13,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: CroColors.deliveryAmber,
+        shape: BoxShape.circle,
+        border: Border.all(color: CroColors.surface, width: 1.5),
+      ),
+      child: Text(
+        count > 9 ? '9+' : '$count',
+        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: CroColors.surface, height: 1),
       ),
     );
   }
@@ -528,7 +612,7 @@ class _HubMarkerDot extends StatelessWidget {
   final String name;
   final String? profilePictureUrl;
   final String? category;
-  final bool hasUnread;
+  final int unreadCount;
   final bool selected;
 
   const _HubMarkerDot({
@@ -536,7 +620,7 @@ class _HubMarkerDot extends StatelessWidget {
     required this.name,
     this.profilePictureUrl,
     this.category,
-    this.hasUnread = false,
+    this.unreadCount = 0,
     this.selected = false,
   });
 
@@ -568,29 +652,15 @@ class _HubMarkerDot extends StatelessWidget {
               initialsSource: name,
               fallbackIcon: HubCategory.iconFor(category),
               fallbackBackgroundColor: CroColors.deliveryAmber,
-              fallbackIconColor: Colors.white,
+              fallbackIconColor: CroColors.surface,
               radius: 11,
             ),
           ),
-          if (hasUnread)
+          if (unreadCount > 0)
             Positioned(
               bottom: 0,
               right: 0,
-              child: Container(
-                key: const Key('webHubUnreadBadge'),
-                width: 13,
-                height: 13,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: CroColors.deliveryAmber,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-                child: const Text(
-                  '!',
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white, height: 1),
-                ),
-              ),
+              child: _UnreadCountBadge(badgeKey: const Key('webHubUnreadBadge'), count: unreadCount),
             ),
         ],
       ),

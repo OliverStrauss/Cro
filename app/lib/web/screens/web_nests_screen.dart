@@ -151,87 +151,105 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
     final waitingCount = residents.where((b) => !b.isRead).length;
     final birdLine = residents.isEmpty ? 'No birds resting here' : '${residents.length} of your birds here';
 
-    return GestureDetector(
-      key: Key('webNestCard_${nest.id}'),
-      onTap: () => widget.onSelectNest(nest),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: nest.id == widget.selectedNestId ? CroColors.waypointBlue.withValues(alpha: 0.6) : CroColors.ink.withValues(alpha: 0.06),
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: Key('webNestCard_${nest.id}'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => widget.onSelectNest(nest),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: nest.id == widget.selectedNestId ? CroColors.waypointBlue.withValues(alpha: 0.6) : CroColors.ink.withValues(alpha: 0.06),
+            ),
+            boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
           ),
-          boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 23,
-                  backgroundColor: CroColors.waypointBlue,
-                  child: Text(
-                    nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(nest.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
-                      Text(
-                        '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
-                        style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-                      ),
-                    ],
-                  ),
-                ),
-                if (waitingCount > 0)
-                  Container(
-                    key: Key('webNestWaitingBadge_${nest.id}'),
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(color: CroColors.alertAway, borderRadius: BorderRadius.circular(8)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 23,
+                    backgroundColor: CroColors.waypointBlue,
                     child: Text(
-                      '$waitingCount waiting',
-                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white),
+                      nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: CroColors.surface),
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Text(birdLine, style: const TextStyle(fontSize: 12.5)),
-                const Spacer(),
-                GestureDetector(
-                  key: Key('webRenameNestButton_${nest.id}'),
-                  onTap: () => _rename(nest),
-                  child: const Text('Rename', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  key: Key('webDeleteNestButton_${nest.id}'),
-                  onTap: () => _handleDelete(nest),
-                  child: Text(
-                    isConfirming ? 'Confirm?' : 'Delete',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(nest.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
+                          style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  if (waitingCount > 0)
+                    Container(
+                      key: Key('webNestWaitingBadge_${nest.id}'),
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(color: CroColors.alertAway, borderRadius: BorderRadius.circular(8)),
+                      child: Text(
+                        '$waitingCount waiting',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CroColors.surface),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(birdLine, style: const TextStyle(fontSize: 12.5)),
+                  const Spacer(),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: Key('webRenameNestButton_${nest.id}'),
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => _rename(nest),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text('Rename', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: Key('webDeleteNestButton_${nest.id}'),
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => _handleDelete(nest),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text(
+                          isConfirming ? 'Confirm?' : 'Delete',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -239,38 +257,42 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
 
   Widget _friendNestCard(Waypoint nest) {
     final color = hexToColor(nest.color ?? '#6B7280');
-    return GestureDetector(
-      key: Key('webFriendNestCard_${nest.id}'),
-      onTap: () => widget.onSelectNest(nest),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 19,
-              backgroundColor: color,
-              child: Text(
-                nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        key: Key('webFriendNestCard_${nest.id}'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => widget.onSelectNest(nest),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 19,
+                backgroundColor: color,
+                child: Text(
+                  nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CroColors.surface),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(nest.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
-                  Text(nest.username ?? '', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: CroColors.fog)),
-                ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(nest.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                    Text(nest.username ?? '', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: CroColors.fog)),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

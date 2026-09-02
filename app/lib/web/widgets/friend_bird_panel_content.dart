@@ -143,7 +143,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
             height: 50,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             alignment: Alignment.center,
-            child: const Icon(Icons.arrow_forward_rounded, size: 22, color: Colors.white),
+            child: const Icon(Icons.arrow_forward_rounded, size: 22, color: CroColors.surface),
           ),
           title: bird.name,
           subtitle: '${bird.type} · ${BirdType.description(bird.type)} · sent by ${bird.username}',
@@ -195,16 +195,21 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
                 children: [for (final emoji in _webReactionEmojis) _reactionChip(emoji)],
               ),
               const SizedBox(height: 18),
-              GestureDetector(
-                key: const Key('friendBirdPanelFollowOnMap'),
-                onTap: widget.onFollowOnMap,
-                child: Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(color: CroColors.warmSurface, borderRadius: BorderRadius.circular(12)),
-                  child: const Text(
-                    'Follow on the map',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+              Material(
+                color: CroColors.warmSurface,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  key: const Key('friendBirdPanelFollowOnMap'),
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: widget.onFollowOnMap,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Text(
+                        'Follow on the map',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -220,7 +225,15 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
       children: [
         Text(label, style: const TextStyle(fontSize: 12.5, color: CroColors.fog)),
         const Spacer(),
-        Text(value, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+        ),
       ],
     );
   }
@@ -229,25 +242,29 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
     final summary = _reactionFor(emoji);
     final count = summary?.count ?? 0;
     final mine = summary?.reactedByMe ?? false;
-    return GestureDetector(
-      key: Key('webFriendReactionChip_$emoji'),
-      onTap: _isLoadingReactions ? null : () => _toggleReaction(emoji),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: mine ? CroColors.waypointBlue.withValues(alpha: 0.16) : CroColors.altSurface,
-          border: Border.all(color: mine ? CroColors.waypointBlue.withValues(alpha: 0.5) : CroColors.ink.withValues(alpha: 0.1)),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 14)),
-            if (count > 0) ...[
-              const SizedBox(width: 5),
-              Text('$count', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: mine ? CroColors.deepWaypoint : CroColors.fog)),
+    return Material(
+      color: mine ? CroColors.waypointBlue.withValues(alpha: 0.16) : CroColors.altSurface,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        key: Key('webFriendReactionChip_$emoji'),
+        borderRadius: BorderRadius.circular(20),
+        onTap: _isLoadingReactions ? null : () => _toggleReaction(emoji),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            border: Border.all(color: mine ? CroColors.waypointBlue.withValues(alpha: 0.5) : CroColors.ink.withValues(alpha: 0.1)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 14)),
+              if (count > 0) ...[
+                const SizedBox(width: 5),
+                Text('$count', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: mine ? CroColors.deepWaypoint : CroColors.fog)),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
