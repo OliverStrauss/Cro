@@ -46,10 +46,11 @@ Beyond implementing what's asked, work in these two modes by default:
 
 This is a monorepo with two independently-buildable halves:
 
-- `/app` — Flutter frontend (package name `cro_app`). Configured platforms: Android, Linux,
-  Windows, Web (no iOS/macOS scaffolding has been generated) — Android/Linux/Windows builds
-  still exist and still run, they just render the same web-first UI rather than a
-  platform-specific one. The pre-auth `login_screen.dart`/`sign_up_screen.dart` live directly
+- `/app` — Flutter frontend (package name `cro_app`). Configured platforms: Linux, Windows, Web
+  (no iOS/macOS/Android scaffolding — Android's was generated at one point but was removed
+  once the UI went web-only, since nothing exercised it) — Linux/Windows builds still exist
+  and still run, they just render the same web-first UI rather than a platform-specific one.
+  The pre-auth `login_screen.dart`/`sign_up_screen.dart` live directly
   under `lib/screens/`; everything post-login lives under `lib/web/` (screens in
   `lib/web/screens/`, widgets in `lib/web/widgets/`) — that directory predates the mobile UI's
   removal and is simply the app's UI now, kept at its existing path/naming rather than
