@@ -13,17 +13,24 @@ namespace CroApp.Api;
 // accounts, all already friends with each other, each with one private, uniquely-named
 // "{Username}'s Roost" nest around Ames, plus a few seed Birds sent between them. Users is
 // wiped and replaced; Waypoints and Birds only ever get new rows added, never wiped (so
-// locally-placed Hubs and any manually-sent birds survive a re-run) - Hubs and Reactions are
-// left exactly as they are.
+// locally-placed Hubs and any manually-sent birds survive a re-run) - Hubs themselves and
+// Reactions are left exactly as they are. HubMessages IS wiped, unlike those: it's the one
+// other container that stores a snapshotted Users reference (SenderId) rather than owning
+// its own identity, so leaving old rows in place after a Users wipe wouldn't just be inert
+// leftover data - the web UI's Hub message board reads that stale SenderId to decide
+// whether to show an "Add friend" button, and a since-deleted sender's id can no longer
+// match anyone in the new users' friend lists, wrongly showing that button for someone
+// who's actually already a friend under their new id.
 public static class DevDataSeeder
 {
     private const string Password = "1";
 
-    public static async Task SeedFixedDevUsersAsync(Database database, string usersContainerName, string waypointsContainerName, string birdsContainerName)
+    public static async Task SeedFixedDevUsersAsync(Database database, string usersContainerName, string waypointsContainerName, string birdsContainerName, string hubMessagesContainerName)
     {
         var usersContainer = database.GetContainer(usersContainerName);
         var waypointsContainer = database.GetContainer(waypointsContainerName);
         var birdsContainer = database.GetContainer(birdsContainerName);
+        var hubMessagesContainer = database.GetContainer(hubMessagesContainerName);
 
         Console.WriteLine("Wiping existing Users (Hubs, Waypoints, Birds, and Reactions are untouched)...");
         var existingIds = new List<string>();
@@ -41,6 +48,25 @@ public static class DevDataSeeder
             await usersContainer.DeleteItemAsync<User>(id, new PartitionKey(id));
         }
         Console.WriteLine($"Deleted {existingIds.Count} existing user(s).");
+
+        // Every existing HubMessage.SenderId now points at a user just deleted above, so the
+        // whole board is stale, not just seeded users' own rows - wipe it all rather than try
+        // to pick out which ones still resolve. Cross-partition (partitioned by HubId, not
+        // SenderId), so a plain SELECT here has no single partition key to scope to.
+        var hubMessageIds = new List<(string Id, string HubId)>();
+        var hubMessageQuery = hubMessagesContainer.GetItemQueryIterator<HubMessage>(new QueryDefinition("SELECT * FROM c"));
+        while (hubMessageQuery.HasMoreResults)
+        {
+            foreach (var existing in await hubMessageQuery.ReadNextAsync())
+            {
+                hubMessageIds.Add((existing.Id, existing.HubId));
+            }
+        }
+        foreach (var (id, hubId) in hubMessageIds)
+        {
+            await hubMessagesContainer.DeleteItemAsync<HubMessage>(id, new PartitionKey(hubId));
+        }
+        Console.WriteLine($"Cleared {hubMessageIds.Count} Hub message board row(s) (stale sender references after the Users wipe above).");
 
         string[] usernames = ["Admin", "Test1", "Test2", "Oliver", "Annie"];
         var hasher = new PasswordHasher<User>();

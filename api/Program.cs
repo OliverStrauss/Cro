@@ -185,7 +185,7 @@ if (app.Environment.IsDevelopment())
         // Always-on-launch reset to the same fixed dev dataset Tools/SeedDevUsers seeds
         // manually - wipes Users and reseeds Admin/Test1/Test2/Oliver/Annie (all friends,
         // one Roost nest each, a few Cro's already in flight) every time the API starts.
-        await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName);
+        await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.HubMessagesContainerName);
     }
     else
     {
