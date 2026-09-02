@@ -160,10 +160,13 @@ dev-only shortcuts" below).
   every run.
 - **Hubs container**: a `Hubs` container (partition key `/status`) is provisioned the same
   dev-only way as Waypoints, for app-curated public landmark nests.
-- **Dev user seeding on startup**: on startup, `Program.cs` also idempotently seeds two dev
-  users if they don't already exist — `Oliver 1` (regular) and `Admin 1` (admin, can place
-  Hubs via the map's "Add Hub" button). See "Seeding local dev data" below for the fuller
-  seed tool.
+- **Dev user seeding on startup**: on every `dotnet run`, `Program.cs` now wipes and reseeds
+  the full fixed 5-user dev dataset itself, via the shared `DevDataSeeder.SeedFixedDevUsersAsync`
+  (the same logic `Tools/SeedDevUsers` calls standalone — see "Seeding local dev data" below).
+  This used to just idempotently seed two bare accounts (`Oliver 1`/`Admin 1`) and leave the
+  richer dataset to a separate manual step; that's no longer the case, so a fresh `dotnet run`
+  alone is now enough to get friends/nests/birds to exercise, and the standalone tool is only
+  needed to reset the dataset without restarting the API.
 - **Blob container access**: the `profile-pictures` container is provisioned on startup in
   Development with `PublicAccessType.Blob` (public read for blobs, no listing) so uploaded
   pictures are fetchable via a plain URL without SAS tokens — fine for local/dev, but real
@@ -195,30 +198,31 @@ the emulators.
 
 ## Seeding local dev data
 
-`Program.cs`'s own startup seed (above) only ever creates those two bare accounts — enough to
-have a known admin, but not enough to exercise friends, nests, or the map with. For that,
-**always run the standalone seed tool** (`api/Tools/SeedDevUsers`) after the emulators are up
-and `dotnet user-secrets` is configured, from `/api`:
+`Program.cs`'s own dev-only startup (see "Dev user seeding on startup" above) now resets to
+the fixed dev dataset itself on every launch, via the shared `DevDataSeeder.SeedFixedDevUsersAsync`.
+That wipes the entire `Users` container and replaces it with five fixed accounts — `Admin`,
+`Test1`, `Test2`, `Oliver`, `Annie` — all password `1` (see "Known dev-only shortcuts"
+above), already mutually Accepted-friends with each other with auto-assigned colors, plus
+one private nest apiece around Ames. `Admin` is seeded with `IsAdmin: true`. It leaves Hubs,
+Waypoints, Birds, and Reactions untouched, but does clear every Hub's message board
+(`HubMessages`) — a `HubMessage` snapshots its sender's user id, so a row left behind after a
+Users wipe would point at a since-deleted user; the web UI's Hub board uses that id to decide
+whether to show an "Add friend" button, and a stale id can never match an entry in the new
+users' friend lists, so the button would wrongly show for someone you're actually already
+friends with (under their new id). Note that it deletes *every* existing user (including any
+you've registered by hand through the app), and each run mints fresh user ids, so a
+previously-seeded user's id is not stable across runs — a plain `dotnet run` is a reset, not
+just a launch.
+
+The standalone tool (`api/Tools/SeedDevUsers`) calls the exact same shared logic directly
+against a running emulator, without going through the API — useful to reset the dataset
+without restarting `dotnet run`, or when the API isn't up at all (there's no `DELETE /users`
+endpoint to do the wipe through otherwise). Run it from `/api` once the emulators are up and
+`dotnet user-secrets` is configured:
 
 ```
 dotnet run --project Tools/SeedDevUsers/SeedDevUsers.csproj
 ```
-
-This wipes the entire `Users` container and replaces it with five fixed accounts — `Admin`,
-`Test1`, `Test2`, `Oliver`, `Annie` — all password `1` (see "Known dev-only shortcuts"
-above), already mutually Accepted-friends with each other with auto-assigned colors, plus
-one private nest apiece around Ames. `Admin` is seeded with `IsAdmin: true`. It talks
-directly to the Cosmos emulator rather than through the running API (there's no `DELETE
-/users` endpoint to do the wipe through), so it works whether or not `dotnet run` is up, and
-leaves Hubs, Waypoints, Birds, and Reactions untouched. It also clears every Hub's message
-board (`HubMessages`), unlike those — a `HubMessage` snapshots its sender's user id, so a row
-left behind after a Users wipe would point at a since-deleted user; the web UI's Hub board
-uses that id to decide whether to show an "Add friend" button, and a stale id can never match
-an entry in the new users' friend lists, so the button would wrongly show for someone you're
-actually already friends with (under their new id). Re-running it is the standard way to
-reset back to this known-good dataset — note that it deletes *every* existing user (including
-any you've registered by hand through the app), and each run mints fresh user ids, so a
-previously-seeded user's id is not stable across runs.
 
 ## CI
 
