@@ -278,6 +278,22 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task SendFriendRequest_RecordsNotificationForTarget()
+    {
+        var usernameA = $"event-friend-a-{Guid.NewGuid():N}";
+        var usernameB = $"event-friend-b-{Guid.NewGuid():N}";
+        var (_, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        var sendResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA, new { Username = usernameB }));
+        sendResponse.EnsureSuccessStatusCode();
+        await WaitForIndexingAsync();
+
+        var targetNotifications = await GetNotificationsAsync(tokenB);
+        Assert.Contains(targetNotifications, n => n.Kind == "FriendRequestReceived" && !n.IsRead && n.DisplayText.Contains(usernameA));
+    }
+
+    [Fact]
     public async Task MarkNotificationRead_AndMarkAllRead_ClearUnreadCount()
     {
         var usernameA = $"event-read-a-{Guid.NewGuid():N}";

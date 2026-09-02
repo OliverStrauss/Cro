@@ -362,6 +362,7 @@ class _PopupSurface extends StatelessWidget {
   EventKind.birdArrivedAtYourNest => (Icons.flutter_dash, CroColors.waypointBlue),
   EventKind.birdArrived => (Icons.flutter_dash, CroColors.deepWaypoint),
   EventKind.friendRequestAccepted => (Icons.person, CroColors.deliveryAmber),
+  EventKind.friendRequestReceived => (Icons.person_add, CroColors.deliveryAmber),
   _ => (Icons.notifications, CroColors.fog),
 };
 

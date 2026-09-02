@@ -49,6 +49,10 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
   final _searchController = TextEditingController();
   List<UserSearchResult> _searchResults = [];
   Timer? _searchDebounce;
+  // Same "no live-update mechanism exists here yet" gap WebShellData.startPolling() closes
+  // for birds/notifications - this screen fetches its own copy of friends/requests/blocked
+  // independently of WebShellData, so it needs its own poll to stay live too.
+  Timer? _livePoll;
   // Inline two-step "Confirm?" pattern, same as web_nests_screen.dart's delete and
   // hub_suggestions_panel.dart's reject - second tap on the same id executes.
   String? _confirmRemoveId;
@@ -59,13 +63,40 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
     super.initState();
     _load();
     _searchController.addListener(_onSearchChanged);
+    _livePoll = Timer.periodic(const Duration(seconds: 3), (_) => _pollLive());
   }
 
   @override
   void dispose() {
+    _livePoll?.cancel();
     _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Quiet refresh for the timer above - unlike _load(), never toggles _isLoading, so a
+  // background tick doesn't flash the whole screen back to a spinner. Same "a blip on a
+  // silent background poll shouldn't blank an already-rendered screen" reasoning as
+  // WebShellData's own poll.
+  Future<void> _pollLive() async {
+    try {
+      final token = widget.authState.token!;
+      final results = await Future.wait([
+        widget.friendsService.getFriends(token),
+        widget.friendsService.getIncomingRequests(token),
+        widget.friendsService.getOutgoingRequests(token),
+        widget.friendsService.getBlockedUsers(token),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _friends = results[0] as List<Friend>;
+        _incoming = results[1] as List<FriendRequest>;
+        _outgoing = results[2] as List<FriendRequest>;
+        _blocked = results[3] as List<BlockedUser>;
+      });
+    } catch (_) {
+      // Swallow - see the comment on _livePoll's declaration above.
+    }
   }
 
   Future<void> _load() async {

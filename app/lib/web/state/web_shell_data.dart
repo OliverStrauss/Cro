@@ -83,13 +83,22 @@ class WebShellData extends ChangeNotifier {
   Timer? _liveUpdateTimer;
   bool _disposed = false;
 
+  // Ids already surfaced to the user - seeded from the first load() so existing history
+  // doesn't all toast at once on login, then grown as the poll below sees new ones. Not
+  // persisted; a fresh page load re-seeds it from whatever's current at that point.
+  Set<String> _knownNotificationIds = {};
+
+  // Fired once per notification id the poll below hasn't seen before - lets WebShellScreen
+  // show a toast without this class ever touching BuildContext itself.
+  void Function(AppEvent)? onNewNotification;
+
   void startPolling() {
     // Unlike the phone app's MapScreen (which needs explicit start/stop hooks because
     // IndexedStack keeps every tab alive across switches), the web shell only ever mounts
     // one content screen at a time and the dock/journey log are always visible regardless
     // of which nav item is selected - so polling can just run for the shell's whole
     // lifetime instead of being tied to a specific tab's visibility.
-    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 3), (_) => refreshBirds());
+    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 3), (_) => _livePoll());
   }
 
   @override
@@ -103,22 +112,37 @@ class WebShellData extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> refreshBirds() async {
+  Future<void> _livePoll() async {
     try {
       final token = authState.token!;
       final results = await Future.wait([
         birdService.listBirds(token),
         friendsService.getFriendsBirds(token),
         hubService.getUnreadCounts(token),
+        friendsService.getIncomingRequests(token),
+        eventService.listEvents(token),
+        eventService.listNotifications(token),
+        friendsService.getFriends(token),
       ]);
       if (_disposed) return;
       birds = results[0] as List<Bird>;
       friendsBirds = results[1] as List<FriendBird>;
       hubUnreadCounts = results[2] as Map<String, int>;
+      incomingRequests = results[3] as List<FriendRequest>;
+      events = results[4] as List<AppEvent>;
+      notifications = results[5] as List<AppEvent>;
+      friends = results[6] as List<Friend>;
+      _reportNewNotifications();
       _notify();
     } catch (_) {
       // Swallow - same "a blip on a silent background poll shouldn't blank an
       // already-rendered screen" reasoning as the phone MapScreen.
+    }
+  }
+
+  void _reportNewNotifications() {
+    for (final n in notifications) {
+      if (_knownNotificationIds.add(n.id)) onNewNotification?.call(n);
     }
   }
 
@@ -153,6 +177,7 @@ class WebShellData extends ChangeNotifier {
       events = results[7] as List<AppEvent>;
       notifications = results[8] as List<AppEvent>;
       friends = results[9] as List<Friend>;
+      _knownNotificationIds = {for (final n in notifications) n.id};
       if (results.length > 10) {
         final profile = results[10] as UserProfile;
         username = profile.username;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/hub.dart';
@@ -48,6 +49,7 @@ void main() {
     VoidCallback? onCancelAddHub,
     List<Hub> hubs = const [],
     Map<String, int> hubUnreadCounts = const {},
+    Map<String, List<Bird>> nestResidentsByNestId = const {},
     String? selectedHubId,
     ValueChanged<Hub>? onSelectHub,
   }) {
@@ -62,6 +64,7 @@ void main() {
           hubs: hubs,
           friends: friends,
           hubUnreadCounts: hubUnreadCounts,
+          nestResidentsByNestId: nestResidentsByNestId,
           selectedNestId: null,
           selectedHubId: selectedHubId,
           selectedBirdId: selectedBirdId,
@@ -182,10 +185,11 @@ void main() {
   // the same test.
   final hub = Hub(id: 'h1', name: 'Lighthouse', latitude: 1.05, longitude: 2.05, status: 'Approved', createdByUserId: 'admin');
 
-  testWidgets('a Hub marker shows the "!" badge only when it has unread messages', (tester) async {
+  testWidgets('a Hub marker shows its unread count badge only when it has unread messages', (tester) async {
     await tester.pumpWidget(buildMap(hubs: [hub], hubUnreadCounts: {'h1': 2}));
     await tester.pump();
     expect(find.byKey(const Key('webHubUnreadBadge')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('webHubUnreadBadge')), matching: find.text('2')), findsOneWidget);
 
     await tester.pumpWidget(buildMap(hubs: [hub], hubUnreadCounts: {'h1': 0}));
     await tester.pump();
@@ -194,6 +198,42 @@ void main() {
     await tester.pumpWidget(buildMap(hubs: [hub]));
     await tester.pump();
     expect(find.byKey(const Key('webHubUnreadBadge')), findsNothing);
+  });
+
+  testWidgets("an own nest marker shows its unread count badge only when it has unread residents", (tester) async {
+    Bird makeResident({required String id, required bool isRead}) => Bird(
+      id: id,
+      userId: 'u1',
+      name: 'Fen',
+      currentNestId: ownNest.id,
+      isTraveling: false,
+      type: 'Cro',
+      isRead: isRead,
+    );
+
+    await tester.pumpWidget(buildMap(
+      nestResidentsByNestId: {
+        ownNest.id: [makeResident(id: 'b1', isRead: false), makeResident(id: 'b2', isRead: false)],
+      },
+    ));
+    await tester.pump();
+    expect(find.byKey(Key('webNestUnreadBadge_${ownNest.id}')), findsOneWidget);
+    expect(
+      find.descendant(of: find.byKey(Key('webNestUnreadBadge_${ownNest.id}')), matching: find.text('2')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(buildMap(
+      nestResidentsByNestId: {
+        ownNest.id: [makeResident(id: 'b1', isRead: true)],
+      },
+    ));
+    await tester.pump();
+    expect(find.byKey(Key('webNestUnreadBadge_${ownNest.id}')), findsNothing);
+
+    await tester.pumpWidget(buildMap());
+    await tester.pump();
+    expect(find.byKey(Key('webNestUnreadBadge_${ownNest.id}')), findsNothing);
   });
 
   testWidgets('a Hub marker shows its category icon with no photo, or the approved photo when set', (tester) async {

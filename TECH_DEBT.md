@@ -68,3 +68,15 @@ question (does a second layout mode belong on the shared widget, or does Hub's t
 avatar pattern belong on every panel eventually?) rather than a mechanical fix. Revisit if
 a third panel needs a non-Row header shape, which would make the case for a shared
 variant clearer.
+
+## `WebFriendsScreen` and `WebShellData` fetch overlapping friends data independently
+
+Both `app/lib/web/screens/web_friends_screen.dart` and `app/lib/web/state/web_shell_data.dart`
+call `friendsService.getFriends`/`getIncomingRequests` and now both poll on their own
+`Timer.periodic(3s)` (added for live-update support - see the notifications/friend-requests
+live-feel pass). `WebShellData`'s copy exists only to drive the nav rail's incoming-invite
+badge count (`WebShellController.friendsBadgeCount`); `WebFriendsScreen`'s is the full list
+the Friends screen renders. A real fix would lift this to one shared source of truth in
+`WebShellData` and have `WebFriendsScreen` consume it instead of fetching its own copy, but
+that also touches the rail's badge wiring - out of scope for just making both screens live.
+Revisit if a third consumer of friends/incoming-request data shows up.

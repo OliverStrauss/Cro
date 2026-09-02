@@ -42,6 +42,7 @@ public static class EventKind
     public const string BirdJoinedFlock = "BirdJoinedFlock";
     public const string FriendAdded = "FriendAdded";
     public const string FriendRequestAccepted = "FriendRequestAccepted";
+    public const string FriendRequestReceived = "FriendRequestReceived";
 }
 
 public static class EventTargetType

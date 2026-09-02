@@ -54,6 +54,7 @@ class EventKind {
   static const birdJoinedFlock = 'BirdJoinedFlock';
   static const friendAdded = 'FriendAdded';
   static const friendRequestAccepted = 'FriendRequestAccepted';
+  static const friendRequestReceived = 'FriendRequestReceived';
 }
 
 // Matches api/Models/Event.cs's EventTargetType constants.

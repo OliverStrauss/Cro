@@ -97,6 +97,15 @@ public class EventService(
             sourceUserId: acceptor.Id);
     }, nameof(RecordFriendAddedAsync), acceptor.Id);
 
+    public Task RecordFriendRequestReceivedAsync(User target, User requester) => RecordBestEffortAsync(async () =>
+    {
+        await CreateAsync(
+            target.Id,
+            EventKind.FriendRequestReceived,
+            $"{requester.Username} sent you a friend request",
+            isNotification: true);
+    }, nameof(RecordFriendRequestReceivedAsync), target.Id);
+
     public Task<List<Event>> ListTimelineAsync(string userId, int limit) =>
         eventRepository.ListByUserIdAsync(userId, limit);
 

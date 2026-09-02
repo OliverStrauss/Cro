@@ -47,6 +47,7 @@ public class FriendService(CosmosUserRepository userRepository, EventService eve
 
         await userRepository.UpdateAsync(updatedRequester);
         await userRepository.UpdateAsync(updatedTarget);
+        await eventService.RecordFriendRequestReceivedAsync(target, requester);
     }
 
     public async Task AcceptAsync(string userId, string requesterId)
