@@ -49,6 +49,10 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
   final _searchController = TextEditingController();
   List<UserSearchResult> _searchResults = [];
   Timer? _searchDebounce;
+  // Inline two-step "Confirm?" pattern, same as web_nests_screen.dart's delete and
+  // hub_suggestions_panel.dart's reject - second tap on the same id executes.
+  String? _confirmRemoveId;
+  String? _confirmBlockSearchId;
 
   @override
   void initState() {
@@ -135,6 +139,11 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
   }
 
   Future<void> _blockFromSearch(String userId) async {
+    if (_confirmBlockSearchId != userId) {
+      setState(() => _confirmBlockSearchId = userId);
+      return;
+    }
+    setState(() => _confirmBlockSearchId = null);
     try {
       await widget.friendsService.blockUser(widget.authState.token!, userId);
       _searchController.clear();
@@ -175,6 +184,11 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
   }
 
   Future<void> _removeFriend(String friendId) async {
+    if (_confirmRemoveId != friendId) {
+      setState(() => _confirmRemoveId = friendId);
+      return;
+    }
+    setState(() => _confirmRemoveId = null);
     try {
       await widget.friendsService.removeFriend(widget.authState.token!, friendId);
       await _load();
@@ -322,13 +336,16 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
   Widget _friendCard(Friend friend) {
     final color = hexToColor(friend.color ?? '#6B7280');
     final nestCount = _nestCountFor(friend.username);
+    final isConfirmingRemove = _confirmRemoveId == friend.userId;
     return Container(
       key: Key('webFriendCard_${friend.userId}'),
       width: 148,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [
-        BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1)),
-      ]),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+      ),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -337,7 +354,12 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
             children: [
               AvatarWithFallback(imageUrl: friend.profilePictureUrl, initialsSource: friend.username, radius: 26, hasBorder: true, borderColor: color),
               const SizedBox(height: 8),
-              Text(friend.username, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+              Text(
+                friend.username,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -356,17 +378,42 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
             ],
           ),
           Positioned(
-            top: -4,
-            right: -4,
-            child: GestureDetector(
-              key: Key('webRemoveFriendButton_${friend.userId}'),
-              onTap: () => _removeFriend(friend.userId),
-              child: Container(
-                width: 20,
-                height: 20,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: CroColors.ink.withValues(alpha: 0.15))),
-                child: const Text('×', style: TextStyle(fontSize: 13, height: 1, fontWeight: FontWeight.w700, color: CroColors.fog)),
+            top: -14,
+            right: -14,
+            child: Tooltip(
+              message: isConfirmingRemove ? 'Tap again to remove' : 'Remove friend',
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: Key('webRemoveFriendButton_${friend.userId}'),
+                  customBorder: const CircleBorder(),
+                  onTap: () => _removeFriend(friend.userId),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Center(
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: isConfirmingRemove ? Theme.of(context).colorScheme.error : CroColors.ink.withValues(alpha: 0.15)),
+                        ),
+                        child: Text(
+                          '×',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                            color: isConfirmingRemove ? Theme.of(context).colorScheme.error : CroColors.fog,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -374,15 +421,26 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
             Positioned(
               bottom: -4,
               right: -4,
-              child: GestureDetector(
-                key: Key('webMakeAdminButton_${friend.userId}'),
-                onTap: () => _confirmMakeAdmin(friend),
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: CroColors.ink.withValues(alpha: 0.15))),
-                  child: const Icon(Icons.shield_outlined, size: 12, color: CroColors.deepWaypoint),
+              child: Tooltip(
+                message: 'Make admin',
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    key: Key('webMakeAdminButton_${friend.userId}'),
+                    customBorder: const CircleBorder(),
+                    onTap: () => _confirmMakeAdmin(friend),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: CroColors.ink.withValues(alpha: 0.15)),
+                      ),
+                      child: const Icon(Icons.shield_outlined, size: 12, color: CroColors.deepWaypoint),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -396,9 +454,11 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
       key: const Key('webFriendSearchResults'),
       width: 420,
       margin: const EdgeInsets.only(top: 10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: const [
-        BoxShadow(color: Color(0x1F2B2F33), blurRadius: 14, offset: Offset(0, 4)),
-      ]),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x1F2B2F33), blurRadius: 14, offset: Offset(0, 4))],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -410,17 +470,44 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
                 children: [
                   AvatarWithFallback(imageUrl: r.profilePictureUrl, initialsSource: r.username, radius: 16),
                   const SizedBox(width: 11),
-                  Expanded(child: Text(r.username, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500))),
-                  GestureDetector(
-                    key: Key('webSendRequestButton_${r.userId}'),
-                    onTap: () => _sendRequest(r.username),
-                    child: const Text('Send request', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+                  Expanded(
+                    child: Text(
+                      r.username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: Key('webSendRequestButton_${r.userId}'),
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => _sendRequest(r.username),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text('Send request', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  GestureDetector(
-                    key: Key('webBlockSearchButton_${r.userId}'),
-                    onTap: () => _blockFromSearch(r.userId),
-                    child: const Text('Block', style: TextStyle(fontSize: 12, color: CroColors.fog)),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: Key('webBlockSearchButton_${r.userId}'),
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => _blockFromSearch(r.userId),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text(
+                          _confirmBlockSearchId == r.userId ? 'Confirm?' : 'Block',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _confirmBlockSearchId == r.userId ? Theme.of(context).colorScheme.error : CroColors.fog,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -435,36 +522,51 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
       key: Key('webInviteCard_${request.userId}'),
       width: 184,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [
-        BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1)),
-      ]),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           AvatarWithFallback(imageUrl: request.profilePictureUrl, initialsSource: request.username, radius: 23),
           const SizedBox(height: 8),
-          Text(request.username, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+          Text(
+            request.username,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              GestureDetector(
-                key: Key('webAcceptInviteButton_${request.userId}'),
-                onTap: () => _accept(request.userId),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                  decoration: BoxDecoration(color: CroColors.waypointBlue, borderRadius: BorderRadius.circular(9)),
-                  child: const Text('Accept', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+              Material(
+                color: CroColors.waypointBlue,
+                borderRadius: BorderRadius.circular(9),
+                child: InkWell(
+                  key: Key('webAcceptInviteButton_${request.userId}'),
+                  borderRadius: BorderRadius.circular(9),
+                  onTap: () => _accept(request.userId),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                    child: Text('Accept', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.surface)),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
-              GestureDetector(
-                key: Key('webDeclineInviteButton_${request.userId}'),
-                onTap: () => _decline(request.userId),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: CroColors.ink.withValues(alpha: 0.15))),
-                  child: const Text('Decline', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog)),
+              Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: Key('webDeclineInviteButton_${request.userId}'),
+                  borderRadius: BorderRadius.circular(9),
+                  onTap: () => _decline(request.userId),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: CroColors.ink.withValues(alpha: 0.15))),
+                    child: const Text('Decline', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog)),
+                  ),
                 ),
               ),
             ],
@@ -479,16 +581,33 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
       key: Key('webOutgoingRow_${request.userId}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          Expanded(child: Text(request.username, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500))),
+          Expanded(
+            child: Text(
+              request.username,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
+            ),
+          ),
           const Text('Waiting', style: TextStyle(fontSize: 11.5, color: CroColors.fog)),
           const SizedBox(width: 10),
-          GestureDetector(
-            key: Key('webCancelOutgoingButton_${request.userId}'),
-            onTap: () => _cancelOutgoing(request.userId),
-            child: const Text('×', style: TextStyle(fontSize: 14, color: CroColors.fog)),
+          Tooltip(
+            message: 'Cancel request',
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                key: Key('webCancelOutgoingButton_${request.userId}'),
+                customBorder: const CircleBorder(),
+                onTap: () => _cancelOutgoing(request.userId),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Text('×', style: TextStyle(fontSize: 14, color: CroColors.fog)),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -500,14 +619,28 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
       key: Key('webBlockedRow_${user.userId}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          Expanded(child: Text(user.username, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: CroColors.fog))),
-          GestureDetector(
-            key: Key('webUnblockButton_${user.userId}'),
-            onTap: () => _unblock(user.userId),
-            child: const Text('Unblock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+          Expanded(
+            child: Text(
+              user.username,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: CroColors.fog),
+            ),
+          ),
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: Key('webUnblockButton_${user.userId}'),
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => _unblock(user.userId),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text('Unblock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+              ),
+            ),
           ),
         ],
       ),

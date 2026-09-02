@@ -29,6 +29,11 @@ class CroColors {
   static const amberInk = Color(0xFFA2521F);
   static const success = Color(0xFF4FA97C);
   static const alertAway = Color(0xFFE8714A);
+
+  // Pale state-tint backgrounds (dock/nest cards' flight/away/hub-visit rows) - named here
+  // instead of left as bare hex literals so they're not silently re-typed per call site.
+  static const flightTint = Color(0xFFF5FAFD);
+  static const warmTint = Color(0xFFFDF7F0);
 }
 
 final ThemeData croTheme = ThemeData(
