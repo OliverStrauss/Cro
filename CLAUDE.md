@@ -210,9 +210,14 @@ above), already mutually Accepted-friends with each other with auto-assigned col
 one private nest apiece around Ames. `Admin` is seeded with `IsAdmin: true`. It talks
 directly to the Cosmos emulator rather than through the running API (there's no `DELETE
 /users` endpoint to do the wipe through), so it works whether or not `dotnet run` is up, and
-leaves Hubs, Birds, and Reactions untouched. Re-running it is the standard way to reset back
-to this known-good dataset — note that it deletes *every* existing user (including any
-you've registered by hand through the app), and each run mints fresh user ids, so a
+leaves Hubs, Waypoints, Birds, and Reactions untouched. It also clears every Hub's message
+board (`HubMessages`), unlike those — a `HubMessage` snapshots its sender's user id, so a row
+left behind after a Users wipe would point at a since-deleted user; the web UI's Hub board
+uses that id to decide whether to show an "Add friend" button, and a stale id can never match
+an entry in the new users' friend lists, so the button would wrongly show for someone you're
+actually already friends with (under their new id). Re-running it is the standard way to
+reset back to this known-good dataset — note that it deletes *every* existing user (including
+any you've registered by hand through the app), and each run mints fresh user ids, so a
 previously-seeded user's id is not stable across runs.
 
 ## CI
