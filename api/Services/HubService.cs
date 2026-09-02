@@ -3,7 +3,7 @@ using CroApp.Api.Repositories;
 
 namespace CroApp.Api.Services;
 
-public class HubService(IHubRepository hubRepository) : IHubService
+public class HubService(CosmosHubRepository hubRepository)
 {
     public Task<List<Hub>> ListApprovedAsync() => hubRepository.ListApprovedAsync();
 
@@ -22,7 +22,7 @@ public class HubService(IHubRepository hubRepository) : IHubService
     }
 
     public async Task<Hub> GetAsync(string hubId) =>
-        await hubRepository.GetAsync(hubId) ?? throw new HubServiceException(404, "Hub not found.");
+        await hubRepository.GetAsync(hubId) ?? throw new ServiceException(404, "Hub not found.");
 
     public async Task<Hub> SuggestAsync(string suggestedByUserId, string name, double latitude, double longitude, string category)
     {
@@ -46,10 +46,10 @@ public class HubService(IHubRepository hubRepository) : IHubService
     public async Task<Hub> ApproveAsync(string hubId)
     {
         var pending = await hubRepository.GetAsync(hubId)
-            ?? throw new HubServiceException(404, "Suggestion not found.");
+            ?? throw new ServiceException(404, "Suggestion not found.");
         if (pending.Status != HubStatus.Pending)
         {
-            throw new HubServiceException(409, "This hub is not a pending suggestion.");
+            throw new ServiceException(409, "This hub is not a pending suggestion.");
         }
 
         await hubRepository.DeleteAsync(pending.Id, HubStatus.Pending);
@@ -60,10 +60,10 @@ public class HubService(IHubRepository hubRepository) : IHubService
     public async Task RejectAsync(string hubId)
     {
         var pending = await hubRepository.GetAsync(hubId)
-            ?? throw new HubServiceException(404, "Suggestion not found.");
+            ?? throw new ServiceException(404, "Suggestion not found.");
         if (pending.Status != HubStatus.Pending)
         {
-            throw new HubServiceException(409, "This hub is not a pending suggestion.");
+            throw new ServiceException(409, "This hub is not a pending suggestion.");
         }
 
         await hubRepository.DeleteAsync(pending.Id, HubStatus.Pending);

@@ -24,23 +24,6 @@ void main() {
     expect(croTheme.floatingActionButtonTheme.backgroundColor, CroColors.waypointBlue);
   });
 
-  test('croTheme themes the bottom nav bar with a waypoint-blue pill indicator', () {
-    final navTheme = croTheme.navigationBarTheme;
-    expect(navTheme.backgroundColor, CroColors.surface);
-    expect(navTheme.height, 78);
-    expect(navTheme.indicatorColor, CroColors.waypointBlue.withValues(alpha: 0.18));
-
-    final selectedLabel = navTheme.labelTextStyle!.resolve({WidgetState.selected})!;
-    expect(selectedLabel.color, CroColors.deepWaypoint);
-    final unselectedLabel = navTheme.labelTextStyle!.resolve({})!;
-    expect(unselectedLabel.color, CroColors.fog);
-
-    final selectedIcon = navTheme.iconTheme!.resolve({WidgetState.selected})!;
-    expect(selectedIcon.color, CroColors.waypointBlue);
-    final unselectedIcon = navTheme.iconTheme!.resolve({})!;
-    expect(unselectedIcon.color, CroColors.fog);
-  });
-
   testWidgets('the app smoke-pumps with croTheme applied', (WidgetTester tester) async {
     await tester.pumpWidget(MyApp(authState: AuthState()));
 

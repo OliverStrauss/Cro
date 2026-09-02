@@ -36,13 +36,18 @@ import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
 import 'web_you_screen.dart';
 
-/// Top-level widget for the web shell (rail + content + floating actions cluster + dock +
-/// right panel) - the kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart.
+// Same cap as the phone app's birds_screen.dart - enforced server-side too, but mirrored
+// here so the web compose entry points (dock's "Add bird" card, floating compose action)
+// can short-circuit with a toast instead of a round-trip error.
+const _maxBirdsPerUser = 5;
+
+/// Top-level widget for the app's single UI (rail + content + floating actions cluster +
+/// dock + right panel), used unconditionally on every platform, selected in main.dart.
 /// There is no top bar: the floating actions cluster (journey log / bell) and the dock both
 /// overlay the content column instead (see 05_web_ui_updates.md item 1). Owns
 /// every piece of shell state (nav selection, panel selection, dock filter/expanded, map
-/// filter) the same way HomeScreen owns tab selection: one StatefulWidget, plain setState,
-/// no state-mgmt package (none exists anywhere else in this codebase).
+/// filter) in one StatefulWidget with plain setState - no state-mgmt package (none exists
+/// anywhere else in this codebase).
 class WebShellScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService? waypointService;
@@ -487,6 +492,12 @@ class WebShellScreenState extends State<WebShellScreen> {
   }
 
   void _onComposePressed() {
+    if (_birds.length >= _maxBirdsPerUser) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('You have the max $_maxBirdsPerUser birds. Delete one from your private nest first.')),
+      );
+      return;
+    }
     final origins = _ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)).toList();
     if (origins.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -628,7 +639,6 @@ class WebShellScreenState extends State<WebShellScreen> {
                         reactionService: _reactionService,
                         onDataChanged: _loadData,
                         onFollowOnMap: () => _selectNav(WebNavItem.map),
-                        onComposePressed: _onComposePressed,
                       ),
                     ),
                   ),
@@ -717,6 +727,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           authState: widget.authState,
           friendsService: _friendsService,
           friendWaypoints: _friendWaypoints,
+          isAdmin: _isAdmin,
           onDataChanged: _loadData,
         );
       case WebNavItem.you:

@@ -20,6 +20,7 @@ class WebFriendsScreen extends StatefulWidget {
   final AuthState authState;
   final FriendsService friendsService;
   final List<Waypoint> friendWaypoints;
+  final bool isAdmin;
   // Called after any action that changes the friends graph (accept/decline/remove/block)
   // so the shell can refresh the rail's incoming-invite badge to match.
   final VoidCallback onDataChanged;
@@ -29,6 +30,7 @@ class WebFriendsScreen extends StatefulWidget {
     required this.authState,
     required this.friendsService,
     required this.friendWaypoints,
+    required this.isAdmin,
     required this.onDataChanged,
   });
 
@@ -191,6 +193,39 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
     }
   }
 
+  // Same "are you sure" confirm dialog as the phone app's ProfileScreen - granting admin is
+  // high-stakes enough to warrant an explicit confirm, unlike everything else on this screen.
+  Future<void> _confirmMakeAdmin(Friend friend) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Make admin?'),
+        content: Text('Make ${friend.username} an admin? Are you sure?'),
+        actions: [
+          TextButton(
+            key: const Key('cancelMakeAdminButton'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('confirmMakeAdminButton'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await widget.friendsService.makeAdmin(widget.authState.token!, friend.userId);
+      _toast('${friend.username} is now an admin');
+      await _load();
+    } catch (e) {
+      _toast(e.toString(), isError: true);
+    }
+  }
+
   void _toast(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -335,6 +370,22 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
               ),
             ),
           ),
+          if (widget.isAdmin && !friend.isAdmin)
+            Positioned(
+              bottom: -4,
+              right: -4,
+              child: GestureDetector(
+                key: Key('webMakeAdminButton_${friend.userId}'),
+                onTap: () => _confirmMakeAdmin(friend),
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: CroColors.ink.withValues(alpha: 0.15))),
+                  child: const Icon(Icons.shield_outlined, size: 12, color: CroColors.deepWaypoint),
+                ),
+              ),
+            ),
         ],
       ),
     );

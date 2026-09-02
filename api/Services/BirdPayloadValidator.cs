@@ -13,23 +13,23 @@ public static class BirdPayloadValidator
         switch (type)
         {
             case BirdTypeCatalog.Cro:
-                if (!hasContent) throw new BirdServiceException(400, "A Cro needs text content.");
-                if (hasMedia) throw new BirdServiceException(400, "A Cro can't carry a file.");
+                if (!hasContent) throw new ServiceException(400, "A Cro needs text content.");
+                if (hasMedia) throw new ServiceException(400, "A Cro can't carry a file.");
                 break;
             case BirdTypeCatalog.Parrot:
-                if (!hasMedia) throw new BirdServiceException(400, "A Parrot needs an audio clip.");
-                if (hasContent) throw new BirdServiceException(400, "A Parrot can't carry text content.");
+                if (!hasMedia) throw new ServiceException(400, "A Parrot needs an audio clip.");
+                if (hasContent) throw new ServiceException(400, "A Parrot can't carry text content.");
                 break;
             case BirdTypeCatalog.Pigeon:
-                if (!hasMedia) throw new BirdServiceException(400, "A Pigeon needs an image.");
-                if (hasContent) throw new BirdServiceException(400, "A Pigeon can't carry text content.");
+                if (!hasMedia) throw new ServiceException(400, "A Pigeon needs an image.");
+                if (hasContent) throw new ServiceException(400, "A Pigeon can't carry text content.");
                 break;
             case BirdTypeCatalog.Raven:
-                if (!hasContent) throw new BirdServiceException(400, "A Raven needs text content.");
-                if (!hasMedia) throw new BirdServiceException(400, "A Raven needs an image.");
+                if (!hasContent) throw new ServiceException(400, "A Raven needs text content.");
+                if (!hasMedia) throw new ServiceException(400, "A Raven needs an image.");
                 break;
             default:
-                throw new BirdServiceException(400, $"Unknown bird type '{type}'.");
+                throw new ServiceException(400, $"Unknown bird type '{type}'.");
         }
     }
 

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace CroApp.Api.Repositories;
 
-public class CosmosHubPictureSuggestionRepository : IHubPictureSuggestionRepository
+public class CosmosHubPictureSuggestionRepository
 {
     private readonly Container _container;
 

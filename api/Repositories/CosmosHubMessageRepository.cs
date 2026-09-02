@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace CroApp.Api.Repositories;
 
-public class CosmosHubMessageRepository : IHubMessageRepository
+public class CosmosHubMessageRepository
 {
     private readonly Container _container;
 

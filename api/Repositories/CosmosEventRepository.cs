@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace CroApp.Api.Repositories;
 
-public class CosmosEventRepository : IEventRepository
+public class CosmosEventRepository
 {
     private readonly Container _container;
 

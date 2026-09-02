@@ -4,9 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/hub.dart';
+import 'package:cro_app/models/hub_category.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/theme.dart';
 import 'package:cro_app/web/screens/web_map_screen.dart';
+import 'package:cro_app/widgets/avatar_with_fallback.dart';
 
 void main() {
   final ownNest = Waypoint(id: 'w1', userId: 'u1', name: 'Home', latitude: 1.0, longitude: 2.0);
@@ -192,6 +194,30 @@ void main() {
     await tester.pumpWidget(buildMap(hubs: [hub]));
     await tester.pump();
     expect(find.byKey(const Key('webHubUnreadBadge')), findsNothing);
+  });
+
+  testWidgets('a Hub marker shows its category icon with no photo, or the approved photo when set', (tester) async {
+    await tester.pumpWidget(buildMap(hubs: [hub]));
+    await tester.pump();
+
+    expect(find.byIcon(HubCategory.iconFor(hub.category)), findsOneWidget);
+    var avatar = tester.widget<AvatarWithFallback>(find.byType(AvatarWithFallback));
+    expect(avatar.imageUrl, isNull);
+
+    final photoHub = Hub(
+      id: 'h1',
+      name: 'Lighthouse',
+      latitude: 1.05,
+      longitude: 2.05,
+      status: 'Approved',
+      createdByUserId: 'admin',
+      profilePictureUrl: 'https://example.com/lighthouse.jpg',
+    );
+    await tester.pumpWidget(buildMap(hubs: [photoHub]));
+    await tester.pump();
+
+    avatar = tester.widget<AvatarWithFallback>(find.byType(AvatarWithFallback));
+    expect(avatar.imageUrl, 'https://example.com/lighthouse.jpg');
   });
 
   testWidgets('tapping a Hub marker calls onSelectHub, and selecting it glows the marker', (tester) async {

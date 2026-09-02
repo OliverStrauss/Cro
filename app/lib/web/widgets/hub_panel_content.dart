@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import '../../models/friend.dart';
 import '../../models/friend_request.dart';
 import '../../models/hub.dart';
+import '../../models/hub_category.dart';
 import '../../models/hub_message.dart';
 import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
+import '../../services/profile_service.dart';
 import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../../utils/jwt_utils.dart';
+import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/hub_message_card.dart';
-import 'panel_header.dart';
 
 /// The hub detail panel body - header plus the hub's message board embedded directly,
 /// rather than a full-screen push (see 01_web_shell_and_dock.md and the PR notes): every
@@ -23,6 +25,7 @@ class HubPanelContent extends StatefulWidget {
   final VoidCallback onClose;
   final HubService hubService;
   final FriendsService friendsService;
+  final ProfileService profileService;
 
   const HubPanelContent({
     super.key,
@@ -31,6 +34,7 @@ class HubPanelContent extends StatefulWidget {
     required this.onClose,
     required this.hubService,
     required this.friendsService,
+    required this.profileService,
   });
 
   @override
@@ -42,6 +46,7 @@ class _HubPanelContentState extends State<HubPanelContent> {
   Set<String> _excludedSenderIds = {};
   bool _isLoading = true;
   String? _errorMessage;
+  bool _isUploadingPicture = false;
 
   @override
   void initState() {
@@ -97,6 +102,43 @@ class _HubPanelContentState extends State<HubPanelContent> {
     }
   }
 
+  // Suggestions don't auto-apply to hub.profilePictureUrl - they just sit Pending until an
+  // admin approves via HubSuggestionsPanel, so there's nothing to refresh here immediately.
+  Future<void> _suggestPicture() async {
+    final (List<int> bytes, String filename, String contentType) picked;
+    try {
+      final xFile = await widget.profileService.pickImage();
+      if (xFile == null) return;
+      picked = (await xFile.readAsBytes(), xFile.name, xFile.mimeType ?? 'image/jpeg');
+    } catch (e) {
+      _toast(e.toString(), isError: true);
+      return;
+    }
+
+    setState(() => _isUploadingPicture = true);
+    try {
+      await widget.hubService.suggestHubPicture(
+        widget.authState.token!,
+        widget.hub.id,
+        picked.$1,
+        filename: picked.$2,
+        contentType: picked.$3,
+      );
+      _toast('Photo suggested — pending admin approval');
+    } catch (e) {
+      _toast(e.toString(), isError: true);
+    } finally {
+      if (mounted) setState(() => _isUploadingPicture = false);
+    }
+  }
+
+  void _toast(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: isError ? Theme.of(context).colorScheme.error : null),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hub = widget.hub;
@@ -104,20 +146,56 @@ class _HubPanelContentState extends State<HubPanelContent> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        PanelHeader(
-          avatar: Container(
-            width: 50,
-            height: 50,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: CroColors.deliveryAmber, borderRadius: BorderRadius.circular(15)),
-            child: Text(
-              hub.name.isEmpty ? '?' : hub.name[0].toUpperCase(),
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white),
-            ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  key: const Key('webPanelClose'),
+                  onTap: widget.onClose,
+                  child: const Icon(Icons.close, size: 20, color: CroColors.fog),
+                ),
+              ),
+              GestureDetector(
+                key: const Key('webSuggestHubPictureButton'),
+                onTap: _isUploadingPicture ? null : _suggestPicture,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AvatarWithFallback(
+                      imageUrl: hub.profilePictureUrl,
+                      initialsSource: hub.name,
+                      fallbackIcon: HubCategory.iconFor(hub.category),
+                      radius: 32,
+                      hasBorder: true,
+                      borderColor: CroColors.deliveryAmber,
+                    ),
+                    if (_isUploadingPicture) const CircularProgressIndicator(),
+                    if (!_isUploadingPicture)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: CroColors.deepWaypoint, shape: BoxShape.circle),
+                          child: const Icon(Icons.photo_camera, size: 14, color: Colors.white),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(hub.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              Text(
+                '${hub.category ?? 'Landmark'} · anyone can send here',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: CroColors.fog),
+              ),
+            ],
           ),
-          title: hub.name,
-          subtitle: '${hub.category ?? 'Landmark'} · anyone can send here',
-          onClose: widget.onClose,
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),

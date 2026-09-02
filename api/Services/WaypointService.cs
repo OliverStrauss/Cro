@@ -3,7 +3,7 @@ using CroApp.Api.Repositories;
 
 namespace CroApp.Api.Services;
 
-public class WaypointService(IWaypointRepository waypointRepository) : IWaypointService
+public class WaypointService(CosmosWaypointRepository waypointRepository)
 {
     public Task<List<Waypoint>> ListAsync(string userId) => waypointRepository.ListByUserIdAsync(userId);
 
@@ -12,7 +12,7 @@ public class WaypointService(IWaypointRepository waypointRepository) : IWaypoint
         var existing = await waypointRepository.ListByUserIdAsync(userId);
         if (existing.Count > 0)
         {
-            throw new WaypointServiceException(409, "You already have a nest. Delete it before adding another.");
+            throw new ServiceException(409, "You already have a nest. Delete it before adding another.");
         }
 
         var waypoint = new Waypoint(Guid.NewGuid().ToString(), userId, name, latitude, longitude, DateTimeOffset.UtcNow, isPublic);
@@ -22,7 +22,7 @@ public class WaypointService(IWaypointRepository waypointRepository) : IWaypoint
     public async Task<Waypoint> UpdateAsync(string userId, string waypointId, string name, double latitude, double longitude)
     {
         var existing = await waypointRepository.GetAsync(userId, waypointId)
-            ?? throw new WaypointServiceException(404, "Nest not found.");
+            ?? throw new ServiceException(404, "Nest not found.");
 
         var updated = existing with { Name = name, Latitude = latitude, Longitude = longitude, UpdatedAt = DateTimeOffset.UtcNow };
         return await waypointRepository.UpdateAsync(updated);
@@ -33,7 +33,7 @@ public class WaypointService(IWaypointRepository waypointRepository) : IWaypoint
         var deleted = await waypointRepository.DeleteAsync(userId, waypointId);
         if (!deleted)
         {
-            throw new WaypointServiceException(404, "Nest not found.");
+            throw new ServiceException(404, "Nest not found.");
         }
     }
 }

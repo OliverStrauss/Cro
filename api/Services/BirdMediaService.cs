@@ -10,7 +10,7 @@ namespace CroApp.Api.Services;
 // separate container. Unlike NestPictureService, this doesn't read-then-update a repository
 // entity: ComposeAndSendAsync generates the new bird's id up front and uploads media keyed
 // by that id before the Bird document itself is created, so there's nothing to fetch here.
-public class BirdMediaService : IBirdMediaService
+public class BirdMediaService
 {
     private readonly BlobContainerClient _container;
 
@@ -23,13 +23,13 @@ public class BirdMediaService : IBirdMediaService
     {
         if (!BirdMediaValidation.AllowedContentTypes(kind).Contains(contentType))
         {
-            throw new BirdMediaServiceException(400, kind == BirdMediaKind.Audio ? "Unsupported audio type." : "Unsupported image type.");
+            throw new ServiceException(400, kind == BirdMediaKind.Audio ? "Unsupported audio type." : "Unsupported image type.");
         }
 
         if (contentLength > BirdMediaValidation.MaxSizeBytes(kind))
         {
             var maxMb = BirdMediaValidation.MaxSizeBytes(kind) / (1024 * 1024);
-            throw new BirdMediaServiceException(400, $"File is too large ({maxMb}MB max).");
+            throw new ServiceException(400, $"File is too large ({maxMb}MB max).");
         }
 
         // A bird carries at most one payload media file (its Type determines audio XOR

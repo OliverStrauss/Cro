@@ -1,13 +1,18 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using CroApp.Api.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CroApp.Api.Tests;
 
-public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>, IAsyncLifetime
 {
     private const string DefaultEmulatorConnectionString =
         "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
@@ -16,7 +21,13 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     // see CLAUDE.md's well-known-local-credentials section.
     private const string SeedPassword = "correct-horse-battery-staple";
 
+    private readonly WebApplicationFactory<Program> _factory;
     private readonly HttpClient _client;
+
+    // Every Hub this test class creates or suggests, keyed by id -> its current status, so
+    // DisposeAsync can delete them from the shared local emulator's Hubs container instead of
+    // leaving permanent "Test Library ..."/"Empty Hub ..." rows behind on every test run.
+    private readonly Dictionary<string, string> _hubIdToStatus = new();
 
     public HubEndpointTests(WebApplicationFactory<Program> factory)
     {
@@ -45,7 +56,27 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
             });
         });
 
+        _factory = configuredFactory;
         _client = configuredFactory.CreateClient();
+    }
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var hubRepository = scope.ServiceProvider.GetRequiredService<CosmosHubRepository>();
+        foreach (var (id, status) in _hubIdToStatus)
+        {
+            try
+            {
+                await hubRepository.DeleteAsync(id, status);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                // Already deleted by the test itself (e.g. a rejected suggestion).
+            }
+        }
     }
 
     private async Task<string> RegisterAndLoginAsync(string username, string password)
@@ -79,8 +110,12 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         return request;
     }
 
-    private Task<HttpResponseMessage> CreateHubAsync(string? token, string name, double lat = 42.0, double lng = -93.6) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token, new { Name = name, Latitude = lat, Longitude = lng, Category = "Landmark" }));
+    private async Task<HttpResponseMessage> CreateHubAsync(string? token, string name, double lat = 42.0, double lng = -93.6)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token, new { Name = name, Latitude = lat, Longitude = lng, Category = "Landmark" }));
+        await TrackHubFromResponseAsync(response);
+        return response;
+    }
 
     [Fact]
     public async Task Admin1_CanCreateAHub()
@@ -193,8 +228,28 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    private Task<HttpResponseMessage> SuggestHubAsync(string token, string name, double lat = 42.3, double lng = -93.4) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hub-suggestions", token, new { Name = name, Latitude = lat, Longitude = lng, Category = "Park" }));
+    private async Task<HttpResponseMessage> SuggestHubAsync(string token, string name, double lat = 42.3, double lng = -93.4)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hub-suggestions", token, new { Name = name, Latitude = lat, Longitude = lng, Category = "Park" }));
+        await TrackHubFromResponseAsync(response);
+        return response;
+    }
+
+    // WebApplicationFactory's in-memory TestServer response stream isn't rewindable, so
+    // ReadFromJsonAsync can only be called once per response - read the body ourselves here,
+    // pull out just the id/status we need for cleanup, then hand the caller back a fresh,
+    // re-readable HttpContent so their own ReadFromJsonAsync<HubDto> still works.
+    private async Task TrackHubFromResponseAsync(HttpResponseMessage response)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            return;
+        }
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        _hubIdToStatus[doc.RootElement.GetProperty("id").GetString()!] = doc.RootElement.GetProperty("status").GetString()!;
+        response.Content = new StringContent(json, Encoding.UTF8, "application/json");
+    }
 
     [Fact]
     public async Task AnyUser_CanSuggestAHub_ButItDoesNotAppearOnListHubs()
@@ -245,6 +300,9 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         approveResponse.EnsureSuccessStatusCode();
         var approved = await approveResponse.Content.ReadFromJsonAsync<HubDto>();
         Assert.Equal("Approved", approved!.Status);
+        // Approving moves the row from the Pending partition to Approved under the same id -
+        // update tracking so DisposeAsync deletes it from the right partition.
+        _hubIdToStatus[approved.Id] = approved.Status;
 
         var listResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/hubs", token));
         listResponse.EnsureSuccessStatusCode();

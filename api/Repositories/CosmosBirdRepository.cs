@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace CroApp.Api.Repositories;
 
-public class CosmosBirdRepository : IBirdRepository
+public class CosmosBirdRepository
 {
     private readonly Container _container;
 

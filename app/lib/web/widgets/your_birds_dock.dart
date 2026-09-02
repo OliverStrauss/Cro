@@ -7,6 +7,8 @@ import '../../theme.dart';
 import '../state/web_shell_controller.dart';
 import 'dock_bird_card.dart';
 
+const _maxBirdsPerUser = 5;
+
 // Home, then away at a friend's nest, then at a hub, then flying to a nest, then flying to
 // a hub - a bird settled somewhere reads before one still in the air, and within "still in
 // the air" a nest-bound one reads before a hub-bound one. A manual bucket pass rather than
@@ -197,7 +199,7 @@ class YourBirdsDock extends StatelessWidget {
                       ),
                     ),
                   ),
-                _AddBirdCard(onTap: onComposePressed),
+                if (birds.length < _maxBirdsPerUser) _AddBirdCard(onTap: onComposePressed),
               ],
             ),
           ),

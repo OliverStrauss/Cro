@@ -5,9 +5,9 @@ using Microsoft.Extensions.Logging;
 namespace CroApp.Api.Services;
 
 public class EventService(
-    IEventRepository eventRepository,
-    IWaypointRepository waypointRepository,
-    ILogger<EventService> logger) : IEventService
+    CosmosEventRepository eventRepository,
+    CosmosWaypointRepository waypointRepository,
+    ILogger<EventService> logger)
 {
     public Task RecordBirdDepartedAsync(Bird bird) => RecordBestEffortAsync(async () =>
     {
@@ -107,7 +107,7 @@ public class EventService(
     public async Task MarkNotificationReadAsync(string userId, string eventId)
     {
         var evt = await eventRepository.GetAsync(userId, eventId)
-            ?? throw new EventServiceException(404, "Notification not found.");
+            ?? throw new ServiceException(404, "Notification not found.");
         if (!evt.IsRead)
         {
             await eventRepository.UpdateAsync(evt with { IsRead = true });

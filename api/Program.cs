@@ -80,27 +80,28 @@ builder.Services.AddSingleton(sp =>
     return new BlobServiceClient(opts.ConnectionString);
 });
 
-builder.Services.AddScoped<IUserRepository, CosmosUserRepository>();
-builder.Services.AddScoped<IWaypointRepository, CosmosWaypointRepository>();
-builder.Services.AddScoped<IWaypointService, WaypointService>();
-builder.Services.AddScoped<IBirdRepository, CosmosBirdRepository>();
-builder.Services.AddScoped<IBirdService, BirdService>();
-builder.Services.AddScoped<IHubRepository, CosmosHubRepository>();
-builder.Services.AddScoped<IHubService, HubService>();
-builder.Services.AddScoped<IHubPictureSuggestionRepository, CosmosHubPictureSuggestionRepository>();
-builder.Services.AddScoped<IHubPictureService, HubPictureService>();
-builder.Services.AddScoped<IHubMessageRepository, CosmosHubMessageRepository>();
-builder.Services.AddScoped<IHubReadStateRepository, CosmosHubReadStateRepository>();
-builder.Services.AddScoped<IBirdReadStateRepository, CosmosBirdReadStateRepository>();
-builder.Services.AddScoped<IBirdReactionRepository, CosmosBirdReactionRepository>();
-builder.Services.AddScoped<IBirdReactionService, BirdReactionService>();
-builder.Services.AddScoped<IEventRepository, CosmosEventRepository>();
-builder.Services.AddScoped<IEventService, EventService>();
-builder.Services.AddScoped<IFriendService, FriendService>();
-builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
-builder.Services.AddScoped<INestPictureService, NestPictureService>();
-builder.Services.AddScoped<IBirdPictureService, BirdPictureService>();
-builder.Services.AddScoped<IBirdMediaService, BirdMediaService>();
+builder.Services.AddScoped<CosmosUserRepository>();
+builder.Services.AddScoped<CosmosWaypointRepository>();
+builder.Services.AddScoped<WaypointService>();
+builder.Services.AddScoped<CosmosBirdRepository>();
+builder.Services.AddScoped<BirdService>();
+builder.Services.AddScoped<CosmosHubRepository>();
+builder.Services.AddScoped<HubService>();
+builder.Services.AddScoped<CosmosHubPictureSuggestionRepository>();
+builder.Services.AddScoped<HubPictureService>();
+builder.Services.AddScoped<CosmosHubMessageRepository>();
+builder.Services.AddScoped<CosmosHubReadStateRepository>();
+builder.Services.AddScoped<CosmosBirdReadStateRepository>();
+builder.Services.AddScoped<CosmosBirdReactionRepository>();
+builder.Services.AddScoped<BirdReactionService>();
+builder.Services.AddScoped<CosmosEventRepository>();
+builder.Services.AddScoped<EventService>();
+builder.Services.AddScoped<FriendService>();
+builder.Services.AddScoped<PictureUploadService>();
+builder.Services.AddScoped<ProfilePictureService>();
+builder.Services.AddScoped<NestPictureService>();
+builder.Services.AddScoped<BirdPictureService>();
+builder.Services.AddScoped<BirdMediaService>();
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
@@ -194,7 +195,7 @@ if (app.Environment.IsDevelopment())
         // so re-running the API against an already-seeded database doesn't error or duplicate.
         // Same well-known-dev-credential category as the Cosmos/Azurite connection strings in
         // CLAUDE.md - never meaningful outside a local emulator.
-        var userRepoForSeed = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+        var userRepoForSeed = scope.ServiceProvider.GetRequiredService<CosmosUserRepository>();
         var seedHasher = new PasswordHasher<User>();
         async Task SeedDevUserAsync(string username, bool isAdmin)
         {
@@ -283,7 +284,7 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapPost("/users", async (CreateUserRequest req, IUserRepository repo) =>
+app.MapPost("/users", async (CreateUserRequest req, CosmosUserRepository repo) =>
 {
     var hasher = new PasswordHasher<User>();
     var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow, PasswordHash: "", Friends: []);
@@ -293,14 +294,14 @@ app.MapPost("/users", async (CreateUserRequest req, IUserRepository repo) =>
 })
 .WithName("CreateUser");
 
-app.MapGet("/users/{id}", async (string id, IUserRepository repo) =>
+app.MapGet("/users/{id}", async (string id, CosmosUserRepository repo) =>
     await repo.GetByIdAsync(id) is { } user ? Results.Ok(user.ToResponse()) : Results.NotFound())
 .WithName("GetUserById");
 
 // Grant-only (no revoke endpoint - not needed yet). Same inline caller-lookup-then-IsAdmin
 // gate as POST /hubs, checked per-request rather than via a JWT claim so a freshly-granted
 // admin doesn't need to re-log-in for it to take effect.
-app.MapPost("/users/{id}/make-admin", async (string id, ClaimsPrincipal principal, IUserRepository userRepo) =>
+app.MapPost("/users/{id}/make-admin", async (string id, ClaimsPrincipal principal, CosmosUserRepository userRepo) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (callerId is null)
@@ -334,7 +335,7 @@ app.MapPost("/users/{id}/make-admin", async (string id, ClaimsPrincipal principa
 // friending yourself. Route ordering vs. GET /users/{id} above doesn't matter - ASP.NET
 // Core's endpoint routing prefers the literal "search" segment over the {id} parameter
 // regardless of registration order.
-app.MapGet("/users/search", async (string? q, ClaimsPrincipal principal, IUserRepository repo) =>
+app.MapGet("/users/search", async (string? q, ClaimsPrincipal principal, CosmosUserRepository repo) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (callerId is null)
@@ -357,7 +358,7 @@ app.MapGet("/users/search", async (string? q, ClaimsPrincipal principal, IUserRe
 .RequireAuthorization()
 .WithName("SearchUsers");
 
-app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<JwtOptions> jwtOpts) =>
+app.MapPost("/login", async (LoginRequest req, CosmosUserRepository repo, IOptions<JwtOptions> jwtOpts) =>
 {
     var user = await repo.GetByUsernameAsync(req.Username);
     if (user is null || string.IsNullOrEmpty(user.PasswordHash))
@@ -377,7 +378,7 @@ app.MapPost("/login", async (LoginRequest req, IUserRepository repo, IOptions<Jw
 })
 .WithName("Login");
 
-app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService waypointService, IUserRepository userRepo) =>
+app.MapGet("/waypoints", async (ClaimsPrincipal principal, WaypointService waypointService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -399,7 +400,7 @@ app.MapGet("/waypoints", async (ClaimsPrincipal principal, IWaypointService wayp
 .RequireAuthorization()
 .WithName("ListWaypoints");
 
-app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService) =>
+app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, WaypointService waypointService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -412,7 +413,7 @@ app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal princip
         var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude, req.IsPublic);
         return Results.Created($"/waypoints/{saved.Id}", saved);
     }
-    catch (WaypointServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -420,7 +421,7 @@ app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal princip
 .RequireAuthorization()
 .WithName("CreateWaypoint");
 
-app.MapPut("/waypoints/{id}", async (string id, SetWaypointRequest req, ClaimsPrincipal principal, IWaypointService waypointService) =>
+app.MapPut("/waypoints/{id}", async (string id, SetWaypointRequest req, ClaimsPrincipal principal, WaypointService waypointService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -433,7 +434,7 @@ app.MapPut("/waypoints/{id}", async (string id, SetWaypointRequest req, ClaimsPr
         var saved = await waypointService.UpdateAsync(userId, id, req.Name, req.Latitude, req.Longitude);
         return Results.Ok(saved);
     }
-    catch (WaypointServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -441,7 +442,7 @@ app.MapPut("/waypoints/{id}", async (string id, SetWaypointRequest req, ClaimsPr
 .RequireAuthorization()
 .WithName("UpdateWaypoint");
 
-app.MapDelete("/waypoints/{id}", async (string id, ClaimsPrincipal principal, IWaypointService waypointService) =>
+app.MapDelete("/waypoints/{id}", async (string id, ClaimsPrincipal principal, WaypointService waypointService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -454,7 +455,7 @@ app.MapDelete("/waypoints/{id}", async (string id, ClaimsPrincipal principal, IW
         await waypointService.DeleteAsync(userId, id);
         return Results.NoContent();
     }
-    catch (WaypointServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -462,7 +463,7 @@ app.MapDelete("/waypoints/{id}", async (string id, ClaimsPrincipal principal, IW
 .RequireAuthorization()
 .WithName("DeleteWaypoint");
 
-app.MapGet("/hubs", async (ClaimsPrincipal principal, IHubService hubService) =>
+app.MapGet("/hubs", async (ClaimsPrincipal principal, HubService hubService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -475,7 +476,7 @@ app.MapGet("/hubs", async (ClaimsPrincipal principal, IHubService hubService) =>
 .RequireAuthorization()
 .WithName("ListHubs");
 
-app.MapPost("/hubs", async (SetHubRequest req, ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+app.MapPost("/hubs", async (SetHubRequest req, ClaimsPrincipal principal, HubService hubService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -505,7 +506,7 @@ app.MapPost("/hubs", async (SetHubRequest req, ClaimsPrincipal principal, IHubSe
 // Any authenticated user can suggest a Hub location - unlike POST /hubs, there's no admin
 // gate here. The suggestion lands in the Pending partition and never appears on GET /hubs
 // (which only ever lists Approved) until an admin approves it below.
-app.MapPost("/hub-suggestions", async (SetHubRequest req, ClaimsPrincipal principal, IHubService hubService) =>
+app.MapPost("/hub-suggestions", async (SetHubRequest req, ClaimsPrincipal principal, HubService hubService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -525,7 +526,7 @@ app.MapPost("/hub-suggestions", async (SetHubRequest req, ClaimsPrincipal princi
 .WithName("SuggestHub");
 
 // The admin moderation feed - same caller-lookup-then-IsAdmin gate as POST /hubs.
-app.MapGet("/hub-suggestions", async (ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+app.MapGet("/hub-suggestions", async (ClaimsPrincipal principal, HubService hubService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -544,7 +545,7 @@ app.MapGet("/hub-suggestions", async (ClaimsPrincipal principal, IHubService hub
 .RequireAuthorization()
 .WithName("ListHubSuggestions");
 
-app.MapPost("/hub-suggestions/{id}/approve", async (string id, ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+app.MapPost("/hub-suggestions/{id}/approve", async (string id, ClaimsPrincipal principal, HubService hubService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -563,7 +564,7 @@ app.MapPost("/hub-suggestions/{id}/approve", async (string id, ClaimsPrincipal p
         var approved = await hubService.ApproveAsync(id);
         return Results.Ok(approved);
     }
-    catch (HubServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -571,7 +572,7 @@ app.MapPost("/hub-suggestions/{id}/approve", async (string id, ClaimsPrincipal p
 .RequireAuthorization()
 .WithName("ApproveHubSuggestion");
 
-app.MapDelete("/hub-suggestions/{id}", async (string id, ClaimsPrincipal principal, IHubService hubService, IUserRepository userRepo) =>
+app.MapDelete("/hub-suggestions/{id}", async (string id, ClaimsPrincipal principal, HubService hubService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -590,7 +591,7 @@ app.MapDelete("/hub-suggestions/{id}", async (string id, ClaimsPrincipal princip
         await hubService.RejectAsync(id);
         return Results.NoContent();
     }
-    catch (HubServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -602,7 +603,7 @@ app.MapDelete("/hub-suggestions/{id}", async (string id, ClaimsPrincipal princip
 // Hub location suggestion, this doesn't create a new Hub, just a Pending picture attached
 // to one that already exists. Same admin-approval gate as hub-suggestions above, so a
 // shared/ownerless Hub's picture can't be griefed by an unmoderated upload.
-app.MapPost("/hubs/{id}/picture-suggestions", async (string id, IFormFile file, ClaimsPrincipal principal, IHubPictureService hubPictureService) =>
+app.MapPost("/hubs/{id}/picture-suggestions", async (string id, IFormFile file, ClaimsPrincipal principal, HubPictureService hubPictureService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -616,7 +617,7 @@ app.MapPost("/hubs/{id}/picture-suggestions", async (string id, IFormFile file, 
         var suggestion = await hubPictureService.SuggestAsync(id, userId, stream, file.ContentType, file.Length);
         return Results.Created($"/hub-picture-suggestions/{suggestion.Id}", suggestion);
     }
-    catch (HubPictureServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -626,7 +627,7 @@ app.MapPost("/hubs/{id}/picture-suggestions", async (string id, IFormFile file, 
 .WithName("SuggestHubPicture");
 
 // The admin moderation feed - same caller-lookup-then-IsAdmin gate as GET /hub-suggestions.
-app.MapGet("/hub-picture-suggestions", async (ClaimsPrincipal principal, IHubPictureService hubPictureService, IUserRepository userRepo) =>
+app.MapGet("/hub-picture-suggestions", async (ClaimsPrincipal principal, HubPictureService hubPictureService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -645,7 +646,7 @@ app.MapGet("/hub-picture-suggestions", async (ClaimsPrincipal principal, IHubPic
 .RequireAuthorization()
 .WithName("ListHubPictureSuggestions");
 
-app.MapPost("/hub-picture-suggestions/{id}/approve", async (string id, ClaimsPrincipal principal, IHubPictureService hubPictureService, IUserRepository userRepo) =>
+app.MapPost("/hub-picture-suggestions/{id}/approve", async (string id, ClaimsPrincipal principal, HubPictureService hubPictureService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -664,7 +665,7 @@ app.MapPost("/hub-picture-suggestions/{id}/approve", async (string id, ClaimsPri
         var hub = await hubPictureService.ApproveAsync(id);
         return Results.Ok(hub);
     }
-    catch (HubPictureServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -672,7 +673,7 @@ app.MapPost("/hub-picture-suggestions/{id}/approve", async (string id, ClaimsPri
 .RequireAuthorization()
 .WithName("ApproveHubPictureSuggestion");
 
-app.MapDelete("/hub-picture-suggestions/{id}", async (string id, ClaimsPrincipal principal, IHubPictureService hubPictureService, IUserRepository userRepo) =>
+app.MapDelete("/hub-picture-suggestions/{id}", async (string id, ClaimsPrincipal principal, HubPictureService hubPictureService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -691,7 +692,7 @@ app.MapDelete("/hub-picture-suggestions/{id}", async (string id, ClaimsPrincipal
         await hubPictureService.RejectAsync(id);
         return Results.NoContent();
     }
-    catch (HubPictureServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -699,7 +700,7 @@ app.MapDelete("/hub-picture-suggestions/{id}", async (string id, ClaimsPrincipal
 .RequireAuthorization()
 .WithName("RejectHubPictureSuggestion");
 
-app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -727,7 +728,7 @@ app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBir
         });
         return Results.Ok(results);
     }
-    catch (BirdServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -740,7 +741,7 @@ app.MapGet("/hubs/{id}/birds", async (string id, ClaimsPrincipal principal, IBir
 // HubMessage.cs). Deliberately not masked by IsPublic the way GetHubResidentBirds is
 // above - a Hub-bound bird can be non-public, but the board is a public log of everything
 // that's ever arrived here regardless, so every row shows in full.
-app.MapGet("/hubs/{id}/messages", async (string id, ClaimsPrincipal principal, IHubMessageRepository hubMessageRepository, IHubRepository hubRepository, IUserRepository userRepo) =>
+app.MapGet("/hubs/{id}/messages", async (string id, ClaimsPrincipal principal, CosmosHubMessageRepository hubMessageRepository, CosmosHubRepository hubRepository, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -786,7 +787,7 @@ app.MapGet("/hubs/{id}/messages", async (string id, ClaimsPrincipal principal, I
 // tradeoff category as GET /friends/waypoints ("fine at expected sizes") - fetches every
 // approved Hub's full message list to count how many postdate the caller's last-read
 // timestamp for that hub (MinValue, i.e. "everything," if they've never opened it).
-app.MapGet("/hubs/unread-counts", async (ClaimsPrincipal principal, IHubRepository hubRepository, IHubMessageRepository hubMessageRepository, IHubReadStateRepository readStateRepository) =>
+app.MapGet("/hubs/unread-counts", async (ClaimsPrincipal principal, CosmosHubRepository hubRepository, CosmosHubMessageRepository hubMessageRepository, CosmosHubReadStateRepository readStateRepository) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -810,7 +811,7 @@ app.MapGet("/hubs/unread-counts", async (ClaimsPrincipal principal, IHubReposito
 .RequireAuthorization()
 .WithName("GetHubUnreadCounts");
 
-app.MapPost("/hubs/{id}/read", async (string id, ClaimsPrincipal principal, IHubRepository hubRepository, IHubReadStateRepository readStateRepository) =>
+app.MapPost("/hubs/{id}/read", async (string id, ClaimsPrincipal principal, CosmosHubRepository hubRepository, CosmosHubReadStateRepository readStateRepository) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -829,7 +830,7 @@ app.MapPost("/hubs/{id}/read", async (string id, ClaimsPrincipal principal, IHub
 .RequireAuthorization()
 .WithName("MarkHubRead");
 
-app.MapGet("/birds", async (ClaimsPrincipal principal, IBirdService birdService) =>
+app.MapGet("/birds", async (ClaimsPrincipal principal, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -850,7 +851,7 @@ app.MapPost("/birds/compose", async (
     [FromForm] string? content,
     IFormFile? file,
     ClaimsPrincipal principal,
-    IBirdService birdService,
+    BirdService birdService,
     [FromForm] bool isPublic = false) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -867,7 +868,7 @@ app.MapPost("/birds/compose", async (
             mediaStream, file?.ContentType, file?.Length ?? 0);
         return Results.Created($"/birds/{created.Id}", created);
     }
-    catch (BirdServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -883,7 +884,7 @@ app.MapPost("/birds/compose", async (
 .DisableAntiforgery()
 .WithName("ComposeBird");
 
-app.MapPut("/birds/{id}", async (string id, RenameBirdRequest req, ClaimsPrincipal principal, IBirdService birdService) =>
+app.MapPut("/birds/{id}", async (string id, RenameBirdRequest req, ClaimsPrincipal principal, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -895,7 +896,7 @@ app.MapPut("/birds/{id}", async (string id, RenameBirdRequest req, ClaimsPrincip
     {
         return Results.Ok(await birdService.RenameAsync(userId, id, req.Name));
     }
-    catch (BirdServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -903,7 +904,7 @@ app.MapPut("/birds/{id}", async (string id, RenameBirdRequest req, ClaimsPrincip
 .RequireAuthorization()
 .WithName("RenameBird");
 
-app.MapDelete("/birds/{id}", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+app.MapDelete("/birds/{id}", async (string id, ClaimsPrincipal principal, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -916,7 +917,7 @@ app.MapDelete("/birds/{id}", async (string id, ClaimsPrincipal principal, IBirdS
         await birdService.DeleteAsync(userId, id);
         return Results.NoContent();
     }
-    catch (BirdServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -924,7 +925,7 @@ app.MapDelete("/birds/{id}", async (string id, ClaimsPrincipal principal, IBirdS
 .RequireAuthorization()
 .WithName("DeleteBird");
 
-app.MapPut("/birds/{id}/picture", async (string id, IFormFile file, ClaimsPrincipal principal, IBirdPictureService pictureService) =>
+app.MapPut("/birds/{id}/picture", async (string id, IFormFile file, ClaimsPrincipal principal, BirdPictureService pictureService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -938,7 +939,7 @@ app.MapPut("/birds/{id}/picture", async (string id, IFormFile file, ClaimsPrinci
         var url = await pictureService.UploadAsync(userId, id, stream, file.ContentType, file.Length);
         return Results.Ok(new { ProfilePictureUrl = url });
     }
-    catch (BirdPictureServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -947,7 +948,7 @@ app.MapPut("/birds/{id}/picture", async (string id, IFormFile file, ClaimsPrinci
 .DisableAntiforgery()
 .WithName("UploadBirdPicture");
 
-app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPrincipal principal, IBirdService birdService) =>
+app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPrincipal principal, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -959,7 +960,7 @@ app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPri
     {
         return Results.Ok(await birdService.SendAsync(userId, id, req.NestId, req.Content));
     }
-    catch (BirdServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -967,7 +968,7 @@ app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPri
 .RequireAuthorization()
 .WithName("SendBird");
 
-app.MapGet("/waypoints/{id}/birds", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+app.MapGet("/waypoints/{id}/birds", async (string id, ClaimsPrincipal principal, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -979,7 +980,7 @@ app.MapGet("/waypoints/{id}/birds", async (string id, ClaimsPrincipal principal,
     {
         return Results.Ok(await birdService.GetNestResidentsAsync(userId, id));
     }
-    catch (BirdServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -987,7 +988,7 @@ app.MapGet("/waypoints/{id}/birds", async (string id, ClaimsPrincipal principal,
 .RequireAuthorization()
 .WithName("GetNestResidentBirds");
 
-app.MapPost("/birds/{id}/read", async (string id, ClaimsPrincipal principal, IBirdService birdService) =>
+app.MapPost("/birds/{id}/read", async (string id, ClaimsPrincipal principal, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -999,7 +1000,7 @@ app.MapPost("/birds/{id}/read", async (string id, ClaimsPrincipal principal, IBi
     {
         return Results.Ok(await birdService.MarkReadAsync(userId, id));
     }
-    catch (BirdServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1012,7 +1013,7 @@ app.MapPost("/birds/{id}/read", async (string id, ClaimsPrincipal principal, IBi
 // marking a public bird - theirs or someone else's - as viewed, the same "differs per
 // viewer, not per owner" reasoning BirdReadState.cs documents. Only public birds can be
 // viewed this way; a private bird has nothing for a friend to see yet.
-app.MapPost("/birds/{id}/viewed", async (string id, ClaimsPrincipal principal, IBirdRepository birdRepository, IBirdReadStateRepository readStateRepository) =>
+app.MapPost("/birds/{id}/viewed", async (string id, ClaimsPrincipal principal, CosmosBirdRepository birdRepository, CosmosBirdReadStateRepository readStateRepository) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1036,7 +1037,7 @@ app.MapPost("/birds/{id}/viewed", async (string id, ClaimsPrincipal principal, I
 .RequireAuthorization()
 .WithName("MarkBirdViewed");
 
-app.MapGet("/birds/{id}/reactions", async (string id, ClaimsPrincipal principal, IBirdReactionService reactionService) =>
+app.MapGet("/birds/{id}/reactions", async (string id, ClaimsPrincipal principal, BirdReactionService reactionService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1048,7 +1049,7 @@ app.MapGet("/birds/{id}/reactions", async (string id, ClaimsPrincipal principal,
     {
         return Results.Ok(await reactionService.GetSummaryAsync(userId, id));
     }
-    catch (BirdReactionServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1056,7 +1057,7 @@ app.MapGet("/birds/{id}/reactions", async (string id, ClaimsPrincipal principal,
 .RequireAuthorization()
 .WithName("GetBirdReactions");
 
-app.MapPut("/birds/{id}/reactions/{emoji}", async (string id, string emoji, ClaimsPrincipal principal, IBirdReactionService reactionService) =>
+app.MapPut("/birds/{id}/reactions/{emoji}", async (string id, string emoji, ClaimsPrincipal principal, BirdReactionService reactionService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1069,7 +1070,7 @@ app.MapPut("/birds/{id}/reactions/{emoji}", async (string id, string emoji, Clai
         await reactionService.AddAsync(userId, id, emoji);
         return Results.Ok(await reactionService.GetSummaryAsync(userId, id));
     }
-    catch (BirdReactionServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1077,7 +1078,7 @@ app.MapPut("/birds/{id}/reactions/{emoji}", async (string id, string emoji, Clai
 .RequireAuthorization()
 .WithName("AddBirdReaction");
 
-app.MapDelete("/birds/{id}/reactions/{emoji}", async (string id, string emoji, ClaimsPrincipal principal, IBirdReactionService reactionService) =>
+app.MapDelete("/birds/{id}/reactions/{emoji}", async (string id, string emoji, ClaimsPrincipal principal, BirdReactionService reactionService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1091,7 +1092,7 @@ app.MapDelete("/birds/{id}/reactions/{emoji}", async (string id, string emoji, C
 .RequireAuthorization()
 .WithName("RemoveBirdReaction");
 
-app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
+app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1104,7 +1105,7 @@ app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrin
         await friendService.SendRequestAsync(userId, req.Username);
         return Results.NoContent();
     }
-    catch (FriendServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1112,7 +1113,7 @@ app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrin
 .RequireAuthorization()
 .WithName("SendFriendRequest");
 
-app.MapGet("/friends/requests/incoming", async (ClaimsPrincipal principal, IUserRepository userRepo) =>
+app.MapGet("/friends/requests/incoming", async (ClaimsPrincipal principal, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1141,7 +1142,7 @@ app.MapGet("/friends/requests/incoming", async (ClaimsPrincipal principal, IUser
 .RequireAuthorization()
 .WithName("GetIncomingFriendRequests");
 
-app.MapGet("/friends/requests/outgoing", async (ClaimsPrincipal principal, IUserRepository userRepo) =>
+app.MapGet("/friends/requests/outgoing", async (ClaimsPrincipal principal, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1169,7 +1170,7 @@ app.MapGet("/friends/requests/outgoing", async (ClaimsPrincipal principal, IUser
 .RequireAuthorization()
 .WithName("GetOutgoingFriendRequests");
 
-app.MapPost("/friends/requests/{requesterId}/accept", async (string requesterId, ClaimsPrincipal principal, IFriendService friendService) =>
+app.MapPost("/friends/requests/{requesterId}/accept", async (string requesterId, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1182,7 +1183,7 @@ app.MapPost("/friends/requests/{requesterId}/accept", async (string requesterId,
         await friendService.AcceptAsync(userId, requesterId);
         return Results.NoContent();
     }
-    catch (FriendServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1190,7 +1191,7 @@ app.MapPost("/friends/requests/{requesterId}/accept", async (string requesterId,
 .RequireAuthorization()
 .WithName("AcceptFriendRequest");
 
-app.MapPost("/friends/requests/{requesterId}/decline", async (string requesterId, ClaimsPrincipal principal, IFriendService friendService) =>
+app.MapPost("/friends/requests/{requesterId}/decline", async (string requesterId, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1204,7 +1205,7 @@ app.MapPost("/friends/requests/{requesterId}/decline", async (string requesterId
 .RequireAuthorization()
 .WithName("DeclineFriendRequest");
 
-app.MapDelete("/friends/{userId}", async (string userId, ClaimsPrincipal principal, IFriendService friendService) =>
+app.MapDelete("/friends/{userId}", async (string userId, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (callerId is null)
@@ -1218,7 +1219,7 @@ app.MapDelete("/friends/{userId}", async (string userId, ClaimsPrincipal princip
 .RequireAuthorization()
 .WithName("RemoveFriend");
 
-app.MapPost("/friends/{userId}/block", async (string userId, ClaimsPrincipal principal, IFriendService friendService) =>
+app.MapPost("/friends/{userId}/block", async (string userId, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (callerId is null)
@@ -1231,7 +1232,7 @@ app.MapPost("/friends/{userId}/block", async (string userId, ClaimsPrincipal pri
         await friendService.BlockAsync(callerId, userId);
         return Results.NoContent();
     }
-    catch (FriendServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1239,7 +1240,7 @@ app.MapPost("/friends/{userId}/block", async (string userId, ClaimsPrincipal pri
 .RequireAuthorization()
 .WithName("BlockUser");
 
-app.MapDelete("/friends/{userId}/block", async (string userId, ClaimsPrincipal principal, IFriendService friendService) =>
+app.MapDelete("/friends/{userId}/block", async (string userId, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (callerId is null)
@@ -1253,7 +1254,7 @@ app.MapDelete("/friends/{userId}/block", async (string userId, ClaimsPrincipal p
 .RequireAuthorization()
 .WithName("UnblockUser");
 
-app.MapGet("/friends/blocked", async (ClaimsPrincipal principal, IFriendService friendService, IUserRepository userRepo) =>
+app.MapGet("/friends/blocked", async (ClaimsPrincipal principal, FriendService friendService, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1279,7 +1280,7 @@ app.MapGet("/friends/blocked", async (ClaimsPrincipal principal, IFriendService 
 .RequireAuthorization()
 .WithName("GetBlockedUsers");
 
-app.MapGet("/friends", async (ClaimsPrincipal principal, IUserRepository userRepo) =>
+app.MapGet("/friends", async (ClaimsPrincipal principal, CosmosUserRepository userRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1309,7 +1310,7 @@ app.MapGet("/friends", async (ClaimsPrincipal principal, IUserRepository userRep
 .RequireAuthorization()
 .WithName("GetFriends");
 
-app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserRepository userRepo, IWaypointRepository waypointRepo) =>
+app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, CosmosUserRepository userRepo, CosmosWaypointRepository waypointRepo) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1361,7 +1362,7 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, IUserReposito
 .RequireAuthorization()
 .WithName("GetFriendsWaypoints");
 
-app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository userRepo, IBirdService birdService, IBirdReadStateRepository readStateRepository) =>
+app.MapGet("/friends/birds", async (ClaimsPrincipal principal, CosmosUserRepository userRepo, BirdService birdService, CosmosBirdReadStateRepository readStateRepository) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1423,7 +1424,7 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, IUserRepository u
 .RequireAuthorization()
 .WithName("GetFriendsBirds");
 
-app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorRequest req, ClaimsPrincipal principal, IFriendService friendService) =>
+app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorRequest req, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (callerId is null)
@@ -1436,7 +1437,7 @@ app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorReques
         await friendService.SetColorAsync(callerId, userId, req.Color);
         return Results.NoContent();
     }
-    catch (FriendServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1444,7 +1445,7 @@ app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorReques
 .RequireAuthorization()
 .WithName("SetFriendColor");
 
-app.MapPut("/profile/picture", async (IFormFile file, ClaimsPrincipal principal, IProfilePictureService pictureService) =>
+app.MapPut("/profile/picture", async (IFormFile file, ClaimsPrincipal principal, ProfilePictureService pictureService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1458,7 +1459,7 @@ app.MapPut("/profile/picture", async (IFormFile file, ClaimsPrincipal principal,
         var url = await pictureService.UploadAsync(userId, stream, file.ContentType, file.Length);
         return Results.Ok(new { ProfilePictureUrl = url });
     }
-    catch (ProfilePictureServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1467,7 +1468,7 @@ app.MapPut("/profile/picture", async (IFormFile file, ClaimsPrincipal principal,
 .DisableAntiforgery()
 .WithName("UploadProfilePicture");
 
-app.MapPut("/waypoints/{id}/picture", async (string id, IFormFile file, ClaimsPrincipal principal, INestPictureService pictureService) =>
+app.MapPut("/waypoints/{id}/picture", async (string id, IFormFile file, ClaimsPrincipal principal, NestPictureService pictureService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1481,7 +1482,7 @@ app.MapPut("/waypoints/{id}/picture", async (string id, IFormFile file, ClaimsPr
         var url = await pictureService.UploadAsync(userId, id, stream, file.ContentType, file.Length);
         return Results.Ok(new { ProfilePictureUrl = url });
     }
-    catch (NestPictureServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1493,7 +1494,7 @@ app.MapPut("/waypoints/{id}/picture", async (string id, IFormFile file, ClaimsPr
 // The web UI's "journey log" - every event ever recorded for the caller, newest first,
 // never pruned (see Event.cs/EventService). No projection needed: Event.UserId is always
 // the caller's own, there's nothing here to hide from them.
-app.MapGet("/events", async (int? limit, ClaimsPrincipal principal, IEventService eventService) =>
+app.MapGet("/events", async (int? limit, ClaimsPrincipal principal, EventService eventService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1507,7 +1508,7 @@ app.MapGet("/events", async (int? limit, ClaimsPrincipal principal, IEventServic
 .WithName("ListEvents");
 
 // The notification bell's dropdown - the IsNotification subset of the same event history.
-app.MapGet("/notifications", async (int? limit, ClaimsPrincipal principal, IEventService eventService) =>
+app.MapGet("/notifications", async (int? limit, ClaimsPrincipal principal, EventService eventService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1520,7 +1521,7 @@ app.MapGet("/notifications", async (int? limit, ClaimsPrincipal principal, IEven
 .RequireAuthorization()
 .WithName("ListNotifications");
 
-app.MapGet("/notifications/unread-count", async (ClaimsPrincipal principal, IEventService eventService) =>
+app.MapGet("/notifications/unread-count", async (ClaimsPrincipal principal, EventService eventService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1533,7 +1534,7 @@ app.MapGet("/notifications/unread-count", async (ClaimsPrincipal principal, IEve
 .RequireAuthorization()
 .WithName("GetUnreadNotificationCount");
 
-app.MapPost("/notifications/{id}/read", async (string id, ClaimsPrincipal principal, IEventService eventService) =>
+app.MapPost("/notifications/{id}/read", async (string id, ClaimsPrincipal principal, EventService eventService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1546,7 +1547,7 @@ app.MapPost("/notifications/{id}/read", async (string id, ClaimsPrincipal princi
         await eventService.MarkNotificationReadAsync(userId, id);
         return Results.NoContent();
     }
-    catch (EventServiceException ex)
+    catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
@@ -1554,7 +1555,7 @@ app.MapPost("/notifications/{id}/read", async (string id, ClaimsPrincipal princi
 .RequireAuthorization()
 .WithName("MarkNotificationRead");
 
-app.MapPost("/notifications/read-all", async (ClaimsPrincipal principal, IEventService eventService) =>
+app.MapPost("/notifications/read-all", async (ClaimsPrincipal principal, EventService eventService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)

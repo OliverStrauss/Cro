@@ -9,7 +9,7 @@ Built after a summer Internship using a similar tech stack learned while working
 
 This is a monorepo with two halves:
 
-- **[`/app`](app/)** — Flutter frontend (iOS, Android, web, desktop)
+- **[`/app`](app/)** — Flutter frontend (web, desktop)
 - **[`/api`](api/)** — .NET (C#) API backend, backed by Azure Cosmos DB
 
 ## Getting started

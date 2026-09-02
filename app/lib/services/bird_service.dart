@@ -134,9 +134,9 @@ class BirdService {
     }
   }
 
-  // Wrapped here (rather than called directly from BirdsScreen) so the pick-then-upload
-  // flow can be faked as a unit in tests - image_picker's platform channel isn't available
-  // in the widget test harness. Same pattern as ProfileService.pickImage.
+  // Wrapped here (rather than called directly from the widgets that use it) so the
+  // pick-then-upload flow can be faked as a unit in tests - image_picker's platform channel
+  // isn't available in the widget test harness. Same pattern as ProfileService.pickImage.
   Future<XFile?> pickImage() => ImagePicker().pickImage(source: ImageSource.gallery);
 
   // A bird's own avatar - distinct from the payload media (audio/image) a specific message

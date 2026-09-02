@@ -1,13 +1,16 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CroApp.Api.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CroApp.Api.Tests;
 
-public class HubPictureSuggestionEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class HubPictureSuggestionEndpointTests : IClassFixture<WebApplicationFactory<Program>>, IAsyncLifetime
 {
     private const string DefaultEmulatorConnectionString =
         "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
@@ -17,7 +20,13 @@ public class HubPictureSuggestionEndpointTests : IClassFixture<WebApplicationFac
     // see CLAUDE.md's well-known-local-credentials section.
     private const string SeedPassword = "correct-horse-battery-staple";
 
+    private readonly WebApplicationFactory<Program> _factory;
     private readonly HttpClient _client;
+
+    // Every Hub this test class creates, keyed by id -> status, so DisposeAsync can delete
+    // them from the shared local emulator's Hubs container instead of leaving permanent
+    // "Test Plaza ..."/"Reject Plaza ..." rows behind on every test run.
+    private readonly Dictionary<string, string> _hubIdToStatus = new();
 
     public HubPictureSuggestionEndpointTests(WebApplicationFactory<Program> factory)
     {
@@ -50,7 +59,27 @@ public class HubPictureSuggestionEndpointTests : IClassFixture<WebApplicationFac
             });
         });
 
+        _factory = configuredFactory;
         _client = configuredFactory.CreateClient();
+    }
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var hubRepository = scope.ServiceProvider.GetRequiredService<CosmosHubRepository>();
+        foreach (var (id, status) in _hubIdToStatus)
+        {
+            try
+            {
+                await hubRepository.DeleteAsync(id, status);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                // Already deleted by the test itself.
+            }
+        }
     }
 
     private async Task<(string UserId, string Token)> RegisterAndLoginAsync(string username, string password)
@@ -88,10 +117,14 @@ public class HubPictureSuggestionEndpointTests : IClassFixture<WebApplicationFac
         return request;
     }
 
-    private async Task<HubDto> CreateHubAsync(string token, string name) =>
-        (await (await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token,
-            new { Name = name, Latitude = 42.0, Longitude = -93.6, Category = "Landmark" })))
-            .Content.ReadFromJsonAsync<HubDto>())!;
+    private async Task<HubDto> CreateHubAsync(string token, string name)
+    {
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/hubs", token,
+            new { Name = name, Latitude = 42.0, Longitude = -93.6, Category = "Landmark" }));
+        var hub = (await response.Content.ReadFromJsonAsync<HubDto>())!;
+        _hubIdToStatus[hub.Id] = hub.Status;
+        return hub;
+    }
 
     private static MultipartFormDataContent BuildUpload(byte[] bytes, string contentType, string fileName = "photo.png")
     {
