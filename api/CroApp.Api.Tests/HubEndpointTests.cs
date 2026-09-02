@@ -65,7 +65,7 @@ public class HubEndpointTests : IClassFixture<WebApplicationFactory<Program>>, I
     public async Task DisposeAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        var hubRepository = scope.ServiceProvider.GetRequiredService<IHubRepository>();
+        var hubRepository = scope.ServiceProvider.GetRequiredService<CosmosHubRepository>();
         foreach (var (id, status) in _hubIdToStatus)
         {
             try

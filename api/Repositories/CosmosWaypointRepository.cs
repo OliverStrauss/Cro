@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace CroApp.Api.Repositories;
 
-public class CosmosWaypointRepository : IWaypointRepository
+public class CosmosWaypointRepository
 {
     private readonly Container _container;
 
@@ -48,7 +48,7 @@ public class CosmosWaypointRepository : IWaypointRepository
     {
         // Cross-partition - EventService looks up a bird's destination nest by id alone to
         // find its owner, the same "caller doesn't know the owning userId" situation
-        // IBirdRepository.GetByIdAsync already handles for Bird.
+        // CosmosBirdRepository.GetByIdAsync already handles for Bird.
         var query = _container.GetItemQueryIterator<Waypoint>(
             new QueryDefinition("SELECT * FROM c WHERE c.id = @id").WithParameter("@id", waypointId));
 

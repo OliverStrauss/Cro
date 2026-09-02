@@ -41,13 +41,13 @@ import 'web_you_screen.dart';
 // can short-circuit with a toast instead of a round-trip error.
 const _maxBirdsPerUser = 5;
 
-/// Top-level widget for the web shell (rail + content + floating actions cluster + dock +
-/// right panel) - the kIsWeb-gated sibling to the phone HomeScreen, selected in main.dart.
+/// Top-level widget for the app's single UI (rail + content + floating actions cluster +
+/// dock + right panel), used unconditionally on every platform, selected in main.dart.
 /// There is no top bar: the floating actions cluster (journey log / bell) and the dock both
 /// overlay the content column instead (see 05_web_ui_updates.md item 1). Owns
 /// every piece of shell state (nav selection, panel selection, dock filter/expanded, map
-/// filter) the same way HomeScreen owns tab selection: one StatefulWidget, plain setState,
-/// no state-mgmt package (none exists anywhere else in this codebase).
+/// filter) in one StatefulWidget with plain setState - no state-mgmt package (none exists
+/// anywhere else in this codebase).
 class WebShellScreen extends StatefulWidget {
   final AuthState authState;
   final WaypointService? waypointService;

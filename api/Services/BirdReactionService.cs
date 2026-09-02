@@ -3,7 +3,9 @@ using CroApp.Api.Repositories;
 
 namespace CroApp.Api.Services;
 
-public class BirdReactionService(IBirdReactionRepository reactionRepository, IBirdRepository birdRepository) : IBirdReactionService
+public record BirdReactionSummaryEntry(string Emoji, int Count, bool ReactedByMe);
+
+public class BirdReactionService(CosmosBirdReactionRepository reactionRepository, CosmosBirdRepository birdRepository)
 {
     public async Task<List<BirdReactionSummaryEntry>> GetSummaryAsync(string callerId, string birdId)
     {
@@ -20,7 +22,7 @@ public class BirdReactionService(IBirdReactionRepository reactionRepository, IBi
     {
         if (!BirdReactionEmoji.Allowed.Contains(emoji))
         {
-            throw new BirdReactionServiceException(400, "Unsupported reaction.");
+            throw new ServiceException(400, "Unsupported reaction.");
         }
         await EnsurePublicBirdExistsAsync(birdId);
 
@@ -40,10 +42,10 @@ public class BirdReactionService(IBirdReactionRepository reactionRepository, IBi
     private async Task EnsurePublicBirdExistsAsync(string birdId)
     {
         var bird = await birdRepository.GetByIdAsync(birdId)
-            ?? throw new BirdReactionServiceException(404, "Bird not found.");
+            ?? throw new ServiceException(404, "Bird not found.");
         if (!bird.IsPublic)
         {
-            throw new BirdReactionServiceException(400, "Only public birds can be reacted to.");
+            throw new ServiceException(400, "Only public birds can be reacted to.");
         }
     }
 }

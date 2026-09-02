@@ -68,25 +68,4 @@ final ThemeData croTheme = ThemeData(
     backgroundColor: CroColors.waypointBlue,
     foregroundColor: CroColors.surface,
   ),
-  navigationBarTheme: NavigationBarThemeData(
-    backgroundColor: CroColors.surface,
-    height: 78,
-    // The 1px top border that visually separates the bar from body content isn't
-    // expressible via NavigationBarThemeData - HomeScreen wraps the bar in a Container
-    // with that border instead of relying on theme alone.
-    elevation: 0,
-    indicatorColor: CroColors.waypointBlue.withValues(alpha: 0.18),
-    labelTextStyle: WidgetStateProperty.resolveWith((states) {
-      final selected = states.contains(WidgetState.selected);
-      return TextStyle(
-        fontSize: 10.5,
-        fontWeight: FontWeight.w600,
-        color: selected ? CroColors.deepWaypoint : CroColors.fog,
-      );
-    }),
-    iconTheme: WidgetStateProperty.resolveWith((states) {
-      final selected = states.contains(WidgetState.selected);
-      return IconThemeData(color: selected ? CroColors.waypointBlue : CroColors.fog);
-    }),
-  ),
 );

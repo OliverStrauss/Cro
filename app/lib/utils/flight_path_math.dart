@@ -5,11 +5,9 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/waypoint.dart';
 
-// Pure flight-path math, hoisted out of MapScreen so both the phone map (map_screen.dart,
-// which re-exports everything here so its own tests need no changes) and the web map screen
-// can share one implementation instead of drifting apart. Every function here only ever reads
-// a Waypoint's .latitude/.longitude/.name, so a Hub can be (and is, by both callers) projected
-// into a Waypoint-shaped record to reuse this without a Hub-vs-Waypoint union type anywhere.
+// Pure flight-path math for web_map_screen.dart. Every function here only ever reads a
+// Waypoint's .latitude/.longitude/.name, so a Hub can be (and is) projected into a
+// Waypoint-shaped record to reuse this without a Hub-vs-Waypoint union type anywhere.
 
 // The quadratic bezier control point for the origin-to-destination flight path, in the
 // same EPSG:3857 (Web Mercator) projected space PolylineLayer draws in - offset

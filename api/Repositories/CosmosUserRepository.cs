@@ -6,7 +6,7 @@ using User = CroApp.Api.Models.User;
 
 namespace CroApp.Api.Repositories;
 
-public class CosmosUserRepository : IUserRepository
+public class CosmosUserRepository
 {
     private readonly Container _container;
 

@@ -7,16 +7,16 @@ using Microsoft.Extensions.Options;
 
 namespace CroApp.Api.Services;
 
-public class HubPictureService : IHubPictureService
+public class HubPictureService
 {
     private readonly BlobContainerClient _container;
-    private readonly IHubRepository _hubRepository;
-    private readonly IHubPictureSuggestionRepository _suggestionRepository;
+    private readonly CosmosHubRepository _hubRepository;
+    private readonly CosmosHubPictureSuggestionRepository _suggestionRepository;
 
     public HubPictureService(
         BlobServiceClient blobServiceClient,
-        IHubRepository hubRepository,
-        IHubPictureSuggestionRepository suggestionRepository,
+        CosmosHubRepository hubRepository,
+        CosmosHubPictureSuggestionRepository suggestionRepository,
         IOptions<BlobStorageOptions> options)
     {
         _container = blobServiceClient.GetBlobContainerClient(options.Value.HubPicturesContainerName);
@@ -35,18 +35,18 @@ public class HubPictureService : IHubPictureService
     {
         if (!ImageUploadValidation.AllowedContentTypes.Contains(contentType))
         {
-            throw new HubPictureServiceException(400, "Unsupported image type.");
+            throw new ServiceException(400, "Unsupported image type.");
         }
         if (contentLength > ImageUploadValidation.MaxSizeBytes)
         {
-            throw new HubPictureServiceException(400, "Image is too large (5MB max).");
+            throw new ServiceException(400, "Image is too large (5MB max).");
         }
 
         var hub = await _hubRepository.GetAsync(hubId)
-            ?? throw new HubPictureServiceException(404, "Hub not found.");
+            ?? throw new ServiceException(404, "Hub not found.");
         if (hub.Status != HubStatus.Approved)
         {
-            throw new HubPictureServiceException(409, "Only an approved Hub can receive a photo suggestion.");
+            throw new ServiceException(409, "Only an approved Hub can receive a photo suggestion.");
         }
 
         var suggestionId = Guid.NewGuid().ToString();
@@ -67,9 +67,9 @@ public class HubPictureService : IHubPictureService
     public async Task<Hub> ApproveAsync(string suggestionId)
     {
         var suggestion = await _suggestionRepository.GetAsync(suggestionId)
-            ?? throw new HubPictureServiceException(404, "Suggestion not found.");
+            ?? throw new ServiceException(404, "Suggestion not found.");
         var hub = await _hubRepository.GetAsync(suggestion.HubId)
-            ?? throw new HubPictureServiceException(404, "Hub not found.");
+            ?? throw new ServiceException(404, "Hub not found.");
 
         var updated = await _hubRepository.UpdateAsync(hub with { ProfilePictureUrl = suggestion.BlobUrl });
         await _suggestionRepository.DeleteAsync(suggestion.Id, suggestion.HubId);
@@ -81,7 +81,7 @@ public class HubPictureService : IHubPictureService
     public async Task RejectAsync(string suggestionId)
     {
         var suggestion = await _suggestionRepository.GetAsync(suggestionId)
-            ?? throw new HubPictureServiceException(404, "Suggestion not found.");
+            ?? throw new ServiceException(404, "Suggestion not found.");
 
         await _container.GetBlobClient(suggestion.Id).DeleteIfExistsAsync();
         await _suggestionRepository.DeleteAsync(suggestion.Id, suggestion.HubId);

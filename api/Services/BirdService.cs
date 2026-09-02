@@ -7,15 +7,15 @@ using Microsoft.Extensions.Options;
 namespace CroApp.Api.Services;
 
 public class BirdService(
-    IBirdRepository birdRepository,
-    IWaypointRepository waypointRepository,
-    IUserRepository userRepository,
-    IHubRepository hubRepository,
-    IHubMessageRepository hubMessageRepository,
-    IBirdMediaService birdMediaService,
-    IEventService eventService,
+    CosmosBirdRepository birdRepository,
+    CosmosWaypointRepository waypointRepository,
+    CosmosUserRepository userRepository,
+    CosmosHubRepository hubRepository,
+    CosmosHubMessageRepository hubMessageRepository,
+    BirdMediaService birdMediaService,
+    EventService eventService,
     IOptions<BirdTravelOptions> birdTravelOptions,
-    ILogger<BirdService> logger) : IBirdService
+    ILogger<BirdService> logger)
 {
     private const int MaxBirdsPerUser = 5;
 
@@ -80,28 +80,28 @@ public class BirdService(
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new BirdServiceException(400, "This bird needs a name.");
+            throw new ServiceException(400, "This bird needs a name.");
         }
         if (!BirdTypeCatalog.IsValid(type))
         {
-            throw new BirdServiceException(400, $"Unknown bird type '{type}'.");
+            throw new ServiceException(400, $"Unknown bird type '{type}'.");
         }
 
         var existing = await birdRepository.ListByUserIdAsync(userId);
         if (existing.Count >= MaxBirdsPerUser)
         {
-            throw new BirdServiceException(409, $"You can have at most {MaxBirdsPerUser} birds. Delete one (from your private nest) before spawning another.");
+            throw new ServiceException(409, $"You can have at most {MaxBirdsPerUser} birds. Delete one (from your private nest) before spawning another.");
         }
 
         BirdPayloadValidator.Validate(type, content, mediaStream is not null);
 
         var origin = await waypointRepository.GetAsync(userId, originNestId)
-            ?? throw new BirdServiceException(404, "Origin nest not found - a new bird can only depart from one of your own nests.");
+            ?? throw new ServiceException(404, "Origin nest not found - a new bird can only depart from one of your own nests.");
         var destination = await ResolveReachableNestAsync(userId, destinationId)
-            ?? throw new BirdServiceException(404, "Destination not found.");
+            ?? throw new ServiceException(404, "Destination not found.");
         if (origin.Id == destination.Id)
         {
-            throw new BirdServiceException(400, "Pick a different destination than the origin nest.");
+            throw new ServiceException(400, "Pick a different destination than the origin nest.");
         }
 
         var birdId = Guid.NewGuid().ToString();
@@ -164,29 +164,29 @@ public class BirdService(
     public async Task<Bird> SendAsync(string userId, string birdId, string destinationNestId, string? content)
     {
         var bird = await birdRepository.GetAsync(userId, birdId)
-            ?? throw new BirdServiceException(404, "Bird not found.");
+            ?? throw new ServiceException(404, "Bird not found.");
         bird = await ResolveArrivalIfDueAsync(bird);
 
         if (bird.IsTraveling)
         {
-            throw new BirdServiceException(409, "This bird is already traveling.");
+            throw new ServiceException(409, "This bird is already traveling.");
         }
         if (bird.CurrentNestId is null)
         {
-            throw new BirdServiceException(400, "This bird has no current nest to depart from.");
+            throw new ServiceException(400, "This bird has no current nest to depart from.");
         }
         if (bird.CurrentNestId == destinationNestId)
         {
-            throw new BirdServiceException(400, "This bird is already at that nest.");
+            throw new ServiceException(400, "This bird is already at that nest.");
         }
 
         var destination = await ResolveReachableNestAsync(userId, destinationNestId)
-            ?? throw new BirdServiceException(404, "Destination nest not found.");
+            ?? throw new ServiceException(404, "Destination nest not found.");
         // Origin may be a friend's nest or a Hub the bird previously arrived at, not
         // necessarily one the caller owns - resolve the same way as the destination, not a
         // plain owner-scoped lookup.
         var origin = await ResolveReachableNestAsync(userId, bird.CurrentNestId)
-            ?? throw new BirdServiceException(404, "Origin nest not found.");
+            ?? throw new ServiceException(404, "Origin nest not found.");
 
         var distanceKm = GeoDistance.HaversineKm(origin.Latitude, origin.Longitude, destination.Latitude, destination.Longitude);
         var effectiveSpeedKmh = BirdTypeCatalog.BaseSpeedKmh(bird.Type) * birdTravelOptions.Value.SpeedMultiplier;
@@ -220,11 +220,11 @@ public class BirdService(
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new BirdServiceException(400, "This bird needs a name.");
+            throw new ServiceException(400, "This bird needs a name.");
         }
 
         var bird = await birdRepository.GetAsync(userId, birdId)
-            ?? throw new BirdServiceException(404, "Bird not found.");
+            ?? throw new ServiceException(404, "Bird not found.");
         var updated = bird with { Name = name.Trim(), UpdatedAt = DateTimeOffset.UtcNow };
         return await birdRepository.UpdateAsync(updated);
     }
@@ -234,31 +234,31 @@ public class BirdService(
     public async Task DeleteAsync(string userId, string birdId)
     {
         var bird = await birdRepository.GetAsync(userId, birdId)
-            ?? throw new BirdServiceException(404, "Bird not found.");
+            ?? throw new ServiceException(404, "Bird not found.");
         bird = await ResolveArrivalIfDueAsync(bird);
 
         if (bird.IsTraveling)
         {
-            throw new BirdServiceException(409, "This bird is still traveling.");
+            throw new ServiceException(409, "This bird is still traveling.");
         }
 
         var privateNest = (await waypointRepository.ListByUserIdAsync(userId)).FirstOrDefault(w => !w.IsPublic);
         if (privateNest is null || bird.CurrentNestId != privateNest.Id)
         {
-            throw new BirdServiceException(409, "This bird can only be deleted once it's home at your private nest.");
+            throw new ServiceException(409, "This bird can only be deleted once it's home at your private nest.");
         }
 
         var deleted = await birdRepository.DeleteAsync(userId, birdId);
         if (!deleted)
         {
-            throw new BirdServiceException(404, "Bird not found.");
+            throw new ServiceException(404, "Bird not found.");
         }
     }
 
     public async Task<List<Bird>> GetNestResidentsAsync(string userId, string nestId)
     {
         var nest = await waypointRepository.GetAsync(userId, nestId)
-            ?? throw new BirdServiceException(404, "Nest not found.");
+            ?? throw new ServiceException(404, "Nest not found.");
 
         var candidates = await birdRepository.GetByNestIdAsync(nest.Id);
         var resolved = new List<Bird>();
@@ -278,7 +278,7 @@ public class BirdService(
     public async Task<List<Bird>> GetHubResidentsAsync(string hubId)
     {
         var hub = await hubRepository.GetAsync(hubId)
-            ?? throw new BirdServiceException(404, "Hub not found.");
+            ?? throw new ServiceException(404, "Hub not found.");
 
         var candidates = await birdRepository.GetByNestIdAsync(hub.Id);
         var resolved = new List<Bird>();
@@ -292,7 +292,7 @@ public class BirdService(
     public async Task<Bird> MarkReadAsync(string userId, string birdId)
     {
         var bird = await birdRepository.GetByIdAsync(birdId)
-            ?? throw new BirdServiceException(404, "Bird not found.");
+            ?? throw new ServiceException(404, "Bird not found.");
         bird = await ResolveArrivalIfDueAsync(bird);
 
         var nest = await waypointRepository.GetAsync(userId, bird.CurrentNestId ?? string.Empty);
@@ -300,7 +300,7 @@ public class BirdService(
         {
             // Caller doesn't own the nest this bird currently sits in (or it's mid-flight,
             // nowhere yet) - same "don't leak details" 404 as the nest-residents endpoint.
-            throw new BirdServiceException(404, "Bird not found.");
+            throw new ServiceException(404, "Bird not found.");
         }
 
         var updated = bird with { IsRead = true, UpdatedAt = DateTimeOffset.UtcNow };
