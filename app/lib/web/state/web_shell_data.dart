@@ -88,6 +88,12 @@ class WebShellData extends ChangeNotifier {
   // persisted; a fresh page load re-seeds it from whatever's current at that point.
   Set<String> _knownNotificationIds = {};
 
+  // Bumped by markAllNotificationsRead/markNotificationRead's local optimistic edit. A poll
+  // that was already in flight when that edit happened captures the pre-bump value below, so
+  // its (now-stale) notifications response gets discarded instead of overwriting the fresher
+  // locally-marked-read state when it resolves afterward.
+  int _notifSeq = 0;
+
   // Fired once per notification id the poll below hasn't seen before - lets WebShellScreen
   // show a toast without this class ever touching BuildContext itself.
   void Function(AppEvent)? onNewNotification;
@@ -115,6 +121,7 @@ class WebShellData extends ChangeNotifier {
   Future<void> _livePoll() async {
     try {
       final token = authState.token!;
+      final notifSeqAtStart = _notifSeq;
       final results = await Future.wait([
         birdService.listBirds(token),
         friendsService.getFriendsBirds(token),
@@ -130,9 +137,13 @@ class WebShellData extends ChangeNotifier {
       hubUnreadCounts = results[2] as Map<String, int>;
       incomingRequests = results[3] as List<FriendRequest>;
       events = results[4] as List<AppEvent>;
-      notifications = results[5] as List<AppEvent>;
+      // See _notifSeq's declaration - a mark-read that landed while this fetch was in flight
+      // makes this response stale, so it's dropped rather than reverting the fresher local edit.
+      if (notifSeqAtStart == _notifSeq) {
+        notifications = results[5] as List<AppEvent>;
+        _reportNewNotifications();
+      }
       friends = results[6] as List<Friend>;
-      _reportNewNotifications();
       _notify();
     } catch (_) {
       // Swallow - same "a blip on a silent background poll shouldn't blank an
@@ -251,6 +262,7 @@ class WebShellData extends ChangeNotifier {
   Future<void> markAllNotificationsRead() async {
     try {
       await eventService.markAllNotificationsRead(authState.token!);
+      _notifSeq++;
       notifications = [for (final n in notifications) _markRead(n)];
       _notify();
     } catch (_) {
@@ -266,6 +278,7 @@ class WebShellData extends ChangeNotifier {
       // Non-fatal - still mark it read locally even if the server call failed.
     }
     if (_disposed) return;
+    _notifSeq++;
     notifications = [for (final n in notifications) n.id == notificationId ? _markRead(n) : n];
     _notify();
   }
