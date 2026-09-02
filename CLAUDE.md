@@ -244,7 +244,7 @@ regardless of theme) over hardcoding a `Colors.*` value anywhere in `/app`.
 | Sky tint | `#BFE4F4` | `colorScheme.primaryContainer` | In-transit highlight, selection |
 | Ink | `#2B2F33` | `colorScheme.onSurface` | Primary text |
 | Fog | `#6B7280` | `colorScheme.onSurfaceVariant` | Secondary text, timestamps |
-| Delivery amber | `#F3AA5E` | `colorScheme.tertiary` | In-transit badge, unread-message badge — used sparingly |
+| Delivery amber | `#F3AA5E` | `colorScheme.tertiary` | In-transit badge, unread-message badge — used sparingly; also Hubs' own feature accent (Add Hub button, selected-card border, Admin badge — a deliberate second use, not drift) |
 
 `colorScheme.error`/`onError` are left at Material's defaults — the palette doesn't specify an
 error color. `scaffoldBackgroundColor` is set independently of `colorScheme.surface` (rather

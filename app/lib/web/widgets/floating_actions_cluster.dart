@@ -249,7 +249,7 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
             link: _journeyLink,
             child: _triggerTile(
               key: const Key('webJourneyLogButton'),
-              bg: journeyOpen ? CroColors.waypointBlue.withValues(alpha: 0.16) : Colors.white,
+              bg: journeyOpen ? CroColors.waypointBlue.withValues(alpha: 0.16) : Theme.of(context).colorScheme.surface,
               onTap: _toggleJourneyLog,
               child: Tooltip(
                 message: 'Journey log',
@@ -278,41 +278,44 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
             link: _bellLink,
             child: _triggerTile(
               key: const Key('webNotificationBell'),
-              bg: open ? CroColors.waypointBlue.withValues(alpha: 0.16) : Colors.white,
+              bg: open ? CroColors.waypointBlue.withValues(alpha: 0.16) : Theme.of(context).colorScheme.surface,
               onTap: _toggleDropdown,
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    Icons.notifications_outlined,
-                    size: 19,
-                    color: open ? CroColors.deepWaypoint : CroColors.fog,
-                  ),
-                  if (widget.unreadCount > 0)
-                    Positioned(
-                      top: -3,
-                      right: -3,
-                      child: Container(
-                        key: const Key('webNotificationBadge'),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: CroColors.alertAway,
-                          borderRadius: BorderRadius.circular(9),
-                        ),
-                        child: Text(
-                          widget.unreadCount > 99 ? '99+' : '${widget.unreadCount}',
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
+              child: Tooltip(
+                message: 'Notifications',
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(
+                      Icons.notifications_outlined,
+                      size: 19,
+                      color: open ? CroColors.deepWaypoint : CroColors.fog,
+                    ),
+                    if (widget.unreadCount > 0)
+                      Positioned(
+                        top: -3,
+                        right: -3,
+                        child: Container(
+                          key: const Key('webNotificationBadge'),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: CroColors.alertAway,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Text(
+                            widget.unreadCount > 99 ? '99+' : '${widget.unreadCount}',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: CroColors.surface,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -340,7 +343,7 @@ class _PopupSurface extends StatelessWidget {
       constraints: constraints,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: CroColors.ink.withValues(alpha: 0.06)),
         boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.32), blurRadius: 44, offset: const Offset(0, 20))],
@@ -569,12 +572,19 @@ class _NotificationsDropdown extends StatelessWidget {
                   ),
                 ),
                 if (notifications.isNotEmpty)
-                  GestureDetector(
-                    key: const Key('webMarkAllReadButton'),
-                    onTap: onMarkAllRead,
-                    child: const Text(
-                      'Mark all read',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: const Key('webMarkAllReadButton'),
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: onMarkAllRead,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text(
+                          'Mark all read',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                        ),
+                      ),
                     ),
                   ),
               ],

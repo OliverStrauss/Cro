@@ -62,25 +62,59 @@ class _BirdPayloadViewState extends State<BirdPayloadView> {
           if (hasContent) const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.network(widget.imageUrl!, key: const Key('birdPayloadImage')),
+            child: Image.network(
+              widget.imageUrl!,
+              key: const Key('birdPayloadImage'),
+              width: double.infinity,
+              height: 200,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return SizedBox(
+                  width: double.infinity,
+                  height: 200,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: progress.expectedTotalBytes != null
+                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                          : null,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (_, _, _) => Container(
+                width: double.infinity,
+                height: 200,
+                color: CroColors.fog.withValues(alpha: 0.15),
+                alignment: Alignment.center,
+                child: const Icon(Icons.image_not_supported_outlined, color: CroColors.fog),
+              ),
+            ),
           ),
         ],
         if (widget.audioUrl != null) ...[
           if (hasContent || widget.imageUrl != null) const SizedBox(height: 12),
-          GestureDetector(
-            key: const Key('birdPayloadAudioButton'),
-            onTap: _toggleAudio,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _isPlayingAudio ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                  size: 32,
-                  color: Theme.of(context).colorScheme.primary,
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: const Key('birdPayloadAudioButton'),
+              borderRadius: BorderRadius.circular(8),
+              onTap: _toggleAudio,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isPlayingAudio ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Voice message', style: TextStyle(fontSize: 13, color: CroColors.ink)),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                const Text('Voice message', style: TextStyle(fontSize: 13, color: CroColors.ink)),
-              ],
+              ),
             ),
           ),
         ],

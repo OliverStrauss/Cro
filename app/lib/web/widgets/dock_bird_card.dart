@@ -156,10 +156,10 @@ class DockBirdView {
   };
 
   Color get cardBg => switch (state) {
-    BirdDockState.home => Colors.white,
-    BirdDockState.flight => const Color(0xFFF5FAFD),
-    BirdDockState.away => const Color(0xFFFDF7F0),
-    BirdDockState.hub => const Color(0xFFFDF7F0),
+    BirdDockState.home => CroColors.surface,
+    BirdDockState.flight => CroColors.flightTint,
+    BirdDockState.away => CroColors.warmTint,
+    BirdDockState.hub => CroColors.warmTint,
   };
 
   Color get cardBorder => switch (state) {
@@ -181,18 +181,21 @@ class DockBirdCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      key: Key('dockCard_${view.bird.id}'),
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 168),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: view.cardBg,
-          border: Border.all(color: view.cardBorder),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
+    return Material(
+      color: view.cardBg,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: Key('dockCard_${view.bird.id}'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 168),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: view.cardBorder),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -245,7 +248,7 @@ class DockBirdCard extends StatelessWidget {
                   ),
                   child: Text(
                     view.hostInitial,
-                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
+                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: CroColors.surface),
                   ),
                 ),
                 const SizedBox(width: 7),
@@ -281,6 +284,7 @@ class DockBirdCard extends StatelessWidget {
               trailing!,
             ],
           ],
+          ),
         ),
       ),
     );

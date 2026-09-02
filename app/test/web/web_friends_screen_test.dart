@@ -20,6 +20,8 @@ class _FakeFriendsService implements FriendsService {
   String? lastAcceptedId;
   String? lastSentRequestUsername;
   String? lastMadeAdminId;
+  String? lastRemovedFriendId;
+  String? lastBlockedUserId;
 
   @override
   Future<List<Friend>> getFriends(String token) async => friends;
@@ -50,10 +52,14 @@ class _FakeFriendsService implements FriendsService {
   Future<void> declineFriendRequest(String token, String requesterId) async {}
 
   @override
-  Future<void> removeFriend(String token, String userId) async {}
+  Future<void> removeFriend(String token, String userId) async {
+    lastRemovedFriendId = userId;
+  }
 
   @override
-  Future<void> blockUser(String token, String userId) async {}
+  Future<void> blockUser(String token, String userId) async {
+    lastBlockedUserId = userId;
+  }
 
   @override
   Future<void> unblockUser(String token, String userId) async {}
@@ -182,5 +188,37 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('webMakeAdminButton_u2')), findsNothing);
+  });
+
+  testWidgets('removing a friend requires two taps to confirm', (tester) async {
+    friendsService.friends = [Friend(userId: 'u2', username: 'mia')];
+    await tester.pumpWidget(build());
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('webRemoveFriendButton_u2')));
+    await tester.pump();
+    expect(friendsService.lastRemovedFriendId, isNull);
+
+    await tester.tap(find.byKey(const Key('webRemoveFriendButton_u2')));
+    await tester.pump();
+    expect(friendsService.lastRemovedFriendId, 'u2');
+  });
+
+  testWidgets('blocking a search result requires two taps to confirm', (tester) async {
+    friendsService.searchResults = [UserSearchResult(userId: 'u5', username: 'newperson')];
+    await tester.pumpWidget(build());
+    await tester.pump();
+
+    await tester.enterText(find.byKey(const Key('webFriendSearchField')), 'new');
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.byKey(const Key('webBlockSearchButton_u5')));
+    await tester.pump();
+    expect(find.text('Confirm?'), findsOneWidget);
+    expect(friendsService.lastBlockedUserId, isNull);
+
+    await tester.tap(find.byKey(const Key('webBlockSearchButton_u5')));
+    await tester.pump();
+    expect(friendsService.lastBlockedUserId, 'u5');
   });
 }

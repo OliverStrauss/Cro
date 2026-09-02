@@ -152,38 +152,55 @@ class _HubPanelContentState extends State<HubPanelContent> {
             children: [
               Align(
                 alignment: Alignment.topRight,
-                child: GestureDetector(
-                  key: const Key('webPanelClose'),
-                  onTap: widget.onClose,
-                  child: const Icon(Icons.close, size: 20, color: CroColors.fog),
+                child: Tooltip(
+                  message: 'Close',
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: const Key('webPanelClose'),
+                      customBorder: const CircleBorder(),
+                      onTap: widget.onClose,
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.close, size: 20, color: CroColors.fog),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              GestureDetector(
-                key: const Key('webSuggestHubPictureButton'),
-                onTap: _isUploadingPicture ? null : _suggestPicture,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AvatarWithFallback(
-                      imageUrl: hub.profilePictureUrl,
-                      initialsSource: hub.name,
-                      fallbackIcon: HubCategory.iconFor(hub.category),
-                      radius: 32,
-                      hasBorder: true,
-                      borderColor: CroColors.deliveryAmber,
-                    ),
-                    if (_isUploadingPicture) const CircularProgressIndicator(),
-                    if (!_isUploadingPicture)
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(color: CroColors.deepWaypoint, shape: BoxShape.circle),
-                          child: const Icon(Icons.photo_camera, size: 14, color: Colors.white),
+              Tooltip(
+                message: 'Suggest a photo',
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    key: const Key('webSuggestHubPictureButton'),
+                    customBorder: const CircleBorder(),
+                    onTap: _isUploadingPicture ? null : _suggestPicture,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        AvatarWithFallback(
+                          imageUrl: hub.profilePictureUrl,
+                          initialsSource: hub.name,
+                          fallbackIcon: HubCategory.iconFor(hub.category),
+                          radius: 32,
+                          hasBorder: true,
+                          borderColor: CroColors.deliveryAmber,
                         ),
-                      ),
-                  ],
+                        if (_isUploadingPicture) const CircularProgressIndicator(),
+                        if (!_isUploadingPicture)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: CroColors.deepWaypoint, shape: BoxShape.circle),
+                              child: const Icon(Icons.photo_camera, size: 14, color: CroColors.surface),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),

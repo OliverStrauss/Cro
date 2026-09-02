@@ -41,10 +41,20 @@ class PanelHeader extends StatelessWidget {
               ],
             ),
           ),
-          GestureDetector(
-            key: const Key('webPanelClose'),
-            onTap: onClose,
-            child: const Icon(Icons.close, size: 18, color: CroColors.fog),
+          Tooltip(
+            message: 'Close',
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                key: const Key('webPanelClose'),
+                customBorder: const CircleBorder(),
+                onTap: onClose,
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(Icons.close, size: 18, color: CroColors.fog),
+                ),
+              ),
+            ),
           ),
         ],
       ),

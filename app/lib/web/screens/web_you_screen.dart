@@ -90,27 +90,36 @@ class _WebYouScreenState extends State<WebYouScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: const [
-                BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1)),
-              ]),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GestureDetector(
-                    key: const Key('webChangePictureButton'),
-                    onTap: _isUploading ? null : _changePicture,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        AvatarWithFallback(
-                          imageUrl: widget.profilePictureUrl,
-                          initialsSource: widget.username,
-                          radius: 42,
-                          hasBorder: true,
-                          borderColor: CroColors.waypointBlue,
+                  Tooltip(
+                    message: 'Change profile picture',
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        key: const Key('webChangePictureButton'),
+                        customBorder: const CircleBorder(),
+                        onTap: _isUploading ? null : _changePicture,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            AvatarWithFallback(
+                              imageUrl: widget.profilePictureUrl,
+                              initialsSource: widget.username,
+                              radius: 42,
+                              hasBorder: true,
+                              borderColor: CroColors.waypointBlue,
+                            ),
+                            if (_isUploading) const CircularProgressIndicator(),
+                          ],
                         ),
-                        if (_isUploading) const CircularProgressIndicator(),
-                      ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 18),
@@ -152,9 +161,11 @@ class _WebYouScreenState extends State<WebYouScreen> {
             ),
             const SizedBox(height: 12),
             Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [
-                BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1)),
-              ]),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
+              ),
               child: Column(
                 children: [
                   _settingsRow(
@@ -195,9 +206,11 @@ class _WebYouScreenState extends State<WebYouScreen> {
   Widget _statTile(String value, String label) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: const [
-        BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1)),
-      ]),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
