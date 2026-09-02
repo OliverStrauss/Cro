@@ -12,6 +12,11 @@ class AppEvent {
   final bool isNotification;
   final bool isRead;
   final DateTime createdAt;
+  // Null for anything that isn't "someone else did this to you" (e.g. your own bird departing
+  // or arriving) - where set (a friend's bird arriving at your nest, a friend accepting your
+  // request), this is that friend's userId, letting the web UI tint the notification with
+  // their own friend color instead of a generic unread tint.
+  final String? sourceUserId;
 
   AppEvent({
     required this.id,
@@ -23,6 +28,7 @@ class AppEvent {
     required this.isNotification,
     required this.isRead,
     required this.createdAt,
+    this.sourceUserId,
   });
 
   factory AppEvent.fromJson(Map<String, dynamic> json) => AppEvent(
@@ -35,6 +41,7 @@ class AppEvent {
     isNotification: json['isNotification'] as bool,
     isRead: json['isRead'] as bool,
     createdAt: DateTime.parse(json['createdAt'] as String),
+    sourceUserId: json['sourceUserId'] as String?,
   );
 }
 
