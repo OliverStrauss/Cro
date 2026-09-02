@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cro_app/models/bird.dart';
+import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/services/bird_service.dart';
 import 'package:cro_app/services/friends_service.dart';
+import 'package:cro_app/services/hub_service.dart';
 import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
@@ -26,6 +28,17 @@ class _FakeFriendsService implements FriendsService {
 
   @override
   Future<List<Waypoint>> getFriendsWaypoints(String token) async => friendWaypointsToReturn;
+
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used here');
+}
+
+class _FakeHubService implements HubService {
+  List<Hub> hubsToReturn = [];
+
+  @override
+  Future<List<Hub>> listHubs(String token) async => hubsToReturn;
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -70,6 +83,7 @@ void main() {
     _FakeBirdService? birdService,
     _FakeWaypointService? waypointService,
     _FakeFriendsService? friendsService,
+    _FakeHubService? hubService,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -81,6 +95,7 @@ void main() {
           onClose: () {},
           waypointService: waypointService ?? _FakeWaypointService(),
           friendsService: friendsService ?? _FakeFriendsService(),
+          hubService: hubService ?? _FakeHubService(),
           birdService: birdService ?? _FakeBirdService(),
           profileService: _FakeProfileService(),
           onChanged: () {},
@@ -157,17 +172,20 @@ void main() {
     expect(find.byKey(const Key('nestPanelResident_b3')), findsNothing);
   });
 
-  testWidgets('sending a bird onward from a friend nest excludes that same friend nest from the destination list',
+  testWidgets(
+      'sending a bird onward from a friend nest excludes that same friend nest from the destination list, but offers hubs',
       (tester) async {
     final myBirdHere = Bird(id: 'b1', userId: 'u1', name: 'Otto', currentNestId: 'f1', isTraveling: false, type: 'Cro');
     final home = Waypoint(id: 'n1', userId: 'u1', name: 'Home', latitude: 0, longitude: 0);
     final anotherFriendNest =
         Waypoint(id: 'f2', userId: 'u3', name: "Bob's Yard", latitude: 3, longitude: 4, username: 'bob');
+    final hub = Hub(id: 'h1', name: 'Lighthouse', latitude: 44, longitude: -91, status: 'Approved', createdByUserId: 'admin');
     final fakeBirdService = _FakeBirdService();
     final fakeWaypointService = _FakeWaypointService()..ownNestsToReturn = [home];
     // getFriendsWaypoints returns every friend nest including the one currently being
     // viewed (f1 itself) - _openSendFlow must filter that out itself, not rely on the caller.
     final fakeFriendsService = _FakeFriendsService()..friendWaypointsToReturn = [friendNest, anotherFriendNest];
+    final fakeHubService = _FakeHubService()..hubsToReturn = [hub];
 
     await tester.pumpWidget(build(
       friendNest,
@@ -176,6 +194,7 @@ void main() {
       birdService: fakeBirdService,
       waypointService: fakeWaypointService,
       friendsService: fakeFriendsService,
+      hubService: fakeHubService,
     ));
     await tester.pump();
 
@@ -188,13 +207,14 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
     expect(find.text("Bob's Yard (bob)"), findsOneWidget);
     expect(find.text("Mia's Cabin (mia)"), findsNothing);
+    expect(find.text('Lighthouse (Hub)'), findsOneWidget);
 
-    await tester.tap(find.text("Bob's Yard (bob)").last);
+    await tester.tap(find.text('Lighthouse (Hub)').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
     await tester.pumpAndSettle();
 
     expect(fakeBirdService.lastSentBirdId, 'b1');
-    expect(fakeBirdService.lastSentNestId, 'f2');
+    expect(fakeBirdService.lastSentNestId, 'h1');
   });
 }

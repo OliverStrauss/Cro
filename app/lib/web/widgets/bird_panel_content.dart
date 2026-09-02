@@ -164,6 +164,9 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
       ...widget.friendWaypoints
           .where((n) => n.id != bird.currentNestId)
           .map((n) => SendBirdDestination(nestId: n.id, label: '${n.name} (${n.username})')),
+      ...widget.hubs
+          .where((h) => h.id != bird.currentNestId)
+          .map((h) => SendBirdDestination(nestId: h.id, label: '${h.name} (Hub)')),
     ];
     final result = await showDialog<SendBirdResult>(
       context: context,

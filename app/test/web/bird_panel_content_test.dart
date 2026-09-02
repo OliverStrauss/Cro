@@ -339,7 +339,7 @@ void main() {
     expect(find.byKey(const Key('birdPanelCallItHome')), findsOneWidget);
   });
 
-  testWidgets('"Send onward" from a friend nest offers both own and other friend nests as destinations',
+  testWidgets('"Send onward" from a friend nest offers own nests, other friend nests, and public hubs as destinations',
       (tester) async {
     var dataChanged = false;
     final bird = Bird(id: 'b10', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
@@ -354,14 +354,15 @@ void main() {
     // Both the sender's own nests and the current friend nest's own name should be offered
     // (f1 itself, the bird's current nest, is excluded) - Cabin (own) is present here.
     expect(find.text('Cabin').hitTestable(), findsOneWidget);
-    await tester.tap(find.text('Cabin').last);
+    expect(find.text('Lighthouse (Hub)').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Lighthouse (Hub)').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
     await tester.pumpAndSettle();
 
     expect(birdService.lastSendBirdId, 'b10');
-    expect(birdService.lastSendNestId, 'n2');
+    expect(birdService.lastSendNestId, 'h1');
     expect(dataChanged, isTrue);
   });
 
