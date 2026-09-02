@@ -14,6 +14,8 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     private const string DefaultEmulatorConnectionString =
         "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
 
+    private const string DefaultBlobConnectionString = "UseDevelopmentStorage=true";
+
     // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
     // see CLAUDE.md's well-known-local-credentials section.
     private const string SeedPassword = "correct-horse-battery-staple";
@@ -24,6 +26,8 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
             ?? DefaultEmulatorConnectionString;
+        var blobConnectionString = Environment.GetEnvironmentVariable("BlobStorage__ConnectionString")
+            ?? DefaultBlobConnectionString;
 
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
@@ -39,9 +43,18 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
                     ["CosmosDb:WaypointsContainerName"] = "Waypoints",
                     ["CosmosDb:BirdsContainerName"] = "Birds",
                     ["CosmosDb:HubsContainerName"] = "Hubs",
+                    ["CosmosDb:HubPictureSuggestionsContainerName"] = "HubPictureSuggestions",
                     ["CosmosDb:ReactionsContainerName"] = "Reactions",
                     ["CosmosDb:HubMessagesContainerName"] = "HubMessages",
+                    ["CosmosDb:HubReadStatesContainerName"] = "HubReadStates",
+                    ["CosmosDb:BirdReadStatesContainerName"] = "BirdReadStates",
                     ["CosmosDb:EventsContainerName"] = "Events",
+                    ["BlobStorage:ConnectionString"] = blobConnectionString,
+                    ["BlobStorage:ProfilePicturesContainerName"] = "profile-pictures",
+                    ["BlobStorage:NestPicturesContainerName"] = "nest-pictures",
+                    ["BlobStorage:HubPicturesContainerName"] = "hub-pictures",
+                    ["BlobStorage:BirdPicturesContainerName"] = "bird-pictures",
+                    ["BlobStorage:BirdMediaContainerName"] = "bird-media",
                     // Same huge multiplier as BirdArrivalEndpointTests.cs, for the same
                     // reason - any test-fixture distance resolves to a microsecond-scale
                     // flight duration.
@@ -206,6 +219,9 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var ownerNotifications = await GetNotificationsAsync(tokenB);
         var notification = Assert.Single(ownerNotifications, n => n.Kind == "BirdArrivedAtYourNest");
         Assert.False(notification.IsRead);
+        // SourceUserId is the sender (A) - lets the web UI tint this notification with A's own
+        // friend color rather than a generic unread tint.
+        Assert.Equal(idA, notification.SourceUserId);
     }
 
     [Fact]
@@ -241,7 +257,7 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var usernameA = $"event-friend-a-{Guid.NewGuid():N}";
         var usernameB = $"event-friend-b-{Guid.NewGuid():N}";
         var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
-        var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
 
         await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA, new { Username = usernameB }));
         var acceptResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
@@ -255,7 +271,10 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains(requesterEvents, e => e.Kind == "FriendRequestAccepted" && e.DisplayText.Contains(usernameB));
 
         var requesterNotifications = await GetNotificationsAsync(tokenA);
-        Assert.Contains(requesterNotifications, n => n.Kind == "FriendRequestAccepted" && !n.IsRead);
+        var notification = Assert.Single(requesterNotifications, n => n.Kind == "FriendRequestAccepted");
+        Assert.False(notification.IsRead);
+        // SourceUserId is the acceptor (B) - lets the web UI tint this with B's own friend color.
+        Assert.Equal(idB, notification.SourceUserId);
     }
 
     [Fact]
@@ -330,5 +349,6 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         string? TargetId,
         bool IsNotification,
         bool IsRead,
-        DateTimeOffset CreatedAt);
+        DateTimeOffset CreatedAt,
+        string? SourceUserId);
 }

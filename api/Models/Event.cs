@@ -15,7 +15,11 @@ namespace CroApp.Api.Models;
 // payload excerpt for the timeline's quoted-note blocks, TargetType/TargetId let a
 // notification or timeline entry deep-link back to the still-live Bird/Nest/Hub it's about
 // (null once that's not applicable, e.g. a friend-request notification just routes to the
-// Friends screen client-side).
+// Friends screen client-side). SourceUserId is null for anything that isn't "someone else did
+// this to you" (self-only kinds like BirdDeparted/BirdArrived never set it) - where it is set
+// (BirdArrivedAtYourNest, FriendRequestAccepted) it's the other user's id, letting the web UI
+// tint that notification with the sender's own friend color without re-deriving it from
+// DisplayText, which is free-form and not guaranteed to name them.
 public record Event(
     [property: JsonPropertyName("id")] string Id,
     string UserId,
@@ -26,7 +30,8 @@ public record Event(
     string? TargetId,
     bool IsNotification,
     bool IsRead,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? SourceUserId = null);
 
 public static class EventKind
 {

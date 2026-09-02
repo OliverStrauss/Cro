@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../models/friend.dart';
+import '../../models/friend_request.dart';
 import '../../theme.dart';
+import '../../utils/color_utils.dart';
+import '../../widgets/avatar_with_fallback.dart';
 import '../models/event.dart';
 import 'journey_log_panel.dart';
 
@@ -18,6 +22,14 @@ class FloatingActionsCluster extends StatefulWidget {
   final List<AppEvent> notifications;
   final VoidCallback onMarkAllRead;
   final ValueChanged<AppEvent> onOpenNotification;
+  // Friend colors, for tinting a notification by who it's from (see _senderTint) - the same
+  // palette already used for trail lines/nest markers/friend list dots.
+  final List<Friend> friends;
+  // Pending incoming friend requests, merged into the dropdown feed alongside notifications -
+  // these have never shown up here before even though they're exactly the kind of thing a
+  // notification feed exists for.
+  final List<FriendRequest> incomingRequests;
+  final ValueChanged<FriendRequest> onOpenFriendRequest;
   final List<AppEvent> events;
   final bool eventsLoading;
   final String? eventsError;
@@ -29,6 +41,9 @@ class FloatingActionsCluster extends StatefulWidget {
     required this.notifications,
     required this.onMarkAllRead,
     required this.onOpenNotification,
+    this.friends = const [],
+    this.incomingRequests = const [],
+    required this.onOpenFriendRequest,
     required this.events,
     required this.eventsLoading,
     required this.eventsError,
@@ -119,6 +134,12 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
               onOpenNotification: (n) {
                 _closeDropdown();
                 widget.onOpenNotification(n);
+              },
+              friends: widget.friends,
+              incomingRequests: widget.incomingRequests,
+              onOpenFriendRequest: (r) {
+                _closeDropdown();
+                widget.onOpenFriendRequest(r);
               },
             ),
           ),
@@ -331,9 +352,9 @@ class _PopupSurface extends StatelessWidget {
 
 // Only 3 event kinds are ever surfaced as notifications (see api/Services/EventService.cs) -
 // a bird landing at your nest, a bird you sent landing elsewhere, and a friend request being
-// accepted. Real AppEvent data has no separate "who"/"tint" field the way the design mock's
-// fabricated demo data did, so this derives a tinted glyph per kind instead - the same
-// approach journey_log_panel.dart already uses for its timeline dots.
+// accepted. This is the fallback glyph/tint for when there's no sender color to use instead
+// (see _senderTint) - the same per-kind approach journey_log_panel.dart uses for its timeline
+// dots.
 (IconData, Color) _notificationGlyph(String kind) => switch (kind) {
   EventKind.birdArrivedAtYourNest => (Icons.flutter_dash, CroColors.waypointBlue),
   EventKind.birdArrived => (Icons.flutter_dash, CroColors.deepWaypoint),
@@ -341,15 +362,78 @@ class _PopupSurface extends StatelessWidget {
   _ => (Icons.notifications, CroColors.fog),
 };
 
+// A notification's sender - resolved from Event.sourceUserId (see api/Models/Event.cs) against
+// the caller's friends list - so it can be tinted with that friend's own trail color, same as
+// the map/nest markers/friend list already use it. Null whenever there's no sender (a
+// self-only event kind) or the sender isn't resolvable (e.g. no friend match).
+Color? _senderTint(AppEvent event, List<Friend> friends) {
+  final sourceUserId = event.sourceUserId;
+  if (sourceUserId == null) return null;
+  final hex = friends.where((f) => f.userId == sourceUserId).firstOrNull?.color;
+  return hex == null ? null : hexToColor(hex);
+}
+
+// What a notification/friend-request row is "about" - drives the small label chip next to its
+// timestamp. Nest/Hub map directly from Event.targetType (api/Models/Event.cs); a bird-targeted
+// or kind-less event (e.g. your own bird arriving somewhere that isn't a friend's nest) gets no
+// chip at all rather than a meaningless one.
+(String, Color)? _feedLabel(AppEvent event) => switch (event.targetType) {
+  EventTargetType.nest => ('Your nest', CroColors.waypointBlue),
+  EventTargetType.hub => ('Hub', CroColors.deliveryAmber),
+  _ => null,
+};
+
+class _FeedLabelChip extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _FeedLabelChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(5)),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color, height: 1.2),
+      ),
+    );
+  }
+}
+
+// One row in the merged feed - either a real notification or a still-pending incoming friend
+// request (see _NotificationsDropdown.build). Friend requests have no createdAt to sort by, so
+// they're listed first rather than spliced in by a fabricated timestamp.
+sealed class _FeedItem {
+  const _FeedItem();
+}
+
+class _EventFeedItem extends _FeedItem {
+  final AppEvent event;
+  const _EventFeedItem(this.event);
+}
+
+class _FriendRequestFeedItem extends _FeedItem {
+  final FriendRequest request;
+  const _FriendRequestFeedItem(this.request);
+}
+
 class _NotificationsDropdown extends StatelessWidget {
   final List<AppEvent> notifications;
   final VoidCallback onMarkAllRead;
   final ValueChanged<AppEvent> onOpenNotification;
+  final List<Friend> friends;
+  final List<FriendRequest> incomingRequests;
+  final ValueChanged<FriendRequest> onOpenFriendRequest;
 
   const _NotificationsDropdown({
     required this.notifications,
     required this.onMarkAllRead,
     required this.onOpenNotification,
+    this.friends = const [],
+    this.incomingRequests = const [],
+    required this.onOpenFriendRequest,
   });
 
   // No `intl` dependency in this project - a plain relative-time string, same convention
@@ -367,12 +451,106 @@ class _NotificationsDropdown extends StatelessWidget {
     return '$days day${days == 1 ? '' : 's'} ago';
   }
 
+  Widget _eventRow(AppEvent n) {
+    final (glyph, kindTint) = _notificationGlyph(n.kind);
+    final senderTint = _senderTint(n, friends);
+    final avatarColor = senderTint ?? kindTint;
+    final chip = _feedLabel(n);
+    return Material(
+      color: n.isRead ? Colors.white : (senderTint ?? CroColors.waypointBlue).withValues(alpha: 0.08),
+      child: InkWell(
+        key: Key('webNotification_${n.id}'),
+        onTap: () => onOpenNotification(n),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: avatarColor, shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: Icon(glyph, size: 17, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(n.displayText, style: const TextStyle(fontSize: 13, height: 1.45)),
+                    const SizedBox(height: 5),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (chip != null) ...[
+                          _FeedLabelChip(label: chip.$1, color: chip.$2),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(_relativeTime(n.createdAt), style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (!n.isRead) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(top: 5),
+                  decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _friendRequestRow(FriendRequest r) {
+    return Material(
+      color: CroColors.success.withValues(alpha: 0.08),
+      child: InkWell(
+        key: Key('webFriendRequestNotification_${r.userId}'),
+        onTap: () => onOpenFriendRequest(r),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AvatarWithFallback(imageUrl: r.profilePictureUrl, initialsSource: r.username, radius: 17),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${r.username} wants to be friends', style: const TextStyle(fontSize: 13, height: 1.45)),
+                    const SizedBox(height: 5),
+                    const _FeedLabelChip(label: 'Friend request', color: CroColors.success),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final items = <_FeedItem>[
+      for (final r in incomingRequests) _FriendRequestFeedItem(r),
+      for (final n in notifications) _EventFeedItem(n),
+    ];
     // Empty means empty (05_web_ui_updates.md item 5): when there's nothing to show, the
     // dropdown is just its header - no "Nothing yet" placeholder, no divider, and no
     // "Mark all read" (there's nothing to mark).
-    final hasNotifications = notifications.isNotEmpty;
+    final hasItems = items.isNotEmpty;
     return _PopupSurface(
       key: const Key('webNotificationsDropdown'),
       width: 372,
@@ -390,7 +568,7 @@ class _NotificationsDropdown extends StatelessWidget {
                     style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
                   ),
                 ),
-                if (hasNotifications)
+                if (notifications.isNotEmpty)
                   GestureDetector(
                     key: const Key('webMarkAllReadButton'),
                     onTap: onMarkAllRead,
@@ -402,62 +580,16 @@ class _NotificationsDropdown extends StatelessWidget {
               ],
             ),
           ),
-          if (hasNotifications) ...[
+          if (hasItems) ...[
             const Divider(height: 1),
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,
-                itemCount: notifications.length,
+                itemCount: items.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final n = notifications[i];
-                  final (glyph, tint) = _notificationGlyph(n.kind);
-                  return Material(
-                    color: n.isRead ? Colors.white : const Color(0xFFF7FBFD),
-                    child: InkWell(
-                      key: Key('webNotification_${n.id}'),
-                      onTap: () => onOpenNotification(n),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
-                              alignment: Alignment.center,
-                              child: Icon(glyph, size: 17, color: Colors.white),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(n.displayText, style: const TextStyle(fontSize: 13, height: 1.45)),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    _relativeTime(n.createdAt),
-                                    style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (!n.isRead) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                width: 8,
-                                height: 8,
-                                margin: const EdgeInsets.only(top: 5),
-                                decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
+                itemBuilder: (context, i) => switch (items[i]) {
+                  _EventFeedItem(:final event) => _eventRow(event),
+                  _FriendRequestFeedItem(:final request) => _friendRequestRow(request),
                 },
               ),
             ),

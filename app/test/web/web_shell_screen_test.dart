@@ -20,6 +20,7 @@ import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
 import 'package:cro_app/theme.dart';
+import 'package:cro_app/utils/color_utils.dart';
 import 'package:cro_app/web/models/event.dart';
 import 'package:cro_app/web/screens/web_shell_screen.dart';
 import 'package:cro_app/web/services/event_service.dart';
@@ -39,6 +40,7 @@ class _FakeFriendsService implements FriendsService {
   List<Waypoint> friendWaypointsToReturn = [];
   List<FriendBird> friendsBirdsToReturn = [];
   List<FriendRequest> incomingToReturn = [];
+  List<Friend> friendsToReturn = [];
 
   @override
   Future<List<Waypoint>> getFriendsWaypoints(String token) async => friendWaypointsToReturn;
@@ -50,7 +52,7 @@ class _FakeFriendsService implements FriendsService {
   Future<List<FriendRequest>> getIncomingRequests(String token) async => incomingToReturn;
 
   @override
-  Future<List<Friend>> getFriends(String token) async => [];
+  Future<List<Friend>> getFriends(String token) async => friendsToReturn;
 
   @override
   Future<List<FriendRequest>> getOutgoingRequests(String token) async => [];
@@ -160,13 +162,23 @@ String _fakeJwtFor(String userId) {
   return '${segment({'alg': 'HS256'})}.${segment({'sub': userId})}.sig';
 }
 
-AppEvent _event(String id, String kind, String text, {bool isNotification = false, bool isRead = true}) => AppEvent(
+AppEvent _event(
+  String id,
+  String kind,
+  String text, {
+  bool isNotification = false,
+  bool isRead = true,
+  String? sourceUserId,
+  String? targetType,
+}) => AppEvent(
   id: id,
   kind: kind,
   displayText: text,
   isNotification: isNotification,
   isRead: isRead,
   createdAt: DateTime(2026, 1, 1),
+  sourceUserId: sourceUserId,
+  targetType: targetType,
 );
 
 void main() {
@@ -476,6 +488,57 @@ void main() {
     expect(find.byIcon(Icons.flutter_dash), findsOneWidget);
     // Regression check: see the matching note on the journey log popup above.
     expect(tester.getSize(find.byKey(const Key('webNotificationsDropdown'))).width, 372);
+  });
+
+  testWidgets('a notification with a resolvable sender is tinted with that friend\'s color, and its target gets a label chip', (
+    tester,
+  ) async {
+    setDesktopSize(tester);
+    friendsService.friendsToReturn = [Friend(userId: 'u2', username: 'oliver', color: '#1E88E5')];
+    eventService.notificationsToReturn = [
+      _event(
+        'n3',
+        EventKind.birdArrivedAtYourNest,
+        'Juniper arrived at your Home Roost',
+        isNotification: true,
+        isRead: false,
+        sourceUserId: 'u2',
+        targetType: 'Nest',
+      ),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your nest'), findsOneWidget);
+    // The 34x34 avatar circle, not the smaller 8x8 unread dot also rendered in this row -
+    // both are circular Containers.
+    final avatarContainers = tester
+        .widgetList<Container>(find.descendant(of: find.byKey(const Key('webNotification_n3')), matching: find.byType(Container)))
+        .where((c) => c.decoration is BoxDecoration && (c.decoration as BoxDecoration).shape == BoxShape.circle && c.constraints?.maxWidth == 34);
+    expect((avatarContainers.single.decoration as BoxDecoration).color, hexToColor('#1E88E5'));
+  });
+
+  testWidgets('a pending incoming friend request shows in the notification feed and routes to Friends when tapped', (
+    tester,
+  ) async {
+    setDesktopSize(tester);
+    friendsService.incomingToReturn = [FriendRequest(userId: 'u2', username: 'mia')];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('mia wants to be friends'), findsOneWidget);
+    expect(find.text('Friend request'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webFriendRequestNotification_u2')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webFriendsScreen')), findsOneWidget);
   });
 }
 

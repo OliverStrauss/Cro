@@ -53,7 +53,8 @@ public class EventService(
                 $"{arrivedBird.Name} arrived at your {destinationName}",
                 isNotification: true,
                 targetType: EventTargetType.Nest,
-                targetId: destinationNest.Id);
+                targetId: destinationNest.Id,
+                sourceUserId: arrivedBird.UserId);
         }
     }, nameof(RecordBirdArrivalAsync), arrivedBird.Id);
 
@@ -92,7 +93,8 @@ public class EventService(
             requester.Id,
             EventKind.FriendRequestAccepted,
             $"{acceptor.Username} accepted your friend request",
-            isNotification: true);
+            isNotification: true,
+            sourceUserId: acceptor.Id);
     }, nameof(RecordFriendAddedAsync), acceptor.Id);
 
     public Task<List<Event>> ListTimelineAsync(string userId, int limit) =>
@@ -131,7 +133,8 @@ public class EventService(
         bool isNotification,
         string? targetType = null,
         string? targetId = null,
-        string? quotedNote = null) =>
+        string? quotedNote = null,
+        string? sourceUserId = null) =>
         eventRepository.CreateAsync(new Event(
             Guid.NewGuid().ToString(),
             userId,
@@ -142,7 +145,8 @@ public class EventService(
             targetId,
             isNotification,
             IsRead: !isNotification,
-            DateTimeOffset.UtcNow));
+            DateTimeOffset.UtcNow,
+            sourceUserId));
 
     // Shared best-effort wrapper for every Record* method - a broken event write (a missing
     // container in some test config, a transient Cosmos hiccup) must never fail the bird
