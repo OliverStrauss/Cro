@@ -396,6 +396,30 @@ void main() {
     expect(birdService.lastMarkedViewedBirdId, 'fb1');
   });
 
+  testWidgets(
+    "a friend's nest appears on the next live poll, not just after a full reload (regression - "
+    'the other side of a new friendship had no local trigger to reload)',
+    (tester) async {
+      setDesktopSize(tester);
+      waypointService.waypointsToReturn = [
+        Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42.0308, longitude: -93.6319),
+      ];
+      await tester.pumpWidget(buildShell());
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('webFriendNestMarker_f1')), findsNothing);
+
+      // Simulate the friendship being accepted on the other end - nothing in this session
+      // triggers a reload, only the next live-poll tick should pick this up.
+      friendsService.friendWaypointsToReturn = [
+        Waypoint(id: 'f1', userId: 'u2', name: "Mia's Cabin", latitude: 42.031, longitude: -93.632, username: 'mia', color: '#E53935'),
+      ];
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('webFriendNestMarker_f1')), findsOneWidget);
+    },
+  );
+
   testWidgets('journey log button opens a popup listing fetched events', (tester) async {
     setDesktopSize(tester);
     eventService.eventsToReturn = [_event('e1', EventKind.birdJoinedFlock, 'Percy joined your flock')];
