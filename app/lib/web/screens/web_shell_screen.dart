@@ -121,7 +121,10 @@ class WebShellScreenState extends State<WebShellScreen> {
     if (mounted) setState(() {});
   }
 
-  void _selectNav(WebNavItem item) => setState(() => _selectedNav = item);
+  void _selectNav(WebNavItem item) => setState(() {
+    _selectedNav = item;
+    _dockHidden = true;
+  });
 
   void _selectNest(Waypoint nest) {
     setState(() {
