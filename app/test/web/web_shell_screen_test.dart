@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -129,12 +130,19 @@ class _FakeEventService implements EventService {
   List<AppEvent> notificationsToReturn = [];
   bool markAllCalled = false;
   String? lastMarkedReadId;
+  // When set, listNotifications() hangs on this instead of resolving immediately - lets a
+  // test hold one poll's response in flight to deterministically race it against a
+  // concurrent mark-read mutation (see the poll-race regression test below).
+  Completer<List<AppEvent>>? pendingNotifications;
 
   @override
   Future<List<AppEvent>> listEvents(String token, {int limit = 200}) async => eventsToReturn;
 
   @override
-  Future<List<AppEvent>> listNotifications(String token, {int limit = 50}) async => notificationsToReturn;
+  Future<List<AppEvent>> listNotifications(String token, {int limit = 50}) {
+    final pending = pendingNotifications;
+    return pending != null ? pending.future : Future.value(notificationsToReturn);
+  }
 
   @override
   Future<int> getUnreadCount(String token) async => notificationsToReturn.where((n) => !n.isRead).length;
@@ -449,6 +457,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(eventService.markAllCalled, isTrue);
   });
+
+  testWidgets(
+    'a poll response already in flight when Mark all read runs does not revert the badge, and later arrivals show only their own count',
+    (tester) async {
+      setDesktopSize(tester);
+      final oldUnread = List.generate(
+        10,
+        (i) => _event('old$i', EventKind.birdArrivedAtYourNest, 'Old $i arrived', isNotification: true, isRead: false),
+      );
+      eventService.notificationsToReturn = oldUnread;
+      await tester.pumpWidget(buildShell());
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.byKey(const Key('webNotificationBadge')), matching: find.text('10')), findsOneWidget);
+
+      // Hold the next poll's GET /notifications response in flight, as if it had already
+      // been sent before the mark-all-read tap below.
+      eventService.pendingNotifications = Completer<List<AppEvent>>();
+      await tester.pump(const Duration(seconds: 4));
+
+      await tester.tap(find.byKey(const Key('webNotificationBell')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('webMarkAllReadButton')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('webNotificationBadge')), findsNothing);
+
+      // Let that stale, pre-mark-read response land now - it must not resurrect the old
+      // unread count.
+      eventService.pendingNotifications!.complete(oldUnread);
+      eventService.pendingNotifications = null;
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('webNotificationBadge')), findsNothing);
+
+      // Two genuinely new notifications arrive - the badge should show just those, not the
+      // old count stacked back on top of them.
+      eventService.notificationsToReturn = [
+        for (final n in oldUnread) _event(n.id, n.kind, n.displayText, isNotification: true),
+        _event('new0', EventKind.birdArrivedAtYourNest, 'New 0 arrived', isNotification: true, isRead: false),
+        _event('new1', EventKind.birdArrivedAtYourNest, 'New 1 arrived', isNotification: true, isRead: false),
+      ];
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.byKey(const Key('webNotificationBadge')), matching: find.text('2')), findsOneWidget);
+    },
+  );
 
   testWidgets('empty notifications dropdown is just its header - no placeholder, no mark-all-read', (tester) async {
     setDesktopSize(tester);
