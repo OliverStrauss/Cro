@@ -130,6 +130,7 @@ class WebShellData extends ChangeNotifier {
         eventService.listEvents(token),
         eventService.listNotifications(token),
         friendsService.getFriends(token),
+        friendsService.getFriendsWaypoints(token),
       ]);
       if (_disposed) return;
       birds = results[0] as List<Bird>;
@@ -144,6 +145,11 @@ class WebShellData extends ChangeNotifier {
         _reportNewNotifications();
       }
       friends = results[6] as List<Friend>;
+      // Otherwise a friend's nest only appears once this user's own next full load() runs
+      // (e.g. accepting a request themselves, which already reloads everything) - the other
+      // side of a new friendship had no such trigger and stayed stuck on stale friendWaypoints
+      // until a page reload.
+      friendWaypoints = results[7] as List<Waypoint>;
       _notify();
     } catch (_) {
       // Swallow - same "a blip on a silent background poll shouldn't blank an
