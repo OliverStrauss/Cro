@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'api_client.dart' as api;
 import 'package:http_parser/http_parser.dart';
 
 import '../config.dart';
@@ -18,7 +19,7 @@ class WaypointService {
   Future<List<Waypoint>> listWaypoints(String token) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl/waypoints'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -43,7 +44,7 @@ class WaypointService {
   }) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/waypoints'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({
@@ -72,7 +73,7 @@ class WaypointService {
   }) async {
     final http.Response response;
     try {
-      response = await http.put(
+      response = await api.put(
         Uri.parse('$apiBaseUrl/waypoints/$id'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({'name': name, 'latitude': latitude, 'longitude': longitude}),
@@ -108,7 +109,7 @@ class WaypointService {
 
     final http.StreamedResponse streamedResponse;
     try {
-      streamedResponse = await request.send();
+      streamedResponse = await api.send(request);
     } catch (_) {
       throw WaypointException('Could not reach the server');
     }
@@ -125,7 +126,7 @@ class WaypointService {
   Future<void> deleteWaypoint(String token, String id) async {
     final http.Response response;
     try {
-      response = await http.delete(
+      response = await api.delete(
         Uri.parse('$apiBaseUrl/waypoints/$id'),
         headers: {'Authorization': 'Bearer $token'},
       );

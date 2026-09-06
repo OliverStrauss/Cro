@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'api_client.dart' as api;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -34,7 +35,7 @@ class BirdService {
   Future<Bird> sendBird(String token, String birdId, {required String nestId, String? content}) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/birds/$birdId/send'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({'nestId': nestId, 'content': content}),
@@ -86,7 +87,7 @@ class BirdService {
 
     final http.StreamedResponse streamedResponse;
     try {
-      streamedResponse = await request.send();
+      streamedResponse = await api.send(request);
     } catch (_) {
       throw BirdException('Could not reach the server');
     }
@@ -101,7 +102,7 @@ class BirdService {
   Future<Bird> renameBird(String token, String birdId, String name) async {
     final http.Response response;
     try {
-      response = await http.put(
+      response = await api.put(
         Uri.parse('$apiBaseUrl/birds/$birdId'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({'name': name}),
@@ -121,7 +122,7 @@ class BirdService {
   Future<void> deleteBird(String token, String birdId) async {
     final http.Response response;
     try {
-      response = await http.delete(
+      response = await api.delete(
         Uri.parse('$apiBaseUrl/birds/$birdId'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -159,7 +160,7 @@ class BirdService {
 
     final http.StreamedResponse streamedResponse;
     try {
-      streamedResponse = await request.send();
+      streamedResponse = await api.send(request);
     } catch (_) {
       throw BirdException('Could not reach the server');
     }
@@ -176,7 +177,7 @@ class BirdService {
   Future<Bird> markBirdRead(String token, String birdId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/birds/$birdId/read'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -197,7 +198,7 @@ class BirdService {
   Future<void> markBirdViewed(String token, String birdId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/birds/$birdId/viewed'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -213,7 +214,7 @@ class BirdService {
   Future<http.Response> _get(String path, String token, String errorFallback) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl$path'),
         headers: {'Authorization': 'Bearer $token'},
       );

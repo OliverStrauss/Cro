@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import '../models/bird_reaction.dart';
+import 'api_client.dart' as api;
 
 class BirdReactionException implements Exception {
   final String message;
@@ -50,7 +51,7 @@ class BirdReactionService {
   Future<http.Response> _send(http.Request request, String token) async {
     request.headers['Authorization'] = 'Bearer $token';
     try {
-      final streamed = await request.send();
+      final streamed = await api.send(request);
       return await http.Response.fromStream(streamed);
     } catch (_) {
       throw BirdReactionException('Could not reach the server');
