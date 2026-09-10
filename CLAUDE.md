@@ -167,10 +167,21 @@ dev-only shortcuts" below).
   richer dataset to a separate manual step; that's no longer the case, so a fresh `dotnet run`
   alone is now enough to get friends/nests/birds to exercise, and the standalone tool is only
   needed to reset the dataset without restarting the API.
-- **Blob container access**: the `profile-pictures` container is provisioned on startup in
-  Development with `PublicAccessType.Blob` (public read for blobs, no listing) so uploaded
-  pictures are fetchable via a plain URL without SAS tokens — fine for local/dev, but real
-  access control is needed before any prod deployment (see "Known dev-only shortcuts").
+- **Blob container access**: all 5 picture containers (`profile-pictures`, `nest-pictures`,
+  `hub-pictures`, `bird-pictures`, `bird-media`) are provisioned on startup in Development
+  with `PublicAccessType.Blob` (public read for blobs, no listing) plus a permissive
+  Blob-service CORS rule (GET, any origin), so uploaded pictures are fetchable via a plain
+  URL and the browser's CORS-mode `Image.network`/`NetworkImage` fetch succeeds — but this
+  whole block is gated on `app.Environment.IsDevelopment()` and never runs against a real
+  deployment. Going live (#149's Azure CD pipeline) surfaced exactly this: images uploaded
+  to the real `croappstorage` account (`cro-prod` resource group) were both private and had
+  no CORS rule, so every picture screen (profile, birds, nests, hubs) failed to display.
+  Fixed manually as a one-time step against `croappstorage` on 2026-09-10 — same two
+  settings the dev-only startup code applies, run once via `az storage container
+  set-permission --public-access blob` (per container) and `az storage cors add --services
+  b` (once, account-wide). This is a manual production step, same category as Cosmos
+  container creation below — it doesn't run automatically and must be redone if the storage
+  account is ever recreated.
 
 ### Known dev-only shortcuts (never meaningful in prod)
 
@@ -181,7 +192,9 @@ None of these should ever reach a real endpoint or a prod deployment:
 - Cosmos emulator's fixed well-known account key (above)
 - `CosmosDb:UseEmulator: true` — unconditional TLS cert acceptance
 - Azurite's `UseDevelopmentStorage=true` connection-string alias
-- `profile-pictures` blob container's public read access
+- The 5 picture containers' public read access + Blob CORS rule (see "Blob container
+  access" above) — dev-only in that the *startup code* only ever applies it locally; the
+  settings themselves are now also live in prod, applied manually
 - `Program.cs`'s two seeded dev users' fixed password (`correct-horse-battery-staple`)
 - `SeedDevUsers`' five seeded accounts' fixed password (`1`) — see below
 - `DevCorsPolicy` (`Program.cs`) — Development-only CORS policy that allows any origin,
@@ -190,11 +203,13 @@ None of these should ever reach a real endpoint or a prod deployment:
   deployment needs a real allow-list scoped to the deployed web app's origin — not yet
   relevant since there's no prod deployment.
 
-No real Azure Cosmos DB or Storage account is provisioned yet. Creating one
-(`az cosmosdb create` / `sql database create` / `sql container create --partition-key-path
-/id`, plus the Storage-account equivalent) is a manual step outside this repo, needed before
-any prod deployment — not required for local dev or CI, both of which run entirely against
-the emulators.
+A real Azure Cosmos DB and Storage account (`croappstorage`, `cro-prod` resource group) are
+now provisioned for prod, deployed via the Azure CD pipeline (#149). Their containers still
+need the same one-time manual setup Cosmos/Blob containers get in dev — `az cosmosdb
+create`/`sql container create --partition-key-path /id`-equivalents for any new Cosmos
+container, and `az storage container set-permission`/`az storage cors add` for any new blob
+container — since `Program.cs`'s provisioning block only runs in Development. Not required
+for local dev or CI, both of which run entirely against the emulators.
 
 ## Seeding local dev data
 

@@ -120,6 +120,21 @@ history. Fine at launch scale; will need either a TTL (losing the "permanent rec
 noted in `Program.cs`'s Events container comment) or real server-side pagination once
 long-lived accounts accumulate enough history for this to matter.
 
+## Blob container public-access + CORS is a manual prod step, not automated anywhere
+
+`Program.cs`'s startup block that sets every picture container to `PublicAccessType.Blob`
+and adds a permissive Blob CORS rule only runs `if (app.Environment.IsDevelopment())` (by
+design - see CLAUDE.md's "Production container creation is a deliberate one-time step").
+Going live on `croappstorage`/`cro-prod` (#149's CD pipeline) hit this directly: no one ran
+the prod-equivalent step, so every picture container was private with no CORS, and every
+picture screen (profile, birds, nests, hubs) failed to load images in production. Fixed
+manually via `az storage container set-permission`/`az storage cors add` on 2026-09-10 (see
+CLAUDE.md). Unlike Cosmos containers, there's no `Tools/` equivalent (like `SeedDevUsers`)
+that runs this against a real account non-interactively - worth adding a small one-time
+provisioning script (or an `az cli` step in the CD workflow, gated to run once / made
+idempotent) so a future storage-account recreation doesn't silently reintroduce the same
+outage.
+
 ## No rate limiting, refresh tokens, or crash reporting/observability
 
 Also flagged while scoping the launch plan. None of these exist today: no `AddRateLimiter`
