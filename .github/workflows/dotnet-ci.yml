@@ -3,7 +3,13 @@ name: .NET CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'api/**'
+      - '.github/workflows/dotnet-ci.yml'
   pull_request:
+    paths:
+      - 'api/**'
+      - '.github/workflows/dotnet-ci.yml'
 
 jobs:
   build:
