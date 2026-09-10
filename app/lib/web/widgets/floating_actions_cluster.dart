@@ -6,9 +6,8 @@ import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../widgets/avatar_with_fallback.dart';
 import '../models/event.dart';
-import 'journey_log_panel.dart';
 
-/// The floating top-right action cluster (journey log / notification bell) that replaced
+/// The floating top-right action cluster (notification bell) that replaced
 /// the old 70px top bar - see 05_web_ui_updates.md item 1. It's positioned by its caller
 /// (WebShellScreen) as an overlay inside the content column's own Stack, so it never overlaps
 /// the right-hand context panel the way a full-width header would have. Every screen's
@@ -30,10 +29,6 @@ class FloatingActionsCluster extends StatefulWidget {
   // notification feed exists for.
   final List<FriendRequest> incomingRequests;
   final ValueChanged<FriendRequest> onOpenFriendRequest;
-  final List<AppEvent> events;
-  final bool eventsLoading;
-  final String? eventsError;
-  final VoidCallback onRetryEvents;
 
   const FloatingActionsCluster({
     super.key,
@@ -44,10 +39,6 @@ class FloatingActionsCluster extends StatefulWidget {
     this.friends = const [],
     this.incomingRequests = const [],
     required this.onOpenFriendRequest,
-    required this.events,
-    required this.eventsLoading,
-    required this.eventsError,
-    required this.onRetryEvents,
   });
 
   @override
@@ -59,12 +50,9 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
   // while its popup is already open is handled purely by that button's onTap toggle, rather
   // than also registering as an "outside" tap on its own popup and racing with the toggle.
   static const _notifGroup = 'webTopBarNotifications';
-  static const _journeyGroup = 'webTopBarJourneyLog';
 
   final _bellLink = LayerLink();
-  final _journeyLink = LayerLink();
   OverlayEntry? _dropdownEntry;
-  OverlayEntry? _journeyEntry;
 
   @override
   void didUpdateWidget(covariant FloatingActionsCluster oldWidget) {
@@ -76,7 +64,6 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
     // during build".
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _dropdownEntry?.markNeedsBuild();
-      _journeyEntry?.markNeedsBuild();
     });
   }
 
@@ -84,8 +71,6 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
   void dispose() {
     _dropdownEntry?.remove();
     _dropdownEntry = null;
-    _journeyEntry?.remove();
-    _journeyEntry = null;
     super.dispose();
   }
 
@@ -94,7 +79,6 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
       _closeDropdown();
       return;
     }
-    _closeJourneyLog();
     // A dropdown built from a StatefulWidget nested a few levels deep only ever paints
     // within its parent's own stacking position - a later-painted sibling elsewhere on the
     // page (the map, the dock) would paint over any part of it that visually overflows
@@ -122,9 +106,8 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
           offset: const Offset(0, 10),
           // TapRegion (not a full-screen GestureDetector barrier) so an outside tap closes
           // this without competing in the same gesture arena as whatever was tapped - a
-          // barrier's own tap recognizer and the journey log button's would fight over the
-          // same pointer, and only one could ever win, breaking a single click's ability to
-          // switch straight from one popup to the other.
+          // barrier's own tap recognizer and another trigger's would fight over the same
+          // pointer, and only one could ever win.
           child: TapRegion(
             groupId: _notifGroup,
             onTapOutside: (_) => _closeDropdown(),
@@ -156,64 +139,7 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
     if (mounted) setState(() {});
   }
 
-  void _toggleJourneyLog() {
-    if (_journeyEntry != null) {
-      _closeJourneyLog();
-      return;
-    }
-    _closeDropdown();
-    _journeyEntry = OverlayEntry(
-      // See the matching comment on the notifications dropdown's OverlayEntry above - Align
-      // is required here for the same reason (an OverlayEntry's root sizes to fill the whole
-      // screen unless wrapped this way).
-      builder: (context) => Align(
-        alignment: Alignment.topLeft,
-        child: CompositedTransformFollower(
-          link: _journeyLink,
-          showWhenUnlinked: false,
-          targetAnchor: Alignment.bottomRight,
-          followerAnchor: Alignment.topRight,
-          offset: const Offset(0, 10),
-          child: TapRegion(
-            groupId: _journeyGroup,
-            onTapOutside: (_) => _closeJourneyLog(),
-            child: _PopupSurface(
-              key: const Key('webJourneyLogDropdown'),
-              width: 380,
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.62),
-              child: JourneyLogPanel(
-                events: widget.events,
-                isLoading: widget.eventsLoading,
-                errorMessage: widget.eventsError,
-                onRetry: widget.onRetryEvents,
-                onClose: _closeJourneyLog,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context).insert(_journeyEntry!);
-    setState(() {});
-  }
-
-  void _closeJourneyLog() {
-    _journeyEntry?.remove();
-    _journeyEntry = null;
-    if (mounted) setState(() {});
-  }
-
-  // The journey log button's glyph: a vertical timeline (three dots, two connector bars).
-  Widget _timelineDot(bool active) => Container(
-    width: 5,
-    height: 5,
-    decoration: BoxDecoration(color: active ? CroColors.deepWaypoint : CroColors.fog, shape: BoxShape.circle),
-  );
-
-  Widget _timelineBar(bool active) =>
-      Container(width: 2, height: 4, color: (active ? CroColors.deepWaypoint : CroColors.fog).withValues(alpha: 0.45));
-
-  // Both popup trigger tiles (journey log, bell) share this 40px card treatment - a soft
+  // This trigger tile (bell) shares this 40px card treatment - a soft
   // shadow instead of Material's own generic elevation shadow, matching this web shell's
   // established convention (see your_birds_dock.dart's dock shadow).
   Widget _triggerTile({required Key key, required Color bg, required VoidCallback onTap, required Widget child}) {
@@ -238,40 +164,10 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
   @override
   Widget build(BuildContext context) {
     final open = _dropdownEntry != null;
-    final journeyOpen = _journeyEntry != null;
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        TapRegion(
-          groupId: _journeyGroup,
-          child: CompositedTransformTarget(
-            link: _journeyLink,
-            child: _triggerTile(
-              key: const Key('webJourneyLogButton'),
-              bg: journeyOpen ? CroColors.waypointBlue.withValues(alpha: 0.16) : Theme.of(context).colorScheme.surface,
-              onTap: _toggleJourneyLog,
-              child: Tooltip(
-                message: 'Journey log',
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _timelineDot(journeyOpen),
-                    const SizedBox(height: 2),
-                    _timelineBar(journeyOpen),
-                    const SizedBox(height: 2),
-                    _timelineDot(journeyOpen),
-                    const SizedBox(height: 2),
-                    _timelineBar(journeyOpen),
-                    const SizedBox(height: 2),
-                    _timelineDot(journeyOpen),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
         TapRegion(
           groupId: _notifGroup,
           child: CompositedTransformTarget(
@@ -356,8 +252,7 @@ class _PopupSurface extends StatelessWidget {
 // Only 3 event kinds are ever surfaced as notifications (see api/Services/EventService.cs) -
 // a bird landing at your nest, a bird you sent landing elsewhere, and a friend request being
 // accepted. This is the fallback glyph/tint for when there's no sender color to use instead
-// (see _senderTint) - the same per-kind approach journey_log_panel.dart uses for its timeline
-// dots.
+// (see _senderTint).
 (IconData, Color) _notificationGlyph(String kind) => switch (kind) {
   EventKind.birdArrivedAtYourNest => (Icons.flutter_dash, CroColors.waypointBlue),
   EventKind.birdArrived => (Icons.flutter_dash, CroColors.deepWaypoint),
@@ -440,8 +335,7 @@ class _NotificationsDropdown extends StatelessWidget {
     required this.onOpenFriendRequest,
   });
 
-  // No `intl` dependency in this project - a plain relative-time string, same convention
-  // journey_log_panel.dart already uses.
+  // No `intl` dependency in this project - a plain relative-time string.
   String _relativeTime(DateTime time) {
     final diff = DateTime.now().difference(time);
     if (diff.inMinutes < 1) return 'Just now';

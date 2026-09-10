@@ -5,10 +5,9 @@ import '../../models/friend_request.dart';
 enum WebNavItem { map, nests, hubs, friends, you }
 
 /// What the right-hand context panel is currently showing. The panel itself is only mounted
-/// when one of these is selected - there is no "nothing selected" member here; the journey
-/// log moved out to a top-bar popup (see JourneyLogPanel/TopBar) and no longer occupies this
-/// panel's default state. `friendBird` is a friend's public bird (read-only view, distinct
-/// from `bird` which is always the caller's own).
+/// when one of these is selected - there is no "nothing selected" member here. `friendBird`
+/// is a friend's public bird (read-only view, distinct from `bird` which is always the
+/// caller's own).
 enum PanelMode { nest, hub, bird, friendBird }
 
 /// The "Your birds" dock's All/Away/Home filter chips.
