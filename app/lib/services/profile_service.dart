@@ -35,7 +35,14 @@ class ProfileService {
   // pick-then-upload flow can be faked as a unit in tests, the same injectable-service
   // pattern used everywhere else in this app - image_picker's platform channel isn't
   // available in the widget test harness.
-  Future<XFile?> pickImage() => ImagePicker().pickImage(source: ImageSource.gallery);
+  // maxWidth/imageQuality downscale+recompress on the way out of the picker (before any
+  // bytes reach our upload code), so a multi-MB gallery photo doesn't ride a slow/cross-
+  // region connection at full resolution just to be displayed as a small avatar.
+  Future<XFile?> pickImage() => ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        imageQuality: 85,
+      );
 
   Future<String> uploadProfilePicture(
     String token,
