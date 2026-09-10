@@ -9,9 +9,6 @@ namespace CroApp.Api.Tests;
 
 public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-
     // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
     // see CLAUDE.md's well-known-local-credentials section. Used here to create Hubs for
     // test setup, since a user can no longer be given a second nest of their own to act as a
@@ -22,27 +19,12 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
 
     public FriendshipEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
-            ?? DefaultEmulatorConnectionString;
-
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["CosmosDb:UseEmulator"] = "true",
-                    ["CosmosDb:ConnectionString"] = connectionString,
-                    ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["CosmosDb:UsersContainerName"] = "Users",
-                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
-                    ["CosmosDb:HubsContainerName"] = "Hubs",
-                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
-                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
-                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
-                    ["Jwt:Audience"] = "CroApp.Api.Tests"
-                });
+                config.AddInMemoryCollection(TestConfig.Build());
             });
         });
 

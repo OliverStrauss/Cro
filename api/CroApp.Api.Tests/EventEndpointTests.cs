@@ -11,11 +11,6 @@ namespace CroApp.Api.Tests;
 // (BirdArrived/BirdArrivedAtYourNest/HubPostCreated) can be exercised without a real wait.
 public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-
-    private const string DefaultBlobConnectionString = "UseDevelopmentStorage=true";
-
     // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
     // see CLAUDE.md's well-known-local-credentials section.
     private const string SeedPassword = "correct-horse-battery-staple";
@@ -24,44 +19,18 @@ public class EventEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 
     public EventEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
-            ?? DefaultEmulatorConnectionString;
-        var blobConnectionString = Environment.GetEnvironmentVariable("BlobStorage__ConnectionString")
-            ?? DefaultBlobConnectionString;
-
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
+                config.AddInMemoryCollection(TestConfig.Build());
+                // Same huge multiplier as BirdArrivalEndpointTests.cs, for the same
+                // reason - any test-fixture distance resolves to a microsecond-scale
+                // flight duration.
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["CosmosDb:UseEmulator"] = "true",
-                    ["CosmosDb:ConnectionString"] = connectionString,
-                    ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["CosmosDb:UsersContainerName"] = "Users",
-                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
-                    ["CosmosDb:BirdsContainerName"] = "Birds",
-                    ["CosmosDb:HubsContainerName"] = "Hubs",
-                    ["CosmosDb:HubPictureSuggestionsContainerName"] = "HubPictureSuggestions",
-                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
-                    ["CosmosDb:HubMessagesContainerName"] = "HubMessages",
-                    ["CosmosDb:HubReadStatesContainerName"] = "HubReadStates",
-                    ["CosmosDb:BirdReadStatesContainerName"] = "BirdReadStates",
-                    ["CosmosDb:EventsContainerName"] = "Events",
-                    ["BlobStorage:ConnectionString"] = blobConnectionString,
-                    ["BlobStorage:ProfilePicturesContainerName"] = "profile-pictures",
-                    ["BlobStorage:NestPicturesContainerName"] = "nest-pictures",
-                    ["BlobStorage:HubPicturesContainerName"] = "hub-pictures",
-                    ["BlobStorage:BirdPicturesContainerName"] = "bird-pictures",
-                    ["BlobStorage:BirdMediaContainerName"] = "bird-media",
-                    // Same huge multiplier as BirdArrivalEndpointTests.cs, for the same
-                    // reason - any test-fixture distance resolves to a microsecond-scale
-                    // flight duration.
-                    ["BirdTravel:SpeedMultiplier"] = "1000000000000",
-                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
-                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
-                    ["Jwt:Audience"] = "CroApp.Api.Tests"
+                    ["BirdTravel:SpeedMultiplier"] = "1000000000000"
                 });
             });
         });

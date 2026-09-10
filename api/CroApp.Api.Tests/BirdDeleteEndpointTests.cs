@@ -9,45 +9,18 @@ namespace CroApp.Api.Tests;
 
 public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-
     private const string SeedPassword = "correct-horse-battery-staple";
 
     private readonly HttpClient _client;
 
     public BirdDeleteEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
-            ?? DefaultEmulatorConnectionString;
-
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["CosmosDb:UseEmulator"] = "true",
-                    ["CosmosDb:ConnectionString"] = connectionString,
-                    ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["CosmosDb:UsersContainerName"] = "Users",
-                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
-                    ["CosmosDb:HubsContainerName"] = "Hubs",
-                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
-                    ["CosmosDb:BirdsContainerName"] = "Birds",
-                    // Left at the real default so a genuinely far send (used only by the
-                    // still-traveling test) reliably stays in flight for the test's lifetime -
-                    // every other test here lands a bird via a zero-distance compose (same
-                    // origin/destination coordinates, different nest ids) instead of a cranked
-                    // multiplier. A merely-small (but nonzero) coordinate delta isn't safe here:
-                    // at Cro's realistic 60 km/h it's a fraction of a second of real flight time,
-                    // not reliably shorter than an HTTP round trip, so it flakes/fails instead of
-                    // landing before the next request checks it.
-                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
-                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
-                    ["Jwt:Audience"] = "CroApp.Api.Tests"
-                });
+                config.AddInMemoryCollection(TestConfig.Build());
             });
         });
 

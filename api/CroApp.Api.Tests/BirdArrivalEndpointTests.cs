@@ -12,9 +12,6 @@ namespace CroApp.Api.Tests;
 // already-traveling-bird conflict check) unreliable if they shared this config.
 public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-
     // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
     // see CLAUDE.md's well-known-local-credentials section. Used here (as HubEndpointTests.cs
     // already does) to create a Hub for test setup, since a plain user can no longer be given
@@ -25,32 +22,19 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
 
     public BirdArrivalEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
-            ?? DefaultEmulatorConnectionString;
-
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
+                config.AddInMemoryCollection(TestConfig.Build());
+                // Huge multiplier so any test-fixture distance - up to half Earth's
+                // circumference (~20,000km, the max possible) - resolves to a
+                // microsecond-scale flight duration, regardless of which two lat/lngs a
+                // test picks.
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["CosmosDb:UseEmulator"] = "true",
-                    ["CosmosDb:ConnectionString"] = connectionString,
-                    ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["CosmosDb:UsersContainerName"] = "Users",
-                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
-                    ["CosmosDb:HubsContainerName"] = "Hubs",
-                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
-                    ["CosmosDb:BirdsContainerName"] = "Birds",
-                    // Huge multiplier so any test-fixture distance - up to half Earth's
-                    // circumference (~20,000km, the max possible) - resolves to a
-                    // microsecond-scale flight duration, regardless of which two lat/lngs a
-                    // test picks.
-                    ["BirdTravel:SpeedMultiplier"] = "1000000000000",
-                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
-                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
-                    ["Jwt:Audience"] = "CroApp.Api.Tests"
+                    ["BirdTravel:SpeedMultiplier"] = "1000000000000"
                 });
             });
         });
