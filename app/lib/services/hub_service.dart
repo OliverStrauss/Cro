@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'api_client.dart' as api;
 import 'package:http_parser/http_parser.dart';
 
 import '../config.dart';
@@ -20,7 +21,7 @@ class HubService {
   Future<List<Hub>> listHubs(String token) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl/hubs'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -48,7 +49,7 @@ class HubService {
   }) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/hubs'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({
@@ -73,7 +74,7 @@ class HubService {
   Future<List<HubMessage>> listMessages(String token, String hubId) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl/hubs/$hubId/messages'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -94,7 +95,7 @@ class HubService {
   Future<Map<String, int>> getUnreadCounts(String token) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl/hubs/unread-counts'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -113,7 +114,7 @@ class HubService {
   Future<void> markHubRead(String token, String hubId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/hubs/$hubId/read'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -137,7 +138,7 @@ class HubService {
   }) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/hub-suggestions'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({
@@ -161,7 +162,7 @@ class HubService {
   Future<List<Hub>> listSuggestions(String token) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl/hub-suggestions'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -180,7 +181,7 @@ class HubService {
   Future<Hub> approveSuggestion(String token, String hubId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/hub-suggestions/$hubId/approve'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -197,7 +198,7 @@ class HubService {
   Future<void> rejectSuggestion(String token, String hubId) async {
     final http.Response response;
     try {
-      response = await http.delete(
+      response = await api.delete(
         Uri.parse('$apiBaseUrl/hub-suggestions/$hubId'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -231,7 +232,7 @@ class HubService {
 
     final http.StreamedResponse streamedResponse;
     try {
-      streamedResponse = await request.send();
+      streamedResponse = await api.send(request);
     } catch (_) {
       throw HubException('Could not reach the server');
     }
@@ -247,7 +248,7 @@ class HubService {
   Future<List<HubPictureSuggestion>> listPictureSuggestions(String token) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl/hub-picture-suggestions'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -266,7 +267,7 @@ class HubService {
   Future<Hub> approvePictureSuggestion(String token, String suggestionId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/hub-picture-suggestions/$suggestionId/approve'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -283,7 +284,7 @@ class HubService {
   Future<void> rejectPictureSuggestion(String token, String suggestionId) async {
     final http.Response response;
     try {
-      response = await http.delete(
+      response = await api.delete(
         Uri.parse('$apiBaseUrl/hub-picture-suggestions/$suggestionId'),
         headers: {'Authorization': 'Bearer $token'},
       );

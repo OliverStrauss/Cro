@@ -53,3 +53,64 @@ public class CorsTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"));
     }
 }
+
+public class ProdCorsTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private const string DefaultEmulatorConnectionString =
+        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+
+    private const string AllowedOrigin = "https://cro-app.example.com";
+
+    private readonly HttpClient _client;
+
+    public ProdCorsTests(WebApplicationFactory<Program> factory)
+    {
+        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
+            ?? DefaultEmulatorConnectionString;
+
+        var configuredFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["CosmosDb:ConnectionString"] = connectionString,
+                    ["CosmosDb:DatabaseName"] = "CroApp",
+                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
+                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
+                    ["Jwt:Audience"] = "CroApp.Api.Tests",
+                    ["Cors:AllowedOrigin"] = AllowedOrigin
+                });
+            });
+        });
+
+        _client = configuredFactory.CreateClient();
+    }
+
+    [Fact]
+    public async Task PreflightRequest_FromConfiguredOrigin_IsAllowed()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Options, "/users");
+        request.Headers.Add("Origin", AllowedOrigin);
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "Content-Type");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task PreflightRequest_FromUnconfiguredOrigin_IsRejected()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Options, "/users");
+        request.Headers.Add("Origin", "https://not-the-real-site.example.com");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "Content-Type");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+}
