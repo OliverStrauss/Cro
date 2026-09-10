@@ -8,3 +8,6 @@
 
 # Root-level Dart tool cache (leftover from pre-monorepo layout)
 .dart_tool/
+
+# Local graphify skill output - not part of the repo
+graphify-out/
