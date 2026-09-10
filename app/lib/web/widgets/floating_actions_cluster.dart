@@ -13,9 +13,11 @@ import '../models/event.dart';
 /// the right-hand context panel the way a full-width header would have. Every screen's
 /// title/subtitle and the "Live" polling indicator went away with the bar itself - polling
 /// still runs, it's just no longer advertised in the UI. A "Send a bird" button briefly lived
-/// here too (matching the design doc), but every screen already has its own compose entry
-/// point (the dock's "+" card, the context panel, a nest's resident-bird tiles) so it was
-/// just a duplicate - same call the pre-redesign top bar made, restored after seeing it live.
+/// here too (matching the design doc), but every screen already had its own way to send an
+/// existing bird (the context panel, a nest's resident-bird tiles) so it was just a
+/// duplicate - same call the pre-redesign top bar made, restored after seeing it live. Users
+/// no longer spawn birds at all now (see YourBirdsDock/BirdTypeCatalog.StarterRoster), which
+/// only reinforces that call.
 class FloatingActionsCluster extends StatefulWidget {
   final int unreadCount;
   final List<AppEvent> notifications;

@@ -12,10 +12,6 @@ namespace CroApp.Api.Tests;
 
 public class HubPictureSuggestionEndpointTests : IClassFixture<WebApplicationFactory<Program>>, IAsyncLifetime
 {
-    private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-    private const string DefaultAzuriteConnectionString = "UseDevelopmentStorage=true";
-
     // Seeded by Program.cs's dev-only startup step, same fixed dev password on every run -
     // see CLAUDE.md's well-known-local-credentials section.
     private const string SeedPassword = "correct-horse-battery-staple";
@@ -30,32 +26,12 @@ public class HubPictureSuggestionEndpointTests : IClassFixture<WebApplicationFac
 
     public HubPictureSuggestionEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var cosmosConnectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
-            ?? DefaultEmulatorConnectionString;
-        var blobConnectionString = Environment.GetEnvironmentVariable("BlobStorage__ConnectionString")
-            ?? DefaultAzuriteConnectionString;
-
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["CosmosDb:UseEmulator"] = "true",
-                    ["CosmosDb:ConnectionString"] = cosmosConnectionString,
-                    ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["CosmosDb:UsersContainerName"] = "Users",
-                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
-                    ["CosmosDb:HubsContainerName"] = "Hubs",
-                    ["CosmosDb:HubPictureSuggestionsContainerName"] = "HubPictureSuggestions",
-                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
-                    ["BlobStorage:ConnectionString"] = blobConnectionString,
-                    ["BlobStorage:HubPicturesContainerName"] = "hub-pictures",
-                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
-                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
-                    ["Jwt:Audience"] = "CroApp.Api.Tests"
-                });
+                config.AddInMemoryCollection(TestConfig.Build());
             });
         });
 

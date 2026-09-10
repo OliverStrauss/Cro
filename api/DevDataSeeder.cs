@@ -11,7 +11,9 @@ namespace CroApp.Api;
 // dev-only startup (see Program.cs) reset to the exact same known-good dev dataset, without
 // the two drifting apart. Resets the Users container to a fixed, known-good set of dev
 // accounts, all already friends with each other, each with one private, uniquely-named
-// "{Username}'s Roost" nest around Ames, plus a few seed Birds sent between them. Users is
+// "{Username}'s Roost" nest around Ames, a full 5-bird starter roster (see
+// BirdTypeCatalog.StarterRoster) sitting home at that Roost, plus a few extra seed Birds sent
+// between them for demo variety. Users is
 // wiped and replaced; Waypoints and Birds only ever get new rows added, never wiped (so
 // locally-placed Hubs and any manually-sent birds survive a re-run) - Hubs themselves and
 // Reactions are left exactly as they are. HubMessages IS wiped, unlike those: it's the one
@@ -143,6 +145,41 @@ public static class DevDataSeeder
             Console.WriteLine($"  + {nestName} at ({latitude}, {longitude})");
         }
 
+        // Every user's starter roster (see BirdTypeCatalog.StarterRoster / BirdService.ListAsync)
+        // seeded directly at their new Roost rather than left for lazy GET /birds provisioning -
+        // a dev user's first bird-touching request wouldn't otherwise be the lazy-provisioning
+        // codepath, since the account and nest already exist by the time anyone logs in.
+        var rosterNow = DateTimeOffset.UtcNow;
+        foreach (var username in usernames)
+        {
+            var user = users[username];
+            var nest = nestsByUsername[username];
+            foreach (var (type, count) in BirdTypeCatalog.StarterRoster)
+            {
+                for (var i = 1; i <= count; i++)
+                {
+                    var name = count > 1 ? $"{username}'s {type} {i}" : $"{username}'s {type}";
+                    var bird = new Bird(
+                        Guid.NewGuid().ToString(),
+                        user.Id,
+                        name,
+                        CurrentNestId: nest.Id,
+                        IsTraveling: false,
+                        NestFromId: null,
+                        NestToId: null,
+                        Speed: null,
+                        Content: null,
+                        Type: type,
+                        DepartedAt: null,
+                        EstimatedArrivalAt: null,
+                        IsRead: true,
+                        UpdatedAt: rosterNow);
+                    await birdsContainer.CreateItemAsync(bird, new PartitionKey(bird.UserId));
+                }
+            }
+            Console.WriteLine($"  + {username}'s starter roster (2 Cro, 1 Raven, 1 Pigeon, 1 Parrot) at {nest.Name}");
+        }
+
         // A handful of Cro's between friends so the app doesn't look empty right after a reset -
         // some still mid-flight, some already landed (one read, one not), touching every seeded user
         // as either sender or recipient at least once. Stuck to the Cro type only (plain text) so
@@ -199,6 +236,6 @@ public static class DevDataSeeder
             Console.WriteLine($"  + {fromUsername} -> {toUsername}: \"{name}\" ({(isTraveling ? "in flight" : "arrived")})");
         }
 
-        Console.WriteLine("Done - all 5 users are friends with each other, each with a uniquely-named Roost nest around Ames, plus a few Cro's already in flight or delivered.");
+        Console.WriteLine("Done - all 5 users are friends with each other, each with a uniquely-named Roost nest around Ames, a full starter roster of 5 birds, plus a few Cro's already in flight or delivered.");
     }
 }

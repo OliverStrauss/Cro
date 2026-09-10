@@ -9,39 +9,16 @@ namespace CroApp.Api.Tests;
 
 public class ProfilePictureEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-    private const string DefaultAzuriteConnectionString = "UseDevelopmentStorage=true";
-
     private readonly HttpClient _client;
 
     public ProfilePictureEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var cosmosConnectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
-            ?? DefaultEmulatorConnectionString;
-        var blobConnectionString = Environment.GetEnvironmentVariable("BlobStorage__ConnectionString")
-            ?? DefaultAzuriteConnectionString;
-
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["CosmosDb:UseEmulator"] = "true",
-                    ["CosmosDb:ConnectionString"] = cosmosConnectionString,
-                    ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["CosmosDb:UsersContainerName"] = "Users",
-                    ["CosmosDb:WaypointsContainerName"] = "Waypoints",
-                    ["CosmosDb:HubsContainerName"] = "Hubs",
-                    ["CosmosDb:ReactionsContainerName"] = "Reactions",
-                    ["BlobStorage:ConnectionString"] = blobConnectionString,
-                    ["BlobStorage:ProfilePicturesContainerName"] = "profile-pictures",
-                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
-                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
-                    ["Jwt:Audience"] = "CroApp.Api.Tests"
-                });
+                config.AddInMemoryCollection(TestConfig.Build());
             });
         });
 

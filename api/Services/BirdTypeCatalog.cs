@@ -24,6 +24,17 @@ public static class BirdTypeCatalog
         (Pigeon, 15.0),
     ];
 
+    // The fixed starter roster every user is auto-provisioned with (see BirdService.ListAsync
+    // and DevDataSeeder) instead of spawning birds themselves - two Cro's plus one each of the
+    // other three types, totaling MaxBirdsPerUser.
+    public static readonly (string Type, int Count)[] StarterRoster =
+    [
+        (Cro, 2),
+        (Raven, 1),
+        (Pigeon, 1),
+        (Parrot, 1),
+    ];
+
     public static bool IsValid(string type) => Types.Any(t => t.Name == type);
 
     public static double BaseSpeedKmh(string type)

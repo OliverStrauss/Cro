@@ -18,7 +18,6 @@ import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
 import '../../utils/jwt_utils.dart';
-import '../../widgets/compose_bird_dialog.dart';
 import '../models/event.dart';
 import '../services/event_service.dart';
 
@@ -348,19 +347,4 @@ class WebShellData extends ChangeNotifier {
     await load();
   }
 
-  Future<void> submitCompose(ComposeBirdResult result) async {
-    await birdService.composeAndSendBird(
-      authState.token!,
-      type: result.type,
-      name: result.name,
-      originNestId: result.originNestId,
-      destinationId: result.destinationId,
-      content: result.content,
-      isPublic: result.isPublic,
-      mediaBytes: result.mediaBytes,
-      mediaContentType: result.mediaContentType,
-      mediaFilename: result.mediaFilename,
-    );
-    await load();
-  }
 }

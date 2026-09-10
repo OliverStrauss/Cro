@@ -7,8 +7,6 @@ import '../../theme.dart';
 import '../state/web_shell_controller.dart';
 import 'dock_bird_card.dart';
 
-const _maxBirdsPerUser = 5;
-
 // Home, then away at a friend's nest, then at a hub, then flying to a nest, then flying to
 // a hub - a bird settled somewhere reads before one still in the air, and within "still in
 // the air" a nest-bound one reads before a hub-bound one. A manual bucket pass rather than
@@ -47,7 +45,6 @@ class YourBirdsDock extends StatelessWidget {
   final VoidCallback onHide;
   final VoidCallback onShow;
   final ValueChanged<Bird> onBirdTap;
-  final VoidCallback onComposePressed;
 
   const YourBirdsDock({
     super.key,
@@ -63,7 +60,6 @@ class YourBirdsDock extends StatelessWidget {
     required this.onHide,
     required this.onShow,
     required this.onBirdTap,
-    required this.onComposePressed,
   });
 
   List<DockBirdView> get _views => birds
@@ -219,7 +215,6 @@ class YourBirdsDock extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (birds.length < _maxBirdsPerUser) _AddBirdCard(onTap: onComposePressed),
               ],
             ),
           ),
@@ -265,47 +260,6 @@ class _FilterChip extends StatelessWidget {
                 color: active ? CroColors.deepWaypoint : CroColors.fog,
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddBirdCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _AddBirdCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        key: const Key('dockAddBirdCard'),
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          width: 124,
-          decoration: BoxDecoration(
-            border: Border.all(color: CroColors.ink.withValues(alpha: 0.2), width: 1.5),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add, size: 22, color: CroColors.fog),
-              SizedBox(height: 5),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  'Send a new bird',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11, color: CroColors.fog),
-                ),
-              ),
-            ],
           ),
         ),
       ),

@@ -3,9 +3,10 @@ using System.Text.Json.Serialization;
 namespace CroApp.Api.Models;
 
 // Id is a generated GUID, and UserId is the owning user's id and the partition key - same
-// single-partition-per-owner reasoning as Waypoint. A user spawns birds on demand (capped at
-// MaxBirdsPerUser, see BirdService) rather than owning a fixed auto-provisioned set - Name is
-// user-supplied at compose time, not auto-generated. CurrentNestId is null while mid-flight
+// single-partition-per-owner reasoning as Waypoint. Every user owns a fixed, auto-provisioned
+// roster (BirdTypeCatalog.StarterRoster, see BirdService.ListAsync) rather than spawning birds
+// themselves - Name defaults to "{Owner}'s {Type}" at provisioning time but can be edited
+// afterward (see BirdService.RenameAsync). CurrentNestId is null while mid-flight
 // (IsTraveling=true), in which case NestFromId/NestToId hold the journey's endpoints. Type is
 // one of BirdTypeCatalog's four types, chosen once at compose time, and drives both the
 // bird's base travel speed and which payload fields are required (see BirdPayloadValidator):
