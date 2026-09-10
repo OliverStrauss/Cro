@@ -3,6 +3,31 @@
 Accepted shortcuts, things flagged but out of scope at the time, and other known gaps
 worth revisiting. See `CLAUDE.md` for the working conventions this file supports.
 
+## `POST /birds/compose` / `BirdService.ComposeAndSendAsync` are now test-only, unreachable from the UI
+
+Users no longer spawn birds themselves - every user is auto-provisioned a fixed 5-bird starter
+roster instead (`BirdTypeCatalog.StarterRoster`, lazily created in `BirdService.ListAsync` and
+attached to a nest in `AssignUnassignedBirdsToNestAsync`). The `/birds/compose` endpoint and
+`ComposeAndSendAsync` were deliberately left in place rather than deleted, because
+`api/CroApp.Api.Tests/{BirdArrivalEndpointTests,BirdComposeEndpointTests,BirdEndpointTests,
+FriendshipEndpointTests,EventEndpointTests,BirdSendEndpointTests,HubMessageEndpointTests,
+BirdReactionEndpointTests,BirdDeleteEndpointTests}.cs` all use it as their only way to put a bird
+into a specific test state (type/content/media/position) - ripping it out would mean rewriting
+every one of those setup helpers around the new starter-roster shape in the same pass, which
+wasn't attempted here. `MaxBirdsPerUser` already makes it a no-op for a real user (they start at
+the cap), so this is inert in production, but it's still surface area: worth either (a) rewriting
+the test helpers to provision-then-rename/resend instead of composing, and deleting the endpoint,
+or (b) formally repurposing it as an admin/test-only route (auth-gated to `IsAdmin`, not just
+left implicitly unreachable because nothing in the UI calls it).
+
+## `DELETE /birds/{id}` still lets a user permanently shrink below the starter roster
+
+`BirdPanelContent`'s Delete button (`BirdService.DeleteAsync`) is untouched by the move to a
+fixed 5-bird starter roster - a user can still delete a bird, but there's no way back to 5 since
+spawning is gone (see above). Not addressed here since removing Delete, or adding some kind of
+"restore from roster" flow, wasn't asked for and is its own product decision. Revisit if this
+comes up as a real complaint.
+
 ## CLAUDE.md's "Dev user seeding on startup" section doesn't mention `SeedFixedDevUsersOnStartup`
 
 CLAUDE.md's Gotchas section says `Program.cs` "idempotently seeds two dev users if they don't

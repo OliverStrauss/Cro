@@ -400,7 +400,7 @@ app.MapGet("/waypoints", async (ClaimsPrincipal principal, WaypointService waypo
 .RequireAuthorization()
 .WithName("ListWaypoints");
 
-app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, WaypointService waypointService) =>
+app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal principal, WaypointService waypointService, BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -411,6 +411,10 @@ app.MapPost("/waypoints", async (SetWaypointRequest req, ClaimsPrincipal princip
     try
     {
         var saved = await waypointService.CreateAsync(userId, req.Name, req.Latitude, req.Longitude, req.IsPublic);
+        // Any of the owner's birds with no current nest (the starter roster, provisioned
+        // nestless before this - a brand-new user's first nest ever) get assigned to the nest
+        // they just created. See BirdService.AssignUnassignedBirdsToNestAsync.
+        await birdService.AssignUnassignedBirdsToNestAsync(userId, saved.Id);
         return Results.Created($"/waypoints/{saved.Id}", saved);
     }
     catch (ServiceException ex)

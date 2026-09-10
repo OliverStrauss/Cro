@@ -49,55 +49,6 @@ class BirdService {
     return Bird.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  // Spawns a brand-new bird and sends it in one step - creation and sending are unified
-  // since a composed bird is always deliberately created *in order to* go somewhere, unlike
-  // the old auto-provisioned birds. mediaBytes/mediaContentType/mediaFilename are only
-  // needed for Parrot (audio) or Pigeon/Raven (image) - null for a text-only Cro.
-  Future<Bird> composeAndSendBird(
-    String token, {
-    required String type,
-    required String name,
-    required String originNestId,
-    required String destinationId,
-    String? content,
-    bool isPublic = false,
-    List<int>? mediaBytes,
-    String? mediaContentType,
-    String? mediaFilename,
-  }) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/birds/compose'))
-      ..headers['Authorization'] = 'Bearer $token'
-      ..fields['type'] = type
-      ..fields['name'] = name
-      ..fields['originNestId'] = originNestId
-      ..fields['destinationId'] = destinationId
-      ..fields['isPublic'] = isPublic.toString();
-    if (content != null) {
-      request.fields['content'] = content;
-    }
-    if (mediaBytes != null) {
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        mediaBytes,
-        filename: mediaFilename ?? 'media',
-        contentType: mediaContentType != null ? MediaType.parse(mediaContentType) : null,
-      ));
-    }
-
-    final http.StreamedResponse streamedResponse;
-    try {
-      streamedResponse = await request.send();
-    } catch (_) {
-      throw BirdException('Could not reach the server');
-    }
-
-    final response = await http.Response.fromStream(streamedResponse);
-    if (response.statusCode != 201) {
-      throw BirdException(_errorMessage(response, 'Could not send this bird'));
-    }
-    return Bird.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
   Future<Bird> renameBird(String token, String birdId, String name) async {
     final http.Response response;
     try {

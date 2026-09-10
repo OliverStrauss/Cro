@@ -12,15 +12,12 @@ import '../../services/hub_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
-import '../../widgets/compose_bird_dialog.dart';
 import '../../widgets/hub_name_dialog.dart';
-import '../../widgets/send_bird_dialog.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import '../models/event.dart';
 import '../services/event_service.dart';
 import '../state/web_shell_controller.dart';
 import '../state/web_shell_data.dart';
-import '../widgets/compose_bird_modal.dart';
 import '../widgets/context_panel.dart';
 import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
@@ -30,11 +27,6 @@ import 'web_hubs_screen.dart';
 import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
 import 'web_you_screen.dart';
-
-// Same cap as the phone app's birds_screen.dart - enforced server-side too, but mirrored
-// here so the web compose entry points (dock's "Add bird" card, floating compose action)
-// can short-circuit with a toast instead of a round-trip error.
-const _maxBirdsPerUser = 5;
 
 /// Top-level widget for the app's single UI (rail + content + floating actions cluster +
 /// dock + right panel), used unconditionally on every platform, selected in main.dart.
@@ -305,50 +297,6 @@ class WebShellScreenState extends State<WebShellScreen> {
     }
   }
 
-  void _onComposePressed() {
-    if (_data.birds.length >= _maxBirdsPerUser) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('You have the max $_maxBirdsPerUser birds. Delete one from your private nest first.')),
-      );
-      return;
-    }
-    final origins = _data.ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)).toList();
-    if (origins.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Create a nest first - a new bird needs somewhere to depart from.'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-      return;
-    }
-    final destinations = [
-      ..._data.ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)),
-      ..._data.friendWaypoints.map((w) => SendBirdDestination(nestId: w.id, label: '${w.name} (${w.username})')),
-      ..._data.hubs.map((h) => SendBirdDestination(nestId: h.id, label: '${h.name} (Hub)')),
-    ];
-
-    ComposeBirdModal.show(
-      context,
-      origins: origins,
-      destinations: destinations,
-      onSubmit: _submitCompose,
-    );
-  }
-
-  Future<void> _submitCompose(ComposeBirdResult result) async {
-    try {
-      await _data.submitCompose(result);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${result.name} is on its way')));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -465,7 +413,6 @@ class WebShellScreenState extends State<WebShellScreen> {
                     onHide: () => setState(() => _dockHidden = true),
                     onShow: () => setState(() => _dockHidden = false),
                     onBirdTap: _selectBird,
-                    onComposePressed: _onComposePressed,
                   ),
                 ),
               ],

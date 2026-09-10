@@ -22,12 +22,69 @@ public class BirdService(
     public async Task<List<Bird>> ListAsync(string userId)
     {
         var existing = await birdRepository.ListByUserIdAsync(userId);
+        if (existing.Count == 0)
+        {
+            existing = await ProvisionStarterRosterAsync(userId);
+        }
         var resolved = new List<Bird>();
         foreach (var bird in existing)
         {
             resolved.Add(await ResolveArrivalIfDueAsync(bird));
         }
         return resolved;
+    }
+
+    // Every user starts with the fixed BirdTypeCatalog.StarterRoster instead of spawning
+    // birds themselves - lazily provisioned on first GET /birds (mirrors this app's older
+    // auto-provisioning flow) rather than at POST /users, so there's exactly one place that
+    // ever creates a starter Bird document. Nestless (CurrentNestId: null) until
+    // AssignUnassignedBirdsToNestAsync attaches them to the nest the user creates next - a
+    // brand-new user has no nest yet at this point.
+    private async Task<List<Bird>> ProvisionStarterRosterAsync(string userId)
+    {
+        var owner = await userRepository.GetByIdAsync(userId);
+        var ownerName = owner?.Username ?? "Your";
+        var now = DateTimeOffset.UtcNow;
+
+        var created = new List<Bird>();
+        foreach (var (type, count) in BirdTypeCatalog.StarterRoster)
+        {
+            for (var i = 1; i <= count; i++)
+            {
+                var name = count > 1 ? $"{ownerName}'s {type} {i}" : $"{ownerName}'s {type}";
+                var bird = new Bird(
+                    Guid.NewGuid().ToString(),
+                    userId,
+                    name,
+                    CurrentNestId: null,
+                    IsTraveling: false,
+                    NestFromId: null,
+                    NestToId: null,
+                    Speed: null,
+                    Content: null,
+                    Type: type,
+                    DepartedAt: null,
+                    EstimatedArrivalAt: null,
+                    IsRead: true,
+                    UpdatedAt: now);
+                created.Add(await birdRepository.CreateAsync(bird));
+            }
+        }
+        return created;
+    }
+
+    // Attaches any of the caller's nestless birds (the starter roster, provisioned with
+    // CurrentNestId: null before the owner had a nest to place them in) to the nest they just
+    // created. Called from POST /waypoints - lives there rather than inside WaypointService so
+    // Waypoint doesn't take on a dependency on Bird, same composition-at-the-endpoint pattern
+    // as GET /friends/waypoints.
+    public async Task AssignUnassignedBirdsToNestAsync(string userId, string nestId)
+    {
+        var birds = await birdRepository.ListByUserIdAsync(userId);
+        foreach (var bird in birds.Where(b => b.CurrentNestId is null && !b.IsTraveling))
+        {
+            await birdRepository.UpdateAsync(bird with { CurrentNestId = nestId, UpdatedAt = DateTimeOffset.UtcNow });
+        }
     }
 
     // Friends'-birds-on-the-map support: unlike ListAsync, this deliberately does NOT
@@ -61,11 +118,14 @@ public class BirdService(
         return resolved.Where(b => b.IsTraveling).ToList();
     }
 
-    // Spawns a brand-new bird and sends it in one step - there's no reason left to keep a
-    // bird idle-and-unsent the way auto-provisioned birds used to be, since every bird is
-    // now deliberately created *in order to* go somewhere. The origin must be caller-owned
-    // (unlike SendAsync's resend flow, a new bird can't depart from a friend's nest or a
-    // Hub); the destination can be anywhere reachable (own, a friend's, or a Hub).
+    // Spawns a brand-new bird and sends it in one step. No longer reachable from the product
+    // UI - every user is auto-provisioned BirdTypeCatalog.StarterRoster instead (see
+    // ProvisionStarterRosterAsync) and MaxBirdsPerUser means a normal user is already at the
+    // cap, so this 409s for them same as any other over-cap attempt. Left in place (endpoint
+    // still wired, see Program.cs) purely as the test suite's way of getting a bird into a
+    // specific state - see TECH_DEBT.md. The origin must be caller-owned (unlike SendAsync's
+    // resend flow, a new bird can't depart from a friend's nest or a Hub); the destination can
+    // be anywhere reachable (own, a friend's, or a Hub).
     public async Task<Bird> ComposeAndSendAsync(
         string userId,
         string type,

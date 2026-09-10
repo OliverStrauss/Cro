@@ -65,8 +65,9 @@ class Bird {
       );
 }
 
-// The four types a user can compose a bird as - kept alongside the Bird model since both
-// the compose dialog and the birds list need this same roster/labeling.
+// The four bird types in the starter roster every user is auto-provisioned with (see
+// BirdTypeCatalog.StarterRoster on the backend) - kept alongside the Bird model since the
+// birds list/dock/panel all need this same roster/labeling.
 class BirdType {
   static const cro = 'Cro';
   static const parrot = 'Parrot';
