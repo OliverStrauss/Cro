@@ -81,15 +81,16 @@ void main() {
     expect(find.text('Near Nest'), findsNothing);
   });
 
-  testWidgets('Hub tab shows a filter chip per category present, and selecting one filters the dropdown', (tester) async {
+  testWidgets('Hub tab shows a filter chip for every HubCategory, same fixed list as recommending a hub, and selecting one filters the dropdown', (tester) async {
     await openDialog(tester);
     await tester.tap(find.text('Hub'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('sendBirdCategoryChip_Park')), findsOneWidget);
     expect(find.byKey(const Key('sendBirdCategoryChip_Bar')), findsOneWidget);
-    // Every other HubCategory has no hub present in this dialog's destinations, so no chip.
-    expect(find.byKey(const Key('sendBirdCategoryChip_Business')), findsNothing);
+    // Shown even though no destination in this dialog has that category - the chip list is
+    // the fixed HubCategory.all, not derived from which hubs happen to be present.
+    expect(find.byKey(const Key('sendBirdCategoryChip_Business')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('sendBirdCategoryChip_Park')));
     await tester.pumpAndSettle();

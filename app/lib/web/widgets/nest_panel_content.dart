@@ -203,11 +203,20 @@ class _NestPanelContentState extends State<NestPanelContent> {
           originLatitude: widget.nest.latitude,
           originLongitude: widget.nest.longitude,
           speedKmh: BirdSpeed.kmh(bird.type),
+          birdType: bird.type,
         ),
       );
       if (result == null) return;
 
-      await widget.birdService.sendBird(token, bird.id, nestId: result.nestId, content: result.content);
+      await widget.birdService.sendBird(
+        token,
+        bird.id,
+        nestId: result.nestId,
+        content: result.content,
+        mediaBytes: result.mediaBytes,
+        mediaContentType: result.mediaContentType,
+        mediaFilename: result.mediaFilename,
+      );
       if (!mounted) return;
       setState(() => _residents = _residents.where((b) => b.id != bird.id).toList());
       widget.onChanged();

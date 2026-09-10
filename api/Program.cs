@@ -993,7 +993,13 @@ app.MapPut("/birds/{id}/picture", async (string id, IFormFile file, ClaimsPrinci
 .DisableAntiforgery()
 .WithName("UploadBirdPicture");
 
-app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPrincipal principal, BirdService birdService) =>
+app.MapPost("/birds/{id}/send", async (
+    string id,
+    [FromForm] string nestId,
+    [FromForm] string? content,
+    IFormFile? file,
+    ClaimsPrincipal principal,
+    BirdService birdService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1001,16 +1007,25 @@ app.MapPost("/birds/{id}/send", async (string id, SendBirdRequest req, ClaimsPri
         return Results.Unauthorized();
     }
 
+    var mediaStream = file?.OpenReadStream();
     try
     {
-        return Results.Ok(await birdService.SendAsync(userId, id, req.NestId, req.Content));
+        return Results.Ok(await birdService.SendAsync(userId, id, nestId, content, mediaStream, file?.ContentType, file?.Length ?? 0));
     }
     catch (ServiceException ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
     }
+    finally
+    {
+        if (mediaStream is not null)
+        {
+            await mediaStream.DisposeAsync();
+        }
+    }
 })
 .RequireAuthorization()
+.DisableAntiforgery()
 .WithName("SendBird");
 
 app.MapGet("/waypoints/{id}/birds", async (string id, ClaimsPrincipal principal, BirdService birdService) =>
@@ -1647,7 +1662,6 @@ record LoginResponse(string Token, DateTimeOffset ExpiresAt);
 // ignores the field entirely, since a nest's kind is not editable after creation.
 record SetWaypointRequest(string Name, double Latitude, double Longitude, bool IsPublic = false);
 record SetHubRequest(string Name, double Latitude, double Longitude, string Category);
-record SendBirdRequest(string NestId, string? Content);
 record RenameBirdRequest(string Name);
 record SendFriendRequestRequest(string Username);
 record SetFriendColorRequest(string Color);

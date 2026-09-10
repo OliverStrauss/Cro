@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:record/record.dart';
 
+import '../models/bird.dart';
 import '../models/hub_category.dart';
 import '../theme.dart';
 
@@ -38,16 +43,31 @@ class SendBirdDestination {
 class SendBirdResult {
   final String nestId;
   final String? content;
+  // This leg's payload media for a Parrot (audio) or Pigeon/Raven (image) - null for a
+  // text-only Cro. Mirrors ComposeBirdResult's shape from the retired compose flow.
+  final List<int>? mediaBytes;
+  final String? mediaContentType;
+  final String? mediaFilename;
 
-  SendBirdResult({required this.nestId, this.content});
+  SendBirdResult({
+    required this.nestId,
+    this.content,
+    this.mediaBytes,
+    this.mediaContentType,
+    this.mediaFilename,
+  });
 }
 
 double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
   const earthRadiusKm = 6371.0;
   final dLat = _toRadians(lat2 - lat1);
   final dLng = _toRadians(lng2 - lng1);
-  final a = sin(dLat / 2) * sin(dLat / 2) +
-      cos(_toRadians(lat1)) * cos(_toRadians(lat2)) * sin(dLng / 2) * sin(dLng / 2);
+  final a =
+      sin(dLat / 2) * sin(dLat / 2) +
+      cos(_toRadians(lat1)) *
+          cos(_toRadians(lat2)) *
+          sin(dLng / 2) *
+          sin(dLng / 2);
   return earthRadiusKm * 2 * atan2(sqrt(a), sqrt(1 - a));
 }
 
@@ -71,18 +91,24 @@ class _DestinationView {
 }
 
 // Picks a destination nest or Hub - either the sender's own nest, a friend's, or a public
-// Hub - and an optional message, then pops a SendBirdResult - the caller is responsible for
+// Hub - and this leg's payload, then pops a SendBirdResult - the caller is responsible for
 // actually calling BirdService.sendBird, same "dialog only collects input" split as
 // WaypointNameDialog. Distance/ETA are previews computed from [originLatitude]/
 // [originLongitude] (wherever this send actually departs from) using the same
 // haversine-distance/base-speed formula as the backend's real send (see BirdService.cs and
 // GeoDistance.cs) - not fetched from the server, so entries don't need a round trip just to
-// list them.
+// list them. The payload field shown matches [birdType]'s BirdPayloadValidator rules (Cro:
+// text, Parrot: recorded audio, Pigeon: image, Raven: text + image) - adapted from the
+// retired ComposeBirdDialog, which asked for the same per-type payload up front when a bird
+// was first spawned.
 class SendBirdDialog extends StatefulWidget {
   final List<SendBirdDestination> destinations;
   final double originLatitude;
   final double originLongitude;
   final double speedKmh;
+  final String birdType;
+  final AudioRecorder? recorder;
+  final ImagePicker? imagePicker;
 
   const SendBirdDialog({
     super.key,
@@ -90,6 +116,9 @@ class SendBirdDialog extends StatefulWidget {
     required this.originLatitude,
     required this.originLongitude,
     required this.speedKmh,
+    this.birdType = BirdType.cro,
+    this.recorder,
+    this.imagePicker,
   });
 
   @override
@@ -98,36 +127,95 @@ class SendBirdDialog extends StatefulWidget {
 
 class _SendBirdDialogState extends State<SendBirdDialog> {
   late final List<_DestinationView> _views;
+  late final AudioRecorder _recorder = widget.recorder ?? AudioRecorder();
+  late final ImagePicker _imagePicker = widget.imagePicker ?? ImagePicker();
   bool _hubMode = false;
-  final Set<String> _selectedCategories = {};
+  String? _selectedCategory;
   String? _selectedNestId;
   final _contentController = TextEditingController();
+
+  bool _isRecording = false;
+  List<int>? _audioBytes;
+  StreamSubscription<Uint8List>? _audioSub;
+  List<int>? _imageBytes;
+  String? _imageFilename;
+
+  bool get _wantsText =>
+      widget.birdType == BirdType.cro || widget.birdType == BirdType.raven;
+  bool get _wantsAudio => widget.birdType == BirdType.parrot;
+  bool get _wantsImage =>
+      widget.birdType == BirdType.pigeon || widget.birdType == BirdType.raven;
 
   @override
   void initState() {
     super.initState();
     _views = widget.destinations.map((d) {
-      final km = _haversineKm(widget.originLatitude, widget.originLongitude, d.latitude, d.longitude);
+      final km = _haversineKm(
+        widget.originLatitude,
+        widget.originLongitude,
+        d.latitude,
+        d.longitude,
+      );
       final hours = widget.speedKmh > 0 ? km / widget.speedKmh : 0.0;
       return _DestinationView(d, km, hours);
-    }).toList()
-      ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+    }).toList()..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
   }
 
   @override
   void dispose() {
     _contentController.dispose();
+    _audioSub?.cancel();
+    if (widget.recorder == null) {
+      _recorder.dispose();
+    }
     super.dispose();
   }
 
-  List<_DestinationView> get _modeViews => _views.where((v) => v.destination.isHub == _hubMode).toList();
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      await _recorder.stop();
+      await _audioSub?.cancel();
+      setState(() => _isRecording = false);
+      return;
+    }
 
-  Set<String> get _availableCategories =>
-      _hubMode ? _modeViews.map((v) => v.destination.category).whereType<String>().toSet() : {};
+    if (!await _recorder.hasPermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Microphone permission is needed to record a Parrot clip',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    _audioBytes = [];
+    final stream = await _recorder.startStream(const RecordConfig());
+    _audioSub = stream.listen((chunk) => _audioBytes!.addAll(chunk));
+    setState(() => _isRecording = true);
+  }
+
+  Future<void> _pickImage() async {
+    final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    setState(() {
+      _imageBytes = bytes;
+      _imageFilename = picked.name;
+    });
+  }
+
+  List<_DestinationView> get _modeViews =>
+      _views.where((v) => v.destination.isHub == _hubMode).toList();
 
   List<_DestinationView> get _visibleViews {
-    if (!_hubMode || _selectedCategories.isEmpty) return _modeViews;
-    return _modeViews.where((v) => _selectedCategories.contains(v.destination.category)).toList();
+    if (!_hubMode || _selectedCategory == null) return _modeViews;
+    return _modeViews
+        .where((v) => v.destination.category == _selectedCategory)
+        .toList();
   }
 
   void _setHubMode(bool hubMode) {
@@ -140,7 +228,7 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
 
   void _toggleCategory(String category) {
     setState(() {
-      if (!_selectedCategories.remove(category)) _selectedCategories.add(category);
+      _selectedCategory = _selectedCategory == category ? null : category;
       _selectedNestId = null;
     });
   }
@@ -148,7 +236,6 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
   @override
   Widget build(BuildContext context) {
     final visible = _visibleViews;
-    final categories = _availableCategories;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -161,85 +248,125 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Send this bird', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Send this bird',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 16),
               SegmentedButton<bool>(
                 key: const Key('sendBirdModeToggle'),
                 segments: const [
-                  ButtonSegment(value: false, label: Text('Nest'), icon: Icon(Icons.holiday_village_rounded)),
-                  ButtonSegment(value: true, label: Text('Hub'), icon: Icon(Icons.map_rounded)),
+                  ButtonSegment(
+                    value: false,
+                    label: Text('Nest'),
+                    icon: Icon(Icons.holiday_village_rounded),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text('Hub'),
+                    icon: Icon(Icons.map_rounded),
+                  ),
                 ],
                 selected: {_hubMode},
                 onSelectionChanged: (selection) => _setHubMode(selection.first),
               ),
-              if (categories.isNotEmpty) ...[
+              if (_hubMode) ...[
                 const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final category in HubCategory.all)
-                      if (categories.contains(category))
-                        FilterChip(
-                          key: Key('sendBirdCategoryChip_$category'),
-                          label: Text(category),
-                          selected: _selectedCategories.contains(category),
-                          onSelected: (_) => _toggleCategory(category),
+                SizedBox(
+                  height: 36,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      for (final category in HubCategory.all)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            key: Key('sendBirdCategoryChip_$category'),
+                            label: Text(category),
+                            selected: _selectedCategory == category,
+                            onSelected: (_) => _toggleCategory(category),
+                          ),
                         ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
               const SizedBox(height: 16),
               if (visible.isEmpty)
                 Text(
-                  _hubMode ? 'No hubs match.' : 'No other nests to send to yet.',
+                  _hubMode
+                      ? 'No hubs match.'
+                      : 'No other nests to send to yet.',
                   style: const TextStyle(color: CroColors.fog),
                 )
               else
                 DropdownMenu<String>(
-                  key: ValueKey('sendBirdDropdown_${_hubMode}_${_selectedCategories.join(',')}'),
+                  key: ValueKey(
+                    'sendBirdDropdown_${_hubMode}_${_selectedCategory ?? ''}',
+                  ),
                   expandedInsets: EdgeInsets.zero,
                   enableFilter: true,
                   requestFocusOnTap: true,
-                  hintText: _hubMode ? 'Search hubs by name' : 'Search nests by name',
+                  hintText: _hubMode
+                      ? 'Search hubs by name'
+                      : 'Search nests by name',
                   dropdownMenuEntries: [
                     for (final v in visible)
                       DropdownMenuEntry(
                         value: v.destination.nestId,
                         label: v.destination.label,
                         leadingIcon: Icon(
-                          v.destination.isHub ? HubCategory.iconFor(v.destination.category) : Icons.person_pin_circle_rounded,
+                          v.destination.isHub
+                              ? HubCategory.iconFor(v.destination.category)
+                              : Icons.person_pin_circle_rounded,
                           size: 20,
                         ),
                         trailingIcon: Text(
                           '${v.miles.toStringAsFixed(1)} mi · ${_travelTimeLabel(v.hours)}',
-                          style: const TextStyle(fontSize: 11, color: CroColors.fog),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: CroColors.fog,
+                          ),
                         ),
                       ),
                   ],
-                  onSelected: (value) => setState(() => _selectedNestId = value),
+                  onSelected: (value) =>
+                      setState(() => _selectedNestId = value),
                 ),
               const SizedBox(height: 16),
-              TextField(
-                key: const Key('sendBirdMessageField'),
-                controller: _contentController,
-                decoration: const InputDecoration(labelText: 'Message (optional)'),
-                maxLines: 3,
-              ),
+              ..._buildPayloadFields(context),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
                   const SizedBox(width: 8),
                   FilledButton(
                     key: const Key('confirmSendBirdButton'),
                     onPressed: _selectedNestId == null
                         ? null
-                        : () => Navigator.of(context).pop(SendBirdResult(
+                        : () => Navigator.of(context).pop(
+                            SendBirdResult(
                               nestId: _selectedNestId!,
-                              content: _contentController.text.trim().isEmpty ? null : _contentController.text.trim(),
-                            )),
+                              content: _contentController.text.trim().isEmpty
+                                  ? null
+                                  : _contentController.text.trim(),
+                              mediaBytes: _wantsAudio
+                                  ? _audioBytes
+                                  : (_wantsImage ? _imageBytes : null),
+                              mediaContentType: _wantsAudio
+                                  ? 'audio/wav'
+                                  : (_wantsImage ? 'image/jpeg' : null),
+                              mediaFilename: _wantsAudio
+                                  ? 'clip.wav'
+                                  : (_wantsImage
+                                        ? (_imageFilename ?? 'photo.jpg')
+                                        : null),
+                            ),
+                          ),
                     child: const Text('Send'),
                   ),
                 ],
@@ -249,5 +376,57 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildPayloadFields(BuildContext context) {
+    final fields = <Widget>[];
+    if (_wantsText) {
+      fields.add(
+        TextField(
+          key: const Key('sendBirdMessageField'),
+          controller: _contentController,
+          decoration: const InputDecoration(labelText: 'Message (optional)'),
+          maxLines: 3,
+        ),
+      );
+    }
+    if (_wantsAudio) {
+      if (fields.isNotEmpty) fields.add(const SizedBox(height: 12));
+      fields.add(
+        Row(
+          children: [
+            IconButton(
+              key: const Key('sendBirdRecordButton'),
+              icon: Icon(_isRecording ? Icons.stop_circle : Icons.mic),
+              color: _isRecording ? Theme.of(context).colorScheme.error : null,
+              onPressed: _toggleRecording,
+            ),
+            Text(
+              _isRecording
+                  ? 'Recording...'
+                  : (_audioBytes != null
+                        ? 'Clip recorded'
+                        : 'Tap to record (optional)'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_wantsImage) {
+      if (fields.isNotEmpty) fields.add(const SizedBox(height: 12));
+      fields.add(
+        Row(
+          children: [
+            IconButton(
+              key: const Key('sendBirdPickImageButton'),
+              icon: const Icon(Icons.image),
+              onPressed: _pickImage,
+            ),
+            Text(_imageFilename ?? 'No image chosen (optional)'),
+          ],
+        ),
+      );
+    }
+    return fields;
   }
 }

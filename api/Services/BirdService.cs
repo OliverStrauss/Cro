@@ -220,8 +220,17 @@ public class BirdService(
     // Resends an already-landed, caller-owned bird onward - distinct from ComposeAndSendAsync
     // (spawning a brand-new bird). A bird can be resent from wherever it currently sits
     // (its own nest, or a friend's/Hub's it previously arrived at), unlike a newly-composed
-    // bird's origin, which must be caller-owned.
-    public async Task<Bird> SendAsync(string userId, string birdId, string destinationNestId, string? content)
+    // bird's origin, which must be caller-owned. Each leg's payload (content/media) replaces
+    // the previous one rather than carrying it forward - same as ComposeAndSendAsync, a leg
+    // with nothing new to say just travels with no payload.
+    public async Task<Bird> SendAsync(
+        string userId,
+        string birdId,
+        string destinationNestId,
+        string? content,
+        Stream? mediaStream,
+        string? mediaContentType,
+        long mediaContentLength)
     {
         var bird = await birdRepository.GetAsync(userId, birdId)
             ?? throw new ServiceException(404, "Bird not found.");
@@ -240,6 +249,8 @@ public class BirdService(
             throw new ServiceException(400, "This bird is already at that nest.");
         }
 
+        BirdPayloadValidator.ValidateAllowed(bird.Type, content, mediaStream is not null);
+
         var destination = await ResolveReachableNestAsync(userId, destinationNestId)
             ?? throw new ServiceException(404, "Destination nest not found.");
         // Origin may be a friend's nest or a Hub the bird previously arrived at, not
@@ -247,6 +258,22 @@ public class BirdService(
         // plain owner-scoped lookup.
         var origin = await ResolveReachableNestAsync(userId, bird.CurrentNestId)
             ?? throw new ServiceException(404, "Origin nest not found.");
+
+        string? audioUrl = null;
+        string? imageUrl = null;
+        if (mediaStream is not null)
+        {
+            var mediaKind = BirdPayloadValidator.MediaKindForType(bird.Type);
+            var mediaUrl = await birdMediaService.UploadAsync(bird.Id, mediaKind, mediaStream, mediaContentType ?? "", mediaContentLength);
+            if (mediaKind == BirdMediaKind.Audio)
+            {
+                audioUrl = mediaUrl;
+            }
+            else
+            {
+                imageUrl = mediaUrl;
+            }
+        }
 
         var distanceKm = GeoDistance.HaversineKm(origin.Latitude, origin.Longitude, destination.Latitude, destination.Longitude);
         var effectiveSpeedKmh = BirdTypeCatalog.BaseSpeedKmh(bird.Type) * birdTravelOptions.Value.SpeedMultiplier;
@@ -265,6 +292,8 @@ public class BirdService(
             EstimatedArrivalAt = now.AddHours(hours),
             IsRead = true, // not delivered yet - nothing to read
             UpdatedAt = now,
+            AudioUrl = audioUrl,
+            ImageUrl = imageUrl,
             // A resend keeps the bird's existing IsPublic value, same as ComposeAndSendAsync -
             // a Hub-bound resend no longer forces it true (see that method's comment).
             IsPublic = bird.IsPublic,

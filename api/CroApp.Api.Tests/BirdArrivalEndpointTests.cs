@@ -113,8 +113,24 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
     private Task<HttpResponseMessage> MarkReadAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/read", token));
 
-    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/send", token, new { NestId = nestId, Content = content }));
+    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/birds/{birdId}/send");
+        if (token is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent(nestId), "nestId" },
+        };
+        if (content is not null)
+        {
+            form.Add(new StringContent(content), "content");
+        }
+        request.Content = form;
+        return _client.SendAsync(request);
+    }
 
     private async Task<HubDto> CreateHubAsync(string token, string name, double lat, double lng)
     {

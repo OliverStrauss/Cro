@@ -8,6 +8,7 @@ import '../../models/friend_bird.dart';
 import '../../models/hub.dart';
 import '../../models/hub_category.dart';
 import '../../models/waypoint.dart';
+import '../../config.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../utils/flight_path_math.dart';
@@ -206,8 +207,14 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.cro_app',
+              // MapTiler when a key is configured (required for production - see the OSM
+              // tile usage policy, tile.openstreetmap.org isn't for production app traffic).
+              // Falls back to raw OSM tiles for local dev so nobody needs a MapTiler key
+              // just to run the app.
+              urlTemplate: mapTilerApiKey.isNotEmpty
+                  ? 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=$mapTilerApiKey'
+                  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.crotheapp.cro_app',
             ),
             if (flights.isNotEmpty)
               PolylineLayer(
