@@ -83,7 +83,13 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
     }
 
     private Task<HttpResponseMessage> ComposeBirdAsync(
-        string token, string type, string name, string originNestId, string destinationId, string? content = null)
+        string token,
+        string type,
+        string name,
+        string originNestId,
+        string destinationId,
+        string? content = null,
+        (byte[] Bytes, string ContentType, string Filename)? media = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
         {
@@ -100,12 +106,48 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         {
             form.Add(new StringContent(content), "content");
         }
+        if (media is not null)
+        {
+            var fileContent = new ByteArrayContent(media.Value.Bytes);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(media.Value.ContentType);
+            form.Add(fileContent, "file", media.Value.Filename);
+        }
         request.Content = form;
         return _client.SendAsync(request);
     }
 
-    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/send", token, new { NestId = nestId, Content = content }));
+    private Task<HttpResponseMessage> SendBirdAsync(
+        string? token,
+        string birdId,
+        string nestId,
+        string? content = null,
+        (byte[] Bytes, string ContentType, string Filename)? media = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/birds/{birdId}/send");
+        if (token is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent(nestId), "nestId" },
+        };
+        if (content is not null)
+        {
+            form.Add(new StringContent(content), "content");
+        }
+        if (media is not null)
+        {
+            var fileContent = new ByteArrayContent(media.Value.Bytes);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(media.Value.ContentType);
+            form.Add(fileContent, "file", media.Value.Filename);
+        }
+        request.Content = form;
+        return _client.SendAsync(request);
+    }
+
+    private static readonly byte[] TinyImageBytes = [0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4];
+    private static readonly byte[] TinyAudioBytes = [0x49, 0x44, 0x33, 1, 2, 3, 4];
 
     private Task<HttpResponseMessage> GetNestResidentsAsync(string? token, string nestId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/waypoints/{nestId}/birds", token));
@@ -121,7 +163,8 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
     // bounces the setup bird through a same-coordinates Hub instead (reachable to anyone, no
     // ownership needed) and straight back to Home, both hops zero-distance so each resolves
     // the instant it's next queried.
-    private async Task<(BirdDto Bird, WaypointDto Home, string UserId, string Token)> LandBirdAtHomeAsync(string usernamePrefix)
+    private async Task<(BirdDto Bird, WaypointDto Home, string UserId, string Token)> LandBirdAtHomeAsync(
+        string usernamePrefix, string type = "Cro")
     {
         var (userId, token) = await RegisterAndLoginAsync($"{usernamePrefix}-{Guid.NewGuid():N}", "correct-horse-battery-staple");
         var home = await CreateNestAsync(token, "Home", 42.0, -93.5, isPublic: false);
@@ -129,7 +172,15 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         var adminToken = await LoginAsync("Admin 1", SeedPassword);
         var bounceHub = await CreateHubAsync(adminToken, $"Setup Bounce {Guid.NewGuid():N}", 42.0, -93.5);
 
-        var composeResponse = await ComposeBirdAsync(token, "Cro", "Setup Bird", home.Id, bounceHub.Id, content: "setup");
+        (byte[] Bytes, string ContentType, string Filename)? setupMedia = type switch
+        {
+            "Parrot" => (TinyAudioBytes, "audio/mpeg", "clip.mp3"),
+            "Pigeon" or "Raven" => (TinyImageBytes, "image/png", "photo.png"),
+            _ => null,
+        };
+        var setupContent = type is "Cro" or "Raven" ? "setup" : null;
+
+        var composeResponse = await ComposeBirdAsync(token, type, "Setup Bird", home.Id, bounceHub.Id, content: setupContent, media: setupMedia);
         composeResponse.EnsureSuccessStatusCode();
         var composed = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
 
@@ -166,6 +217,88 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         Assert.NotNull(sent.DepartedAt);
         Assert.True(sent.EstimatedArrivalAt >= sent.DepartedAt);
         Assert.Equal("Hello there", sent.Content);
+    }
+
+    [Fact]
+    public async Task Send_PigeonWithImage_Succeeds()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-pigeon", "Pigeon");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var response = await SendBirdAsync(token, bird.Id, away.Id, media: (TinyImageBytes, "image/png", "photo.png"));
+        response.EnsureSuccessStatusCode();
+        var sent = await response.Content.ReadFromJsonAsync<BirdDto>();
+
+        Assert.True(sent!.IsTraveling);
+        Assert.NotNull(sent.ImageUrl);
+        Assert.Null(sent.Content);
+    }
+
+    [Fact]
+    public async Task Send_ParrotWithAudio_Succeeds()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-parrot", "Parrot");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var response = await SendBirdAsync(token, bird.Id, away.Id, media: (TinyAudioBytes, "audio/mpeg", "clip.mp3"));
+        response.EnsureSuccessStatusCode();
+        var sent = await response.Content.ReadFromJsonAsync<BirdDto>();
+
+        Assert.True(sent!.IsTraveling);
+        Assert.NotNull(sent.AudioUrl);
+        Assert.Null(sent.Content);
+    }
+
+    [Fact]
+    public async Task Send_ParrotWithTextContent_ReturnsBadRequest()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-parrot", "Parrot");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var response = await SendBirdAsync(token, bird.Id, away.Id, "This should not be allowed");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Send_PigeonWithTextContent_ReturnsBadRequest()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-pigeon", "Pigeon");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var response = await SendBirdAsync(token, bird.Id, away.Id, "This should not be allowed");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Send_CroWithMedia_ReturnsBadRequest()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-cro");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var response = await SendBirdAsync(token, bird.Id, away.Id, media: (TinyImageBytes, "image/png", "photo.png"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Send_RavenWithTextAndImage_Succeeds()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-raven", "Raven");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var response = await SendBirdAsync(
+            token, bird.Id, away.Id, "Hello there", media: (TinyImageBytes, "image/png", "photo.png"));
+        response.EnsureSuccessStatusCode();
+        var sent = await response.Content.ReadFromJsonAsync<BirdDto>();
+
+        Assert.True(sent!.IsTraveling);
+        Assert.Equal("Hello there", sent.Content);
+        Assert.NotNull(sent.ImageUrl);
     }
 
     [Fact]

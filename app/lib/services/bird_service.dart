@@ -32,18 +32,41 @@ class BirdService {
         .toList();
   }
 
-  Future<Bird> sendBird(String token, String birdId, {required String nestId, String? content}) async {
-    final http.Response response;
+  // mediaBytes/mediaContentType/mediaFilename carry this leg's payload for a Parrot (audio)
+  // or Pigeon/Raven (image) - a bird's Type fixes what it can carry, enforced server-side by
+  // BirdPayloadValidator.ValidateAllowed, same rule set as composeAndSendBird's.
+  Future<Bird> sendBird(
+    String token,
+    String birdId, {
+    required String nestId,
+    String? content,
+    List<int>? mediaBytes,
+    String? mediaContentType,
+    String? mediaFilename,
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/birds/$birdId/send'))
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields['nestId'] = nestId;
+    if (content != null) {
+      request.fields['content'] = content;
+    }
+    if (mediaBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        mediaBytes,
+        filename: mediaFilename ?? 'media',
+        contentType: mediaContentType != null ? MediaType.parse(mediaContentType) : null,
+      ));
+    }
+
+    final http.StreamedResponse streamedResponse;
     try {
-      response = await api.post(
-        Uri.parse('$apiBaseUrl/birds/$birdId/send'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'nestId': nestId, 'content': content}),
-      );
+      streamedResponse = await api.send(request);
     } catch (_) {
       throw BirdException('Could not reach the server');
     }
 
+    final response = await http.Response.fromStream(streamedResponse);
     if (response.statusCode != 200) {
       throw BirdException(_errorMessage(response, 'Could not send this bird'));
     }

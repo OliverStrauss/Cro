@@ -115,8 +115,24 @@ public class BirdDeleteEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private Task<HttpResponseMessage> DeleteBirdAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/birds/{birdId}", token));
 
-    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null) =>
-        _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/send", token, new { NestId = nestId, Content = content }));
+    private Task<HttpResponseMessage> SendBirdAsync(string? token, string birdId, string nestId, string? content = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/birds/{birdId}/send");
+        if (token is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent(nestId), "nestId" },
+        };
+        if (content is not null)
+        {
+            form.Add(new StringContent(content), "content");
+        }
+        request.Content = form;
+        return _client.SendAsync(request);
+    }
 
     // Lands a bird idle back at `home` itself, without needing a second nest of the same
     // user's own. A compose origin must be a nest the caller owns (see

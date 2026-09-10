@@ -20,6 +20,20 @@ the test helpers to provision-then-rename/resend instead of composing, and delet
 or (b) formally repurposing it as an admin/test-only route (auth-gated to `IsAdmin`, not just
 left implicitly unreachable because nothing in the UI calls it).
 
+## `BirdService.composeAndSendBird` (Flutter) was accidentally un-deleted by a merge conflict
+
+`ce90b1a` ("Replace bird spawning with an auto-provisioned starter roster") deleted
+`composeAndSendBird` from `app/lib/services/bird_service.dart` along with the rest of the
+compose UI, since nothing calls it anymore (see the entry above - the backend endpoint stayed
+for test setup, but the frontend wrapper had no remaining caller at all). It's back in the
+current file, byte-for-byte: `700563e` ("Merge origin/main into feature/starter-bird-roster,
+resolving conflicts") resolved a conflict on this file by keeping the
+`feature/starter-bird-roster` branch's older copy, which still had it, silently reverting
+`ce90b1a`'s deletion. Confirmed dead again as of this pass (zero callers in `app/lib`).
+Harmless (never called, so never hits the live/test-only backend endpoint), but worth deleting
+next time this file is touched rather than leaving a second copy of the same "is this actually
+dead" question to re-answer later.
+
 ## `DELETE /birds/{id}` still lets a user permanently shrink below the starter roster
 
 `BirdPanelContent`'s Delete button (`BirdService.DeleteAsync`) is untouched by the move to a

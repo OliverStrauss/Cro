@@ -50,7 +50,15 @@ class _FakeBirdService implements BirdService {
   String? lastDeletedBirdId;
 
   @override
-  Future<Bird> sendBird(String token, String birdId, {required String nestId, String? content}) async {
+  Future<Bird> sendBird(
+    String token,
+    String birdId, {
+    required String nestId,
+    String? content,
+    List<int>? mediaBytes,
+    String? mediaContentType,
+    String? mediaFilename,
+  }) async {
     lastSendBirdId = birdId;
     lastSendNestId = nestId;
     lastSendContent = content;

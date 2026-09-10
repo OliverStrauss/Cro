@@ -13,6 +13,9 @@ public static class HubCategoryCatalog
     public const string Park = "Park";
     public const string Business = "Business";
     public const string Landmark = "Landmark";
+    public const string Restaurant = "Restaurant";
+    public const string Coffee = "Coffee";
+    public const string Grocery = "Grocery";
     public const string Other = "Other";
 
     public static readonly string[] All =
@@ -23,6 +26,9 @@ public static class HubCategoryCatalog
         Park,
         Business,
         Landmark,
+        Restaurant,
+        Coffee,
+        Grocery,
         Other,
     ];
 
