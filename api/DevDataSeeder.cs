@@ -180,62 +180,6 @@ public static class DevDataSeeder
             Console.WriteLine($"  + {username}'s starter roster (2 Cro, 1 Raven, 1 Pigeon, 1 Parrot) at {nest.Name}");
         }
 
-        // A handful of Cro's between friends so the app doesn't look empty right after a reset -
-        // some still mid-flight, some already landed (one read, one not), touching every seeded user
-        // as either sender or recipient at least once. Stuck to the Cro type only (plain text) so
-        // this stays fully offline - Parrot/Pigeon/Raven would need real audio/image URLs to render
-        // as anything but a broken-media placeholder in the app.
-        //
-        // ETAs are hand-picked rather than run through the real GeoDistance/BirdTypeCatalog math:
-        // these seeded nests are deliberately clustered around Ames (see homeBases above) so pins
-        // don't overlap, so a real distance/speed computation would land every "in-flight" bird
-        // within minutes - not the sustained in-flight state the dock/journey log are meant to show.
-        // Speed is still snapshotted at Cro's real base speed for field-shape consistency, it just
-        // isn't what these particular ETAs were derived from.
-        var now = DateTimeOffset.UtcNow;
-        var croSpeedKmh = BirdTypeCatalog.BaseSpeedKmh(BirdTypeCatalog.Cro);
-
-        (string FromUsername, string ToUsername, string Name, string Content, TimeSpan? EtaFromNow)[] seedBirds =
-        [
-            ("Oliver", "Annie", "Morning Cro", "Morning! Heading your way.", TimeSpan.FromHours(18)),
-            ("Test1", "Test2", "Halfway There", "Made it past the stadium, halfway there!", TimeSpan.FromDays(2)),
-            ("Test2", "Admin", "See You Soon", "On my way, see you soon.", TimeSpan.FromHours(6)),
-            ("Admin", "Oliver", "Welcome", "Welcome to the flock!", null),
-            ("Annie", "Test1", "Made It", "Made it safely, thanks for having me.", null),
-        ];
-
-        foreach (var (fromUsername, toUsername, name, content, etaFromNow) in seedBirds)
-        {
-            var sender = users[fromUsername];
-            var origin = nestsByUsername[fromUsername];
-            var destination = nestsByUsername[toUsername];
-            var isTraveling = etaFromNow is not null;
-
-            var bird = new Bird(
-                Guid.NewGuid().ToString(),
-                sender.Id,
-                name,
-                // Idle/arrived birds sit in the destination nest they landed in, same as
-                // BirdService.ResolveArrivalIfDueAsync sets on real arrival resolution.
-                CurrentNestId: isTraveling ? null : destination.Id,
-                IsTraveling: isTraveling,
-                NestFromId: origin.Id,
-                NestToId: destination.Id,
-                Speed: croSpeedKmh,
-                Content: content,
-                Type: BirdTypeCatalog.Cro,
-                DepartedAt: isTraveling ? now : now.AddDays(-3),
-                EstimatedArrivalAt: isTraveling ? now.Add(etaFromNow!.Value) : now.AddDays(-1),
-                // Idle birds land unread, same as a real arrival - the "Welcome" one is left unread,
-                // "Made It" is marked already-read for a bit of state variety.
-                IsRead: isTraveling || name == "Made It",
-                UpdatedAt: now,
-                IsPublic: false,
-                NestFromName: origin.Name);
-            await birdsContainer.CreateItemAsync(bird, new PartitionKey(bird.UserId));
-            Console.WriteLine($"  + {fromUsername} -> {toUsername}: \"{name}\" ({(isTraveling ? "in flight" : "arrived")})");
-        }
-
-        Console.WriteLine("Done - all 5 users are friends with each other, each with a uniquely-named Roost nest around Ames, a full starter roster of 5 birds, plus a few Cro's already in flight or delivered.");
+        Console.WriteLine("Done - all 5 users are friends with each other, each with a uniquely-named Roost nest around Ames and a full starter roster of 5 birds.");
     }
 }

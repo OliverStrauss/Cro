@@ -173,7 +173,7 @@ void main() {
   });
 
   testWidgets(
-      'sending a bird onward from a friend nest excludes that same friend nest from the destination list, but offers hubs',
+      'sending a bird onward from a friend nest excludes that same friend nest from the Nest tab, and the Hub tab offers hubs',
       (tester) async {
     final myBirdHere = Bird(id: 'b1', userId: 'u1', name: 'Otto', currentNestId: 'f1', isTraveling: false, type: 'Cro');
     final home = Waypoint(id: 'n1', userId: 'u1', name: 'Home', latitude: 0, longitude: 0);
@@ -201,15 +201,22 @@ void main() {
     await tester.tap(find.byKey(const Key('nestPanelResident_b1')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
+    // Nest tab (default) offers the caller's own nest and other friends' nests - not the
+    // currently-viewed friend nest (f1 itself) nor the Hub.
+    await tester.tap(find.byType(DropdownMenu<String>));
     await tester.pumpAndSettle();
-
     expect(find.text('Home'), findsOneWidget);
     expect(find.text("Bob's Yard (bob)"), findsOneWidget);
     expect(find.text("Mia's Cabin (mia)"), findsNothing);
-    expect(find.text('Lighthouse (Hub)'), findsOneWidget);
+    expect(find.text('Lighthouse'), findsNothing);
 
-    await tester.tap(find.text('Lighthouse (Hub)').last);
+    // Switching to the Hub tab augments the dropdown with public hubs instead.
+    await tester.tap(find.text('Hub'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('Lighthouse'), findsOneWidget);
+    await tester.tap(find.text('Lighthouse').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
     await tester.pumpAndSettle();

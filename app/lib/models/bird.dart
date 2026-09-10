@@ -84,3 +84,19 @@ class BirdType {
         _ => type,
       };
 }
+
+// Mirrors api/Services/BirdTypeCatalog.cs's BaseSpeedKmh, same manual-sync convention as
+// BirdType above. Used client-side only for a pre-send ETA preview (SendBirdDialog) -
+// ponytail: assumes the server's default BirdTravelOptions.SpeedMultiplier of 1.0 since
+// that's not exposed to the client; expose it via a config endpoint if an environment ever
+// tunes it away from 1.0 and this preview needs to stay exact.
+class BirdSpeed {
+  static const Map<String, double> _baseKmh = {
+    BirdType.cro: 60.0,
+    BirdType.parrot: 40.0,
+    BirdType.raven: 25.0,
+    BirdType.pigeon: 15.0,
+  };
+
+  static double kmh(String type) => _baseKmh[type] ?? _baseKmh[BirdType.pigeon]!;
+}

@@ -216,7 +216,7 @@ void main() {
     await tester.tap(find.byKey(const Key('birdPanelSendSomewhere')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
+    await tester.tap(find.byType(DropdownMenu<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cabin').last);
     await tester.pumpAndSettle();
@@ -339,7 +339,7 @@ void main() {
     expect(find.byKey(const Key('birdPanelCallItHome')), findsOneWidget);
   });
 
-  testWidgets('"Send onward" from a friend nest offers own nests, other friend nests, and public hubs as destinations',
+  testWidgets('"Send onward" from a friend nest defaults to the Nest tab (own/friend nests), and Hub tab offers public hubs',
       (tester) async {
     var dataChanged = false;
     final bird = Bird(id: 'b10', userId: 'u1', name: 'Bramble', currentNestId: 'f1', isTraveling: false, type: 'Cro');
@@ -349,13 +349,19 @@ void main() {
     await tester.tap(find.byKey(const Key('birdPanelSendOnward')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('sendBirdDestinationDropdown')));
+    // Nest tab (default) offers the sender's own nests - not the Hub.
+    await tester.tap(find.byType(DropdownMenu<String>));
     await tester.pumpAndSettle();
-    // Both the sender's own nests and the current friend nest's own name should be offered
-    // (f1 itself, the bird's current nest, is excluded) - Cabin (own) is present here.
     expect(find.text('Cabin').hitTestable(), findsOneWidget);
-    expect(find.text('Lighthouse (Hub)').hitTestable(), findsOneWidget);
-    await tester.tap(find.text('Lighthouse (Hub)').last);
+    expect(find.text('Lighthouse').hitTestable(), findsNothing);
+
+    // Switching to the Hub tab augments the dropdown with public hubs instead.
+    await tester.tap(find.text('Hub'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('Lighthouse').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Lighthouse').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
@@ -375,7 +381,7 @@ void main() {
     await tester.tap(find.byKey(const Key('birdPanelCallItHome')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('sendBirdDestinationDropdown')), findsNothing);
+    expect(find.byType(DropdownMenu<String>), findsNothing);
     expect(birdService.lastSendBirdId, 'b9');
     expect(birdService.lastSendNestId, ownNest.id);
     expect(dataChanged, isTrue);
