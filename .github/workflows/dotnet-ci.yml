@@ -77,3 +77,22 @@ jobs:
         env:
           CosmosDb__ConnectionString: "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
           BlobStorage__ConnectionString: "UseDevelopmentStorage=true"
+
+  # Deploys to the cro-api App Service (cro-prod resource group) only after tests pass
+  # on main - never on a PR. Needs the AZURE_WEBAPP_PUBLISH_PROFILE secret (see the
+  # publish-profile download in `az webapp deployment list-publishing-profiles`).
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet publish api/CroApp.Api.csproj -c Release -o api/publish-out
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: cro-api
+          package: api/publish-out
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
