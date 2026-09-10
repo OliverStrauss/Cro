@@ -408,10 +408,6 @@ class WebShellScreenState extends State<WebShellScreen> {
                     friends: _data.friends,
                     incomingRequests: _data.incomingRequests,
                     onOpenFriendRequest: (_) => _selectNav(WebNavItem.friends),
-                    events: _data.events,
-                    eventsLoading: false,
-                    eventsError: null,
-                    onRetryEvents: _data.load,
                   ),
                 ),
                 // Floats directly over the map instead of sitting in its own Row column, so

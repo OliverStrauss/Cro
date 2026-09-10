@@ -19,9 +19,8 @@ import 'hub_panel_content.dart';
 import 'nest_panel_content.dart';
 
 /// The 392px right-hand panel: only mounted while a nest, hub or bird is selected (map
-/// marker tap, dock card tap, nests/hubs screen tap) - the journey log used to live here as
-/// its permanent default view but is now a top-bar popup (see JourneyLogPanel/TopBar), so
-/// there is no "nothing selected" state to render here any more.
+/// marker tap, dock card tap, nests/hubs screen tap) - there is no "nothing selected" state
+/// to render here.
 class ContextPanel extends StatelessWidget {
   final PanelMode mode;
   final Waypoint? selectedNest;
