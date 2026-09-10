@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import 'api_client.dart' as api;
 
 class AuthException implements Exception {
   final String message;
@@ -16,7 +17,7 @@ class AuthService {
   Future<String> login(String username, String password) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': username, 'password': password}),
@@ -36,7 +37,7 @@ class AuthService {
   Future<String> signUp(String username, String email, String password) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/users'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': username, 'email': email, 'password': password}),

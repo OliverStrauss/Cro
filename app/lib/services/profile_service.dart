@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'api_client.dart' as api;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -19,7 +20,7 @@ class ProfileService {
   Future<UserProfile> getUser(String userId) async {
     final http.Response response;
     try {
-      response = await http.get(Uri.parse('$apiBaseUrl/users/$userId'));
+      response = await api.get(Uri.parse('$apiBaseUrl/users/$userId'));
     } catch (_) {
       throw ProfileException('Could not reach the server');
     }
@@ -53,7 +54,7 @@ class ProfileService {
 
     final http.StreamedResponse streamedResponse;
     try {
-      streamedResponse = await request.send();
+      streamedResponse = await api.send(request);
     } catch (_) {
       throw ProfileException('Could not reach the server');
     }

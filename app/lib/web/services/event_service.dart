@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../config.dart';
+import '../../services/api_client.dart' as api;
 import '../models/event.dart';
 
 class EventException implements Exception {
@@ -74,7 +75,7 @@ class EventService {
   Future<http.Response> _send(http.Request request, String token) async {
     request.headers['Authorization'] = 'Bearer $token';
     try {
-      final streamed = await request.send();
+      final streamed = await api.send(request);
       return await http.Response.fromStream(streamed);
     } catch (_) {
       throw EventException('Could not reach the server');

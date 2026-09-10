@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'api_client.dart' as api;
 
 import '../config.dart';
 import '../models/blocked_user.dart';
@@ -51,7 +52,7 @@ class FriendsService {
   Future<void> sendFriendRequest(String token, String username) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/friends/requests'),
         headers: {
           'Content-Type': 'application/json',
@@ -73,7 +74,7 @@ class FriendsService {
   Future<void> acceptFriendRequest(String token, String requesterId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/friends/requests/$requesterId/accept'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -91,7 +92,7 @@ class FriendsService {
   Future<void> removeFriend(String token, String userId) async {
     final http.Response response;
     try {
-      response = await http.delete(
+      response = await api.delete(
         Uri.parse('$apiBaseUrl/friends/$userId'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -113,7 +114,7 @@ class FriendsService {
   Future<void> declineFriendRequest(String token, String requesterId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/friends/requests/$requesterId/decline'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -131,7 +132,7 @@ class FriendsService {
   Future<void> blockUser(String token, String userId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/friends/$userId/block'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -147,7 +148,7 @@ class FriendsService {
   Future<void> unblockUser(String token, String userId) async {
     final http.Response response;
     try {
-      response = await http.delete(
+      response = await api.delete(
         Uri.parse('$apiBaseUrl/friends/$userId/block'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -175,7 +176,7 @@ class FriendsService {
   Future<void> makeAdmin(String token, String userId) async {
     final http.Response response;
     try {
-      response = await http.post(
+      response = await api.post(
         Uri.parse('$apiBaseUrl/users/$userId/make-admin'),
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -216,7 +217,7 @@ class FriendsService {
   Future<List<UserSearchResult>> searchUsers(String token, String query) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse(
           '$apiBaseUrl/users/search',
         ).replace(queryParameters: {'q': query}),
@@ -243,7 +244,7 @@ class FriendsService {
   ) async {
     final http.Response response;
     try {
-      response = await http.put(
+      response = await api.put(
         Uri.parse('$apiBaseUrl/friends/$friendId/color'),
         headers: {
           'Content-Type': 'application/json',
@@ -267,7 +268,7 @@ class FriendsService {
   ) async {
     final http.Response response;
     try {
-      response = await http.get(
+      response = await api.get(
         Uri.parse('$apiBaseUrl$path'),
         headers: {'Authorization': 'Bearer $token'},
       );

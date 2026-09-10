@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/login_screen.dart';
+import 'services/api_client.dart' as api_client;
 import 'state/auth_state.dart';
 import 'theme.dart';
 import 'web/screens/web_shell_screen.dart';
@@ -11,6 +12,9 @@ const bool skipLogin = bool.fromEnvironment('SKIP_LOGIN', defaultValue: false);
 
 void main() {
   final authState = AuthState();
+  // A 401 from any API call means the token expired or was revoked - log out centrally
+  // rather than leaving the caller to fail silently or show a confusing error.
+  api_client.onUnauthorized = authState.logout;
   if (skipLogin) {
     authState.login('dev-skip-login-token');
   }
