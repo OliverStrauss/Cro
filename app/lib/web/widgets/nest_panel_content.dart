@@ -176,15 +176,34 @@ class _NestPanelContentState extends State<NestPanelContent> {
       final friendNests = results[1].where((w) => w.id != widget.nest.id);
       final hubs = await widget.hubService.listHubs(token);
       final destinations = [
-        ...ownNests.map((w) => SendBirdDestination(nestId: w.id, label: w.name)),
-        ...friendNests.map((w) => SendBirdDestination(nestId: w.id, label: '${w.name} (${w.username})')),
-        ...hubs.map((h) => SendBirdDestination(nestId: h.id, label: '${h.name} (Hub)')),
+        ...ownNests.map((w) => SendBirdDestination(nestId: w.id, name: w.name, latitude: w.latitude, longitude: w.longitude, isHub: false)),
+        ...friendNests.map((w) => SendBirdDestination(
+              nestId: w.id,
+              name: w.name,
+              ownerUsername: w.username,
+              latitude: w.latitude,
+              longitude: w.longitude,
+              isHub: false,
+            )),
+        ...hubs.map((h) => SendBirdDestination(
+              nestId: h.id,
+              name: h.name,
+              latitude: h.latitude,
+              longitude: h.longitude,
+              isHub: true,
+              category: h.category,
+            )),
       ];
 
       if (!mounted) return;
       final result = await showDialog<SendBirdResult>(
         context: context,
-        builder: (_) => SendBirdDialog(destinations: destinations),
+        builder: (_) => SendBirdDialog(
+          destinations: destinations,
+          originLatitude: widget.nest.latitude,
+          originLongitude: widget.nest.longitude,
+          speedKmh: BirdSpeed.kmh(bird.type),
+        ),
       );
       if (result == null) return;
 

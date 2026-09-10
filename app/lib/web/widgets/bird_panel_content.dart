@@ -151,26 +151,62 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     }
   }
 
+  // Wherever the bird currently sits (one of its own from/to/current ids) - the departure
+  // point for the send dialog's distance/ETA preview. Always resolvable here since the
+  // footer only offers "send onward" once DockBirdView has already placed the bird
+  // somewhere (state home/away/hub, never null/flight).
+  ({double lat, double lng})? _originLatLng() {
+    final currentId = widget.bird.currentNestId;
+    for (final n in [...widget.ownNests, ...widget.friendWaypoints]) {
+      if (n.id == currentId) return (lat: n.latitude, lng: n.longitude);
+    }
+    for (final h in widget.hubs) {
+      if (h.id == currentId) return (lat: h.latitude, lng: h.longitude);
+    }
+    return null;
+  }
+
   // Relays the bird from wherever it's currently parked (a hub or a friend's nest) onward
   // to a different friend's nest (or back to one of the sender's own), each hop carrying
   // its own message - mirrors NestPanelContent._openSendFlow's destination list, just built
   // from the lists already passed into this panel instead of re-fetched.
   Future<void> _sendOnward() async {
     final bird = widget.bird;
+    final origin = _originLatLng();
+    if (origin == null || !mounted) return;
     final destinations = [
       ...widget.ownNests
           .where((n) => n.id != bird.currentNestId)
-          .map((n) => SendBirdDestination(nestId: n.id, label: n.name)),
+          .map((n) => SendBirdDestination(nestId: n.id, name: n.name, latitude: n.latitude, longitude: n.longitude, isHub: false)),
       ...widget.friendWaypoints
           .where((n) => n.id != bird.currentNestId)
-          .map((n) => SendBirdDestination(nestId: n.id, label: '${n.name} (${n.username})')),
+          .map((n) => SendBirdDestination(
+                nestId: n.id,
+                name: n.name,
+                ownerUsername: n.username,
+                latitude: n.latitude,
+                longitude: n.longitude,
+                isHub: false,
+              )),
       ...widget.hubs
           .where((h) => h.id != bird.currentNestId)
-          .map((h) => SendBirdDestination(nestId: h.id, label: '${h.name} (Hub)')),
+          .map((h) => SendBirdDestination(
+                nestId: h.id,
+                name: h.name,
+                latitude: h.latitude,
+                longitude: h.longitude,
+                isHub: true,
+                category: h.category,
+              )),
     ];
     final result = await showDialog<SendBirdResult>(
       context: context,
-      builder: (_) => SendBirdDialog(destinations: destinations),
+      builder: (_) => SendBirdDialog(
+        destinations: destinations,
+        originLatitude: origin.lat,
+        originLongitude: origin.lng,
+        speedKmh: BirdSpeed.kmh(bird.type),
+      ),
     );
     if (result == null || !mounted) return;
 
