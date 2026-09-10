@@ -80,3 +80,35 @@ the Friends screen renders. A real fix would lift this to one shared source of t
 `WebShellData` and have `WebFriendsScreen` consume it instead of fetching its own copy, but
 that also touches the rail's badge wiring - out of scope for just making both screens live.
 Revisit if a third consumer of friends/incoming-request data shows up.
+
+## Unbounded cross-partition scans and no pagination across most repositories
+
+Flagged while scoping the real-Azure launch plan (issues #140/#141). `CosmosUserRepository`
+(`GetByUsernameAsync` - every `/login`, and `SearchByUsernamePrefixAsync`),
+`CosmosBirdRepository` (`GetByIdAsync`, `GetByNestIdAsync`, `GetManyByUserIdsAsync`),
+`CosmosHubRepository.GetAsync`, `CosmosHubPictureSuggestionRepository` (`ListPendingAsync`,
+`GetAsync`), and `CosmosWaypointRepository` (`GetByIdAsync`, `GetManyByUserIdsAsync`) all run
+cross-partition scans with no pagination, each already commented in source as "fine at
+current tiny counts." Accepted at today's user count; revisit if account/row counts grow
+enough that these scans show up in Cosmos RU cost or latency.
+
+## `CosmosEventRepository`'s per-user event history is never pruned
+
+`QueryByUserIdAsync` is single-partition (good) but sorts/limits **client-side in memory**
+after loading a user's entire event history, which is never pruned or TTL'd (per the
+existing comment at `CosmosEventRepository.cs`) - unlike `HubMessages`' 7-day TTL. Every
+`/events`, `/notifications`, and `/notifications/unread-count` call re-reads the whole
+history. Fine at launch scale; will need either a TTL (losing the "permanent record" property
+noted in `Program.cs`'s Events container comment) or real server-side pagination once
+long-lived accounts accumulate enough history for this to matter.
+
+## No rate limiting, refresh tokens, or crash reporting/observability
+
+Also flagged while scoping the launch plan. None of these exist today: no `AddRateLimiter`
+(the 5 file-upload endpoints are the main exposure once request size limits are in place -
+see #140), no refresh-token flow (a 60-minute access token just requires re-login on expiry,
+now that #141 makes a 401 log the user out cleanly instead of failing silently), and no
+crash reporting/APM on either half (Application Insights would be the natural add for the
+API given it's already targeting Azure App Service; Flutter web has no equivalent wired up
+at all). None of these block an initial small-scale launch; revisit once there's real traffic
+to justify them.

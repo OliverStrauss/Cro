@@ -17,6 +17,7 @@ using Microsoft.IdentityModel.Tokens;
 using User = CroApp.Api.Models.User;
 
 const string DevCorsPolicy = "DevCorsPolicy";
+const string ProdCorsPolicy = "ProdCorsPolicy";
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,10 +26,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 // Flutter web's dev server runs on a randomly-assigned localhost port each run, so a
-// fixed-origin allow-list isn't practical here. Development-only, same pattern as the
-// emulator TLS bypass and container auto-provisioning below - production needs a real
-// allow-list of the deployed web app's actual origin, not yet relevant since there's no
-// prod deployment.
+// fixed-origin allow-list isn't practical here.
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddCors(options =>
@@ -39,6 +37,35 @@ if (builder.Environment.IsDevelopment())
         });
     });
 }
+else
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(ProdCorsPolicy, policy =>
+        {
+            // Real allow-list for the deployed web app's actual origin, set via config
+            // (Cors:AllowedOrigin) rather than hardcoded - unset means no origin is
+            // allowed, so a missing value fails closed instead of accidentally allowing
+            // everything. Read here rather than outside AddCors so it reflects config
+            // after all overrides (WebApplicationFactory's test config included) are
+            // fully merged in - AddCors's setup action is itself deferred via
+            // Configure<CorsOptions>, same timing as AddJwtBearer's options delegate above.
+            var allowedOrigin = builder.Configuration["Cors:AllowedOrigin"];
+            if (!string.IsNullOrEmpty(allowedOrigin))
+            {
+                policy.WithOrigins(allowedOrigin).AllowAnyHeader().AllowAnyMethod();
+            }
+        });
+    });
+}
+
+// The app's real upload ceiling is BirdMediaValidation.MaxAudioSizeBytes (10MB) - this
+// leaves headroom for multipart overhead while still rejecting grossly oversized bodies
+// before they're fully buffered, instead of relying on Kestrel's much larger 30MB default.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 12 * 1024 * 1024;
+});
 
 builder.Services.Configure<CosmosDbOptions>(builder.Configuration.GetSection("CosmosDb"));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
@@ -112,6 +139,16 @@ builder.Services
         // remapped to legacy ClaimTypes.NameIdentifier/Name URIs, so reading them back via
         // JwtRegisteredClaimNames.Sub would return null instead of the actual user id.
         options.MapInboundClaims = false;
+        var signingKey = jwtSection["SigningKey"];
+        if (string.IsNullOrEmpty(signingKey))
+        {
+            // An empty key would otherwise stand up JWT auth that accepts a token signed
+            // with an empty HMAC key - fail loudly instead of silently running
+            // unauthenticated in every environment, dev included. Checked here rather than
+            // eagerly at the top of the file so it reads config after all overrides
+            // (WebApplicationFactory's test config included) are fully merged in.
+            throw new InvalidOperationException("Jwt:SigningKey is required and must not be empty.");
+        }
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -120,7 +157,7 @@ builder.Services
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["SigningKey"] ?? string.Empty))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey))
         };
     });
 builder.Services.AddAuthorization();
@@ -276,13 +313,17 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-if (app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment())
 {
-    app.UseCors(DevCorsPolicy);
+    app.UseHsts();
 }
+
+app.UseCors(app.Environment.IsDevelopment() ? DevCorsPolicy : ProdCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/health", () => Results.Ok()).WithName("HealthCheck");
 
 app.MapPost("/users", async (CreateUserRequest req, CosmosUserRepository repo) =>
 {
