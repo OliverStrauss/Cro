@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/auth_error_banner.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/auth_text_field.dart';
+import 'forgot_password_screen.dart';
 import 'sign_up_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -68,12 +69,17 @@ class _LoginScreenState extends State<LoginScreen> {
           TextButton(
             key: const Key('goToSignUpButton'),
             style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: Size.zero),
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              final signedUp = await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
                   builder: (_) => SignUpScreen(authState: widget.authState),
                 ),
               );
+              if (signedUp == true && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('You have been successfully signed up. Welcome!')),
+                );
+              }
             },
             child: const Text('Sign up', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
           ),
@@ -107,6 +113,24 @@ class _LoginScreenState extends State<LoginScreen> {
               enableSuggestions: false,
               validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
               onSubmitted: (_) => _isLoading ? null : _submit(),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: const Key('forgotPasswordButton'),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 0), minimumSize: Size.zero),
+                onPressed: () async {
+                  final reset = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                  );
+                  if (reset == true && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Your password has been reset. Log in below.')),
+                    );
+                  }
+                },
+                child: const Text('Forgot password?', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+              ),
             ),
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),

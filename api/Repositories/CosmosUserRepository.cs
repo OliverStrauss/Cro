@@ -56,6 +56,26 @@ public class CosmosUserRepository
         return null;
     }
 
+    public async Task<User?> GetByEmailAsync(string email)
+    {
+        // Cross-partition query, same tradeoff as GetByUsernameAsync above.
+        var query = _container.GetItemQueryIterator<User>(
+            new QueryDefinition("SELECT * FROM c WHERE c.email = @email")
+                .WithParameter("@email", email));
+
+        while (query.HasMoreResults)
+        {
+            var page = await query.ReadNextAsync();
+            var match = page.FirstOrDefault();
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
     // Case-insensitive username-prefix search, for the "Add Friends" live-suggestions
     // dropdown. Cross-partition query, same tradeoff as GetByUsernameAsync above - fine at
     // current tiny user counts. Stops paging as soon as `limit` results are in hand rather

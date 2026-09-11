@@ -42,12 +42,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     });
 
     try {
-      final token = await _authService.signUp(
+      await _authService.signUp(
         _usernameController.text,
         _emailController.text,
         _passwordController.text,
       );
-      widget.authState.login(token);
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setState(() => _errorMessage = e.toString());
     } finally {
