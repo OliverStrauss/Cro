@@ -327,6 +327,19 @@ app.MapGet("/health", () => Results.Ok()).WithName("HealthCheck");
 
 app.MapPost("/users", async (CreateUserRequest req, CosmosUserRepository repo) =>
 {
+    // Users is partitioned by /id (a random Guid), not by username, so there's no
+    // Cosmos-level unique constraint to lean on - a retried sign-up (slow request, page
+    // refresh mid-request) would otherwise create a second document with the same
+    // username/email and a different id. Same check-then-create pattern DevDataSeeder/
+    // Program.cs's dev-user seeding already uses.
+    // ponytail: check-then-create isn't atomic, so two truly concurrent sign-ups with the
+    // same username could still both pass this check - a unique key policy on username
+    // would close that, add if simultaneous duplicate sign-ups turn out to happen in practice.
+    if (await repo.GetByUsernameAsync(req.Username) is not null)
+    {
+        return Results.Conflict(new { message = "Username already taken" });
+    }
+
     var hasher = new PasswordHasher<User>();
     var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow, PasswordHash: "", Friends: []);
     var hashedUser = user with { PasswordHash = hasher.HashPassword(user, req.Password) };

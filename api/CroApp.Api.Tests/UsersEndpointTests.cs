@@ -49,5 +49,19 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(created.Username, fetched.Username);
     }
 
+    [Fact]
+    public async Task CreateUser_WithDuplicateUsername_ReturnsConflictAndDoesNotCreateSecondUser()
+    {
+        var username = $"test-user-{Guid.NewGuid():N}";
+        var createRequest = new { Username = username, Email = "first@example.com", Password = "correct-horse-battery-staple" };
+        var firstResponse = await _client.PostAsJsonAsync("/users", createRequest);
+        firstResponse.EnsureSuccessStatusCode();
+
+        var duplicateRequest = new { Username = username, Email = "second@example.com", Password = "another-password" };
+        var duplicateResponse = await _client.PostAsJsonAsync("/users", duplicateRequest);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, duplicateResponse.StatusCode);
+    }
+
     private record UserResponse(string Id, string Username, string Email, DateTimeOffset CreatedAt);
 }

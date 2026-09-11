@@ -46,6 +46,9 @@ class AuthService {
       throw AuthException('Could not reach the server');
     }
 
+    if (response.statusCode == 409) {
+      throw AuthException('That username is already taken');
+    }
     if (response.statusCode != 201) {
       throw AuthException('Could not create account');
     }
