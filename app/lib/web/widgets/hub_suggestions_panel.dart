@@ -61,7 +61,10 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
       final pictureSuggestions = results[1] as List<HubPictureSuggestion>;
       _hubNameById
         ..clear()
-        ..addEntries((results[2] as List<Hub>).map((h) => MapEntry(h.id, h.name)));
+        ..addEntries((results[2] as List<Hub>).map((h) => MapEntry(h.id, h.name)))
+        // A photo suggested alongside a Hub suggestion (see WebShellData.placeHub) points at
+        // a still-Pending hub, which listHubs (Approved only) won't have a name for.
+        ..addEntries(suggestions.map((h) => MapEntry(h.id, h.name)));
 
       // N+1 username resolution, cached per suggester - same accepted tradeoff category as
       // GET /friends' own N+1 avatar lookups, fine at expected suggestion-queue sizes.

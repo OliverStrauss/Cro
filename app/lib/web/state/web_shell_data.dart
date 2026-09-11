@@ -293,18 +293,31 @@ class WebShellData extends ChangeNotifier {
 
   /// Creates or suggests a Hub depending on admin status, then reloads. Returns whether it
   /// was submitted as a suggestion (non-admin) rather than created outright, so the caller
-  /// can show the "sent to admins" toast without this class touching BuildContext.
+  /// can show the "sent to admins" toast without this class touching BuildContext. An
+  /// optional photo rides along as a picture suggestion on the newly created/suggested Hub -
+  /// HubPictureService.SuggestAsync accepts both Approved and Pending hubs, so this works
+  /// the same way whether the Hub was created outright or is still awaiting admin approval.
   Future<bool> placeHub({
     required double latitude,
     required double longitude,
     required String name,
     required String category,
+    List<int>? imageBytes,
+    String? imageFilename,
+    String? imageContentType,
   }) async {
     final wasSuggestion = !isAdmin;
-    if (isAdmin) {
-      await hubService.createHub(authState.token!, name: name, latitude: latitude, longitude: longitude, category: category);
-    } else {
-      await hubService.suggestHub(authState.token!, name: name, latitude: latitude, longitude: longitude, category: category);
+    final hub = isAdmin
+        ? await hubService.createHub(authState.token!, name: name, latitude: latitude, longitude: longitude, category: category)
+        : await hubService.suggestHub(authState.token!, name: name, latitude: latitude, longitude: longitude, category: category);
+    if (imageBytes != null) {
+      await hubService.suggestHubPicture(
+        authState.token!,
+        hub.id,
+        imageBytes,
+        filename: imageFilename ?? 'photo.jpg',
+        contentType: imageContentType ?? 'image/jpeg',
+      );
     }
     await load();
     return wasSuggestion;

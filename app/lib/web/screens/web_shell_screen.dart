@@ -252,7 +252,7 @@ class WebShellScreenState extends State<WebShellScreen> {
     setState(() => _addingHub = false);
     final result = await showDialog<HubNameDialogResult>(
       context: context,
-      builder: (context) => const HubNameDialog(),
+      builder: (context) => HubNameDialog(profileService: _data.profileService),
     );
     if (result == null || result.name.trim().isEmpty || !mounted) return;
 
@@ -262,6 +262,9 @@ class WebShellScreenState extends State<WebShellScreen> {
         longitude: point.longitude,
         name: result.name.trim(),
         category: result.category,
+        imageBytes: result.imageBytes,
+        imageFilename: result.imageFilename,
+        imageContentType: result.imageContentType,
       );
       if (wasSuggestion && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sent to admins for review')));
