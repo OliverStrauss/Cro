@@ -400,6 +400,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                         reactionService: _data.reactionService,
                         onDataChanged: _data.load,
                         onFollowOnMap: () => _selectNav(WebNavItem.map),
+                        onSelectBird: _selectBird,
                       ),
                     ),
                   ),

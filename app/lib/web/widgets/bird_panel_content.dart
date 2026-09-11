@@ -60,9 +60,6 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
   List<BirdReactionSummary> _reactions = [];
   bool _isLoadingReactions = false;
   bool _isUploadingPicture = false;
-  // Awaiting a second tap on Delete before it actually deletes - same two-tap pattern as
-  // the phone app's birds_screen.dart and this app's own nest screens.
-  bool _confirmingDelete = false;
 
   @override
   void initState() {
@@ -274,25 +271,6 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     }
   }
 
-  Future<void> _handleDeleteTap() async {
-    if (!_confirmingDelete) {
-      setState(() => _confirmingDelete = true);
-      return;
-    }
-    setState(() => _confirmingDelete = false);
-
-    try {
-      await widget.birdService.deleteBird(widget.authState.token!, widget.bird.id);
-      widget.onDataChanged();
-      widget.onClose();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
-      );
-    }
-  }
-
   Future<void> _pickAndUploadPicture() async {
     try {
       final image = await widget.birdService.pickImage();
@@ -412,26 +390,6 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Material(
-                          type: MaterialType.transparency,
-                          child: InkWell(
-                            key: const Key('birdPanelDeleteButton'),
-                            borderRadius: BorderRadius.circular(6),
-                            onTap: _handleDeleteTap,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                              child: Text(
-                                _confirmingDelete ? 'Confirm?' : 'Delete',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: _confirmingDelete ? Theme.of(context).colorScheme.error : CroColors.fog,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -459,28 +417,30 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                         key: const Key('birdPanelProgressNote'),
                         style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
                       ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'What it carries',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          BirdPayloadView(
-                            content: bird.content,
-                            imageUrl: bird.imageUrl,
-                            audioUrl: bird.type == BirdType.parrot ? null : bird.audioUrl,
-                          ),
-                          if (bird.type == BirdType.parrot && bird.audioUrl != null)
-                            _ParrotWaveform(audioUrl: bird.audioUrl!, color: Theme.of(context).colorScheme.primary),
-                        ],
+                    if (BirdPayloadView.hasPayload(content: bird.content, audioUrl: bird.audioUrl, imageUrl: bird.imageUrl)) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'What it carries',
+                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            BirdPayloadView(
+                              content: bird.content,
+                              imageUrl: bird.imageUrl,
+                              audioUrl: bird.type == BirdType.parrot ? null : bird.audioUrl,
+                            ),
+                            if (bird.type == BirdType.parrot && bird.audioUrl != null)
+                              _ParrotWaveform(audioUrl: bird.audioUrl!, color: Theme.of(context).colorScheme.primary),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                     if (bird.isPublic) ...[
                       const SizedBox(height: 18),
                       const Text('Reactions', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),

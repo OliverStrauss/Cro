@@ -47,7 +47,6 @@ class _FakeBirdService implements BirdService {
   String? lastSendContent;
   String? lastRenamedBirdId;
   String? lastRenamedTo;
-  String? lastDeletedBirdId;
 
   @override
   Future<Bird> sendBird(
@@ -71,11 +70,6 @@ class _FakeBirdService implements BirdService {
     lastRenamedBirdId = birdId;
     lastRenamedTo = name;
     return Bird(id: birdId, userId: 'u1', name: name, currentNestId: 'n1', isTraveling: false, type: 'Cro');
-  }
-
-  @override
-  Future<void> deleteBird(String token, String birdId) async {
-    lastDeletedBirdId = birdId;
   }
 
   // image_picker's platform channel isn't available in the widget test harness - returning
@@ -208,6 +202,15 @@ void main() {
     expect(closed, isTrue);
   });
 
+  testWidgets('a bird with no content/image/audio shows no "What it carries" section at all', (tester) async {
+    final bird = Bird(id: 'b14', userId: 'u1', name: 'Willa', currentNestId: 'n1', isTraveling: false, type: 'Cro');
+    await tester.pumpWidget(build(bird));
+    await tester.pump();
+
+    expect(find.text('What it carries'), findsNothing);
+    expect(find.text('This bird carried no message.'), findsNothing);
+  });
+
   testWidgets('a home bird shows the Home chip, "Home and rested" note, and Send footer button', (tester) async {
     final bird = Bird(id: 'b5', userId: 'u1', name: 'Willa', currentNestId: 'n1', isTraveling: false, type: 'Cro');
     await tester.pumpWidget(build(bird, ownNests: [ownNest, ownNest2]));
@@ -253,28 +256,13 @@ void main() {
     expect(dataChanged, isTrue);
   });
 
-  testWidgets('deleting a bird requires a second confirming tap, then closes the panel', (tester) async {
-    var dataChanged = false;
-    var closed = false;
+  testWidgets('there is no delete button - deleting a bird is not exposed in the UI', (tester) async {
     final bird = Bird(id: 'b13', userId: 'u1', name: 'Willa', currentNestId: 'n1', isTraveling: false, type: 'Cro');
-    await tester.pumpWidget(build(
-      bird,
-      onDataChanged: () => dataChanged = true,
-      onClose: () => closed = true,
-    ));
+    await tester.pumpWidget(build(bird));
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('birdPanelDeleteButton')));
-    await tester.pump();
-    expect(birdService.lastDeletedBirdId, isNull);
-    expect(find.text('Confirm?'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('birdPanelDeleteButton')));
-    await tester.pump();
-
-    expect(birdService.lastDeletedBirdId, 'b13');
-    expect(dataChanged, isTrue);
-    expect(closed, isTrue);
+    expect(find.byKey(const Key('birdPanelDeleteButton')), findsNothing);
+    expect(find.text('Delete'), findsNothing);
   });
 
   testWidgets('an in-flight bird shows the In flight chip, a percent note, and Follow footer button', (tester) async {

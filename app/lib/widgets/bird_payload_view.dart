@@ -14,6 +14,12 @@ class BirdPayloadView extends StatefulWidget {
 
   const BirdPayloadView({super.key, this.content, this.audioUrl, this.imageUrl});
 
+  // Whether there's anything here to show at all - callers that wrap this in their own
+  // "What it carries" heading use it to hide that heading entirely instead of showing it
+  // over an empty/placeholder body.
+  static bool hasPayload({String? content, String? audioUrl, String? imageUrl}) =>
+      (content != null && content.isNotEmpty) || audioUrl != null || imageUrl != null;
+
   @override
   State<BirdPayloadView> createState() => _BirdPayloadViewState();
 }
