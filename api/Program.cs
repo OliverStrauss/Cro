@@ -1498,6 +1498,23 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, CosmosUserReposit
 .RequireAuthorization()
 .WithName("GetFriendsBirds");
 
+// Anyone-can-see-it feed: unlike GET /friends/birds, this is not scoped to accepted
+// friends at all - see BirdService.ListPublicInTransitAsync for what it deliberately never
+// returns (nest ids, raw endpoint coordinates, timestamps).
+app.MapGet("/birds/public", async (ClaimsPrincipal principal, BirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var sightings = await birdService.ListPublicInTransitAsync(userId);
+    return Results.Ok(sightings);
+})
+.RequireAuthorization()
+.WithName("GetPublicBirds");
+
 app.MapPut("/friends/{userId}/color", async (string userId, SetFriendColorRequest req, ClaimsPrincipal principal, FriendService friendService) =>
 {
     var callerId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;

@@ -56,6 +56,24 @@ public class CosmosBirdRepository
         return results;
     }
 
+    public async Task<List<Bird>> ListPublicTravelingAsync()
+    {
+        // Cross-partition - a public bird can belong to any user, so this can't be scoped
+        // to a single PartitionKey the way ListByUserIdAsync is (same shape as GetByIdAsync
+        // above). Backs GET /birds/public, the one query in this repository that isn't
+        // scoped to the caller or their friends at all.
+        var query = _container.GetItemQueryIterator<Bird>(
+            new QueryDefinition("SELECT * FROM c WHERE c.isPublic = true AND c.isTraveling = true"));
+
+        var results = new List<Bird>();
+        while (query.HasMoreResults)
+        {
+            var page = await query.ReadNextAsync();
+            results.AddRange(page);
+        }
+        return results;
+    }
+
     public async Task<Bird?> GetAsync(string userId, string birdId)
     {
         try

@@ -7,6 +7,7 @@ import '../../models/friend.dart';
 import '../../models/friend_bird.dart';
 import '../../models/hub.dart';
 import '../../models/hub_category.dart';
+import '../../models/public_bird.dart';
 import '../../models/waypoint.dart';
 import '../../config.dart';
 import '../../theme.dart';
@@ -26,6 +27,11 @@ class WebMapScreen extends StatefulWidget {
   final List<Waypoint> friendWaypoints;
   final List<Bird> birds;
   final List<FriendBird> friendsBirds;
+  // Any user's public in-flight birds, not scoped to friends - see BirdService.getPublicBirds.
+  // Rendered as a marker with no path line and no origin/destination markers, since a
+  // PublicBird carries only a single already-privacy-clamped point (see its own doc comment)
+  // and never the flight's real endpoints.
+  final List<PublicBird> publicBirds;
   final List<Hub> hubs;
   // Only used for the Trails legend's per-friend rows (username + trail color) -
   // WebShellScreen already loads this for the Friends screen and rail badge.
@@ -54,6 +60,7 @@ class WebMapScreen extends StatefulWidget {
   // A friend's bird marker is only tappable when it's public (see _MapFlight/onTap below) -
   // there's nothing to view yet on a still-private one.
   final ValueChanged<FriendBird> onSelectFriendBird;
+  final ValueChanged<PublicBird>? onSelectPublicBird;
   // Armed by the Nests screen's "+ Add a nest" button - the next map tap places a nest
   // there instead of selecting whatever marker is underneath it.
   final bool addingNest;
@@ -76,6 +83,7 @@ class WebMapScreen extends StatefulWidget {
     required this.friendWaypoints,
     required this.birds,
     required this.friendsBirds,
+    this.publicBirds = const [],
     required this.hubs,
     this.friends = const [],
     this.hubUnreadCounts = const {},
@@ -95,6 +103,7 @@ class WebMapScreen extends StatefulWidget {
     this.onCancelAddHub,
     required this.onSelectBird,
     required this.onSelectFriendBird,
+    this.onSelectPublicBird,
   });
 
   @override
@@ -126,7 +135,8 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
   // informational, so it's simply skipped rather than given a reduced-motion variant.
   void _syncBob() {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
-    final hasTraveling = !reduceMotion && (widget.birds.any((b) => b.isTraveling) || widget.friendsBirds.isNotEmpty);
+    final hasTraveling = !reduceMotion &&
+        (widget.birds.any((b) => b.isTraveling) || widget.friendsBirds.isNotEmpty || widget.publicBirds.isNotEmpty);
     if (hasTraveling && !_bobController.isAnimating) {
       _bobController.repeat(reverse: true);
     } else if (!hasTraveling && _bobController.isAnimating) {
@@ -354,6 +364,43 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                               isPublic: f.isPublicFriendBird,
                               hasViewed: f.hasViewed,
                               selected: f.id == widget.selectedBirdId,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                // A stranger's public bird, from GET /birds/public - deliberately not part
+                // of `flights` above, so it never gets a PolylineLayer path or an
+                // origin/destination marker: the server only ever gives us the one
+                // already-privacy-clamped point in PublicBird.latitude/longitude, not the
+                // flight's real endpoints, so there's nothing to draw a line between.
+                for (final pb in widget.publicBirds)
+                  Marker(
+                    key: Key('webPublicBirdMarker_${pb.id}'),
+                    point: LatLng(pb.latitude, pb.longitude),
+                    width: 34,
+                    height: 34,
+                    child: Tooltip(
+                      message: '${pb.senderUsername}\'s bird',
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => widget.onSelectPublicBird?.call(pb),
+                          child: AnimatedBuilder(
+                            animation: _bobController,
+                            builder: (context, child) => Transform.translate(offset: Offset(0, -4 * _bobController.value), child: child),
+                            child: _BirdMarkerDot(
+                              key: Key('webPublicBirdMarkerDot_${pb.id}'),
+                              color: CroColors.deliveryAmber,
+                              heading: 0,
+                              isPublic: true,
+                              // No per-viewer read-state exists for a global audience (unlike
+                              // FriendBird.hasViewed) - true keeps the badge a plain "public"
+                              // indicator rather than reading as an unread notification.
+                              hasViewed: true,
+                              selected: pb.id == widget.selectedBirdId,
                             ),
                           ),
                         ),

@@ -135,6 +135,16 @@ provisioning script (or an `az cli` step in the CD workflow, gated to run once /
 idempotent) so a future storage-account recreation doesn't silently reintroduce the same
 outage.
 
+## `GET /birds/public` is a full cross-partition scan with no index/materialized view
+
+`BirdService.ListPublicInTransitAsync` (#156) backs the "any user can see a public bird
+in flight" feature by querying `CosmosBirdRepository.ListPublicTravelingAsync`, which scans
+every partition in the Birds container (`WHERE c.isPublic = true AND c.isTraveling = true`,
+no partition key) rather than something scoped like `ListTravelingForUsersAsync`'s
+friend-id list. Fine at this project's user-base scale; if the Birds container ever gets
+large, replace it with a materialized "public birds" view/index instead of a full scan on
+every poll (the web shell polls this every 3 seconds - see `WebShellData.startPolling`).
+
 ## No rate limiting, refresh tokens, or crash reporting/observability
 
 Also flagged while scoping the launch plan. None of these exist today: no `AddRateLimiter`

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cro_app/models/bird.dart';
@@ -6,6 +7,7 @@ import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/hub_category.dart';
+import 'package:cro_app/models/public_bird.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/theme.dart';
 import 'package:cro_app/web/screens/web_map_screen.dart';
@@ -41,9 +43,11 @@ void main() {
 
   Widget buildMap({
     List<FriendBird> friendsBirds = const [],
+    List<PublicBird> publicBirds = const [],
     List<Friend> friends = const [],
     String? selectedBirdId,
     ValueChanged<FriendBird>? onSelectFriendBird,
+    ValueChanged<PublicBird>? onSelectPublicBird,
     bool isAdmin = false,
     bool addingHub = false,
     VoidCallback? onCancelAddHub,
@@ -61,6 +65,7 @@ void main() {
           friendWaypoints: [friendNest],
           birds: const [],
           friendsBirds: friendsBirds,
+          publicBirds: publicBirds,
           hubs: hubs,
           friends: friends,
           hubUnreadCounts: hubUnreadCounts,
@@ -73,6 +78,7 @@ void main() {
           onSelectHub: onSelectHub ?? (_) {},
           onSelectBird: (_) {},
           onSelectFriendBird: onSelectFriendBird ?? (_) {},
+          onSelectPublicBird: onSelectPublicBird,
           isAdmin: isAdmin,
           addingHub: addingHub,
           onCancelAddHub: onCancelAddHub,
@@ -143,6 +149,31 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('webBirdMarkerGlow')), findsNothing);
+  });
+
+  testWidgets('a public bird renders a marker with no polyline, and tapping calls onSelectPublicBird', (tester) async {
+    PublicBird? tapped;
+    final publicBird = PublicBird(
+      id: 'pub1',
+      senderUserId: 'stranger1',
+      senderUsername: 'stranger_sam',
+      type: 'Cro',
+      content: 'hi',
+      latitude: 1.03,
+      longitude: 2.03,
+    );
+    await tester.pumpWidget(buildMap(publicBirds: [publicBird], onSelectPublicBird: (b) => tapped = b));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('webPublicBirdMarker_pub1')), findsOneWidget);
+    // No own/friend flight in this scenario, so PolylineLayer (which only ever draws
+    // `flights`, never a PublicBird) isn't mounted at all - confirming a public bird never
+    // gets a drawn path.
+    expect(find.byType(PolylineLayer), findsNothing);
+
+    await tester.tap(find.byKey(const Key('webPublicBirdMarker_pub1')));
+    expect(tapped?.id, 'pub1');
   });
 
   testWidgets('addingHub banner reads "place" for an admin and "suggest" otherwise', (tester) async {

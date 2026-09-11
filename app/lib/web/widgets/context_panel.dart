@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/bird.dart';
 import '../../models/friend_bird.dart';
 import '../../models/hub.dart';
+import '../../models/public_bird.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
@@ -17,6 +18,7 @@ import 'bird_panel_content.dart';
 import 'friend_bird_panel_content.dart';
 import 'hub_panel_content.dart';
 import 'nest_panel_content.dart';
+import 'public_bird_panel_content.dart';
 
 /// The 392px right-hand panel: only mounted while a nest, hub or bird is selected (map
 /// marker tap, dock card tap, nests/hubs screen tap) - there is no "nothing selected" state
@@ -28,6 +30,7 @@ class ContextPanel extends StatelessWidget {
   final Hub? selectedHub;
   final Bird? selectedBird;
   final FriendBird? selectedFriendBird;
+  final PublicBird? selectedPublicBird;
   // The caller's own full bird list - only used by NestPanelContent, to find which of the
   // caller's own birds are currently resting at a friend's nest (see its own doc comment).
   final List<Bird> ownBirds;
@@ -53,6 +56,7 @@ class ContextPanel extends StatelessWidget {
     this.selectedHub,
     this.selectedBird,
     this.selectedFriendBird,
+    this.selectedPublicBird,
     required this.ownBirds,
     required this.ownNests,
     required this.friendWaypoints,
@@ -130,6 +134,13 @@ class ContextPanel extends StatelessWidget {
           reactionService: reactionService,
           onClose: onClose,
           onFollowOnMap: onFollowOnMap,
+        ),
+        PanelMode.publicBird when selectedPublicBird != null => PublicBirdPanelContent(
+          key: ValueKey('publicBird_${selectedPublicBird!.id}'),
+          bird: selectedPublicBird!,
+          authState: authState,
+          friendsService: friendsService,
+          onClose: onClose,
         ),
         // Defensive only: the shell never mounts ContextPanel unless a selection backs
         // `mode` (see WebShellScreen), so this can't actually be reached.

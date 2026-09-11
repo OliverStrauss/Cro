@@ -8,6 +8,7 @@ import '../../models/friend.dart';
 import '../../models/friend_bird.dart';
 import '../../models/friend_request.dart';
 import '../../models/hub.dart';
+import '../../models/public_bird.dart';
 import '../../models/user_profile.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_reaction_service.dart';
@@ -59,6 +60,9 @@ class WebShellData extends ChangeNotifier {
   List<Waypoint> friendWaypoints = [];
   List<Bird> birds = [];
   List<FriendBird> friendsBirds = [];
+  // Any user's public in-flight birds, not scoped to friends at all - see
+  // BirdService.getPublicBirds/GET /birds/public.
+  List<PublicBird> publicBirds = [];
   List<Hub> hubs = [];
   // Keyed by hubId - drives the "!" badge on a Hub's map marker (see WebMapScreen). Mirrors
   // the phone app's MapScreen._hubUnreadCounts.
@@ -115,6 +119,7 @@ class WebShellData extends ChangeNotifier {
       final results = await Future.wait([
         birdService.listBirds(token),
         friendsService.getFriendsBirds(token),
+        birdService.getPublicBirds(token),
         hubService.getUnreadCounts(token),
         friendsService.getIncomingRequests(token),
         eventService.listEvents(token),
@@ -125,20 +130,21 @@ class WebShellData extends ChangeNotifier {
       if (_disposed) return;
       birds = results[0] as List<Bird>;
       friendsBirds = results[1] as List<FriendBird>;
-      hubUnreadCounts = results[2] as Map<String, int>;
-      incomingRequests = results[3] as List<FriendRequest>;
-      events = results[4] as List<AppEvent>;
+      publicBirds = results[2] as List<PublicBird>;
+      hubUnreadCounts = results[3] as Map<String, int>;
+      incomingRequests = results[4] as List<FriendRequest>;
+      events = results[5] as List<AppEvent>;
       // See _notifSeq's declaration - a mark-read that landed while this fetch was in flight
       // makes this response stale, so it's dropped rather than reverting the fresher local edit.
       if (notifSeqAtStart == _notifSeq) {
-        notifications = results[5] as List<AppEvent>;
+        notifications = results[6] as List<AppEvent>;
       }
-      friends = results[6] as List<Friend>;
+      friends = results[7] as List<Friend>;
       // Otherwise a friend's nest only appears once this user's own next full load() runs
       // (e.g. accepting a request themselves, which already reloads everything) - the other
       // side of a new friendship had no such trigger and stayed stuck on stale friendWaypoints
       // until a page reload.
-      friendWaypoints = results[7] as List<Waypoint>;
+      friendWaypoints = results[8] as List<Waypoint>;
       _notify();
     } catch (_) {
       // Swallow - same "a blip on a silent background poll shouldn't blank an
@@ -159,6 +165,7 @@ class WebShellData extends ChangeNotifier {
         friendsService.getFriendsWaypoints(token),
         birdService.listBirds(token),
         friendsService.getFriendsBirds(token),
+        birdService.getPublicBirds(token),
         hubService.listHubs(token),
         hubService.getUnreadCounts(token),
         friendsService.getIncomingRequests(token),
@@ -171,14 +178,15 @@ class WebShellData extends ChangeNotifier {
       friendWaypoints = results[1] as List<Waypoint>;
       birds = results[2] as List<Bird>;
       friendsBirds = results[3] as List<FriendBird>;
-      hubs = results[4] as List<Hub>;
-      hubUnreadCounts = results[5] as Map<String, int>;
-      incomingRequests = results[6] as List<FriendRequest>;
-      events = results[7] as List<AppEvent>;
-      notifications = results[8] as List<AppEvent>;
-      friends = results[9] as List<Friend>;
-      if (results.length > 10) {
-        final profile = results[10] as UserProfile;
+      publicBirds = results[4] as List<PublicBird>;
+      hubs = results[5] as List<Hub>;
+      hubUnreadCounts = results[6] as Map<String, int>;
+      incomingRequests = results[7] as List<FriendRequest>;
+      events = results[8] as List<AppEvent>;
+      notifications = results[9] as List<AppEvent>;
+      friends = results[10] as List<Friend>;
+      if (results.length > 11) {
+        final profile = results[11] as UserProfile;
         username = profile.username;
         profilePictureUrl = profile.profilePictureUrl;
         isAdmin = profile.isAdmin;

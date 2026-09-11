@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../config.dart';
 import '../models/bird.dart';
+import '../models/public_bird.dart';
 
 class BirdException implements Exception {
   final String message;
@@ -21,6 +22,16 @@ class BirdService {
     final response = await _get('/birds', token, 'Could not load birds');
     return (jsonDecode(response.body) as List<dynamic>)
         .map((e) => Bird.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // Any user's public, currently-in-flight birds - not scoped to friends at all, unlike
+  // FriendsService.getFriendsBirds. Lives here rather than FriendsService precisely because
+  // it isn't a friends concept.
+  Future<List<PublicBird>> getPublicBirds(String token) async {
+    final response = await _get('/birds/public', token, 'Could not load public birds');
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((e) => PublicBird.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
