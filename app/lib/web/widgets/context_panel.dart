@@ -47,6 +47,7 @@ class ContextPanel extends StatelessWidget {
   final BirdReactionService reactionService;
   final VoidCallback onDataChanged;
   final VoidCallback onFollowOnMap;
+  final ValueChanged<Bird> onSelectBird;
 
   const ContextPanel({
     super.key,
@@ -71,6 +72,7 @@ class ContextPanel extends StatelessWidget {
     required this.reactionService,
     required this.onDataChanged,
     required this.onFollowOnMap,
+    required this.onSelectBird,
   });
 
   @override
@@ -96,11 +98,10 @@ class ContextPanel extends StatelessWidget {
           authState: authState,
           onClose: onClose,
           waypointService: waypointService,
-          friendsService: friendsService,
-          hubService: hubService,
           birdService: birdService,
           profileService: profileService,
           onChanged: onDataChanged,
+          onSelectBird: onSelectBird,
         ),
         PanelMode.hub when selectedHub != null => HubPanelContent(
           key: ValueKey('hub_${selectedHub!.id}'),

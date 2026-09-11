@@ -34,13 +34,18 @@ Harmless (never called, so never hits the live/test-only backend endpoint), but 
 next time this file is touched rather than leaving a second copy of the same "is this actually
 dead" question to re-answer later.
 
-## `DELETE /birds/{id}` still lets a user permanently shrink below the starter roster
+## `DELETE /birds/{id}` is now unreachable from the frontend, same shape as `/birds/compose` above
 
-`BirdPanelContent`'s Delete button (`BirdService.DeleteAsync`) is untouched by the move to a
-fixed 5-bird starter roster - a user can still delete a bird, but there's no way back to 5 since
-spawning is gone (see above). Not addressed here since removing Delete, or adding some kind of
-"restore from roster" flow, wasn't asked for and is its own product decision. Revisit if this
-comes up as a real complaint.
+`BirdPanelContent`'s Delete button (which called `BirdService.deleteBird` /
+`DELETE /birds/{id}`) was removed from the UI (2026-09-10) - there was no way back to the
+fixed 5-bird starter roster once a bird was deleted (spawning is gone, see the `/birds/compose`
+entry above), so exposing permanent deletion in the UI no longer made sense. The Flutter
+`BirdService.deleteBird` wrapper and the backend `DELETE /birds/{id}` endpoint/`DeleteAsync`
+were left in place rather than deleted, same reasoning as `/birds/compose`: worth checking
+before ripping them out whether `api/CroApp.Api.Tests` (e.g. `BirdDeleteEndpointTests.cs`)
+relies on the endpoint for setup/teardown. Revisit alongside that entry - both are now
+test-only/no-UI-caller surface area with the same "delete or formally repurpose as
+admin-only" choice ahead of them.
 
 ## Backend integration tests appear to write into the shared local dev Cosmos database
 

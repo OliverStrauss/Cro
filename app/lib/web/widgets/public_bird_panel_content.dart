@@ -76,19 +76,21 @@ class _PublicBirdPanelContentState extends State<PublicBirdPanelContent> {
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
             children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('What it carries', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
-                  ],
+              if (BirdPayloadView.hasPayload(content: bird.content, audioUrl: bird.audioUrl, imageUrl: bird.imageUrl)) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('What it carries', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
+              ],
               Material(
                 color: _sent ? CroColors.altSurface : CroColors.warmSurface,
                 borderRadius: BorderRadius.circular(12),

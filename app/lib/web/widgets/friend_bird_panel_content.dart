@@ -173,19 +173,21 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
                 style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('What it carries', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
-                  ],
+              if (BirdPayloadView.hasPayload(content: bird.content, audioUrl: bird.audioUrl, imageUrl: bird.imageUrl)) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('What it carries', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
+              ],
               const Text('Reactions', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
               const SizedBox(height: 9),
               Wrap(

@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../../models/bird.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_service.dart';
-import '../../services/friends_service.dart';
-import '../../services/hub_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
@@ -12,17 +10,16 @@ import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../utils/jwt_utils.dart';
 import '../../widgets/received_bird_sheet.dart';
-import '../../widgets/send_bird_dialog.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import 'panel_header.dart';
 
 /// The nest detail panel body - own nests get delivered-mail + resident-bird sections
-/// (rename, send onward). A friend's nest reuses that same resident-bird section (name,
-/// type, "Send onward/home") for whichever of the caller's OWN birds happen to be resting
-/// there right now - e.g. one you already sent this friend - and otherwise renders nothing
-/// beyond the header, since a friend's nest never reveals anything else about what's there.
-/// Adapted from the phone app's NestDetailsSheet (same resident-fetch/rename/send logic)
-/// into the panel format instead of a bottom sheet.
+/// (rename, tap a resident to open its bird detail panel). A friend's nest reuses that same
+/// resident-bird section for whichever of the caller's OWN birds happen to be resting there
+/// right now - e.g. one you already sent this friend - and otherwise renders nothing beyond
+/// the header, since a friend's nest never reveals anything else about what's there.
+/// Adapted from the phone app's NestDetailsSheet (same resident-fetch/rename logic) into the
+/// panel format instead of a bottom sheet.
 class NestPanelContent extends StatefulWidget {
   final Waypoint nest;
   final bool isOwn;
@@ -34,13 +31,14 @@ class NestPanelContent extends StatefulWidget {
   final AuthState authState;
   final VoidCallback onClose;
   final WaypointService waypointService;
-  final FriendsService friendsService;
-  final HubService hubService;
   final BirdService birdService;
   final ProfileService profileService;
-  // Called after a successful rename/send so the shell can refresh its own nest/bird lists
-  // (nav badges, dock, map markers) to match.
+  // Called after a successful rename so the shell can refresh its own nest/bird lists (nav
+  // badges, dock, map markers) to match.
   final VoidCallback onChanged;
+  // Opens a resident bird's own detail panel - the same one YourBirdsDock opens for a dock
+  // tap - instead of this panel offering its own send flow.
+  final ValueChanged<Bird> onSelectBird;
 
   const NestPanelContent({
     super.key,
@@ -50,11 +48,10 @@ class NestPanelContent extends StatefulWidget {
     required this.authState,
     required this.onClose,
     required this.waypointService,
-    required this.friendsService,
-    required this.hubService,
     required this.birdService,
     required this.profileService,
     required this.onChanged,
+    required this.onSelectBird,
   });
 
   @override
@@ -165,69 +162,6 @@ class _NestPanelContentState extends State<NestPanelContent> {
     widget.onChanged();
   }
 
-  Future<void> _openSendFlow(Bird bird) async {
-    final token = widget.authState.token!;
-    try {
-      final results = await Future.wait([
-        widget.waypointService.listWaypoints(token),
-        widget.friendsService.getFriendsWaypoints(token),
-      ]);
-      final ownNests = results[0].where((w) => w.id != widget.nest.id);
-      final friendNests = results[1].where((w) => w.id != widget.nest.id);
-      final hubs = await widget.hubService.listHubs(token);
-      final destinations = [
-        ...ownNests.map((w) => SendBirdDestination(nestId: w.id, name: w.name, latitude: w.latitude, longitude: w.longitude, isHub: false)),
-        ...friendNests.map((w) => SendBirdDestination(
-              nestId: w.id,
-              name: w.name,
-              ownerUsername: w.username,
-              latitude: w.latitude,
-              longitude: w.longitude,
-              isHub: false,
-            )),
-        ...hubs.map((h) => SendBirdDestination(
-              nestId: h.id,
-              name: h.name,
-              latitude: h.latitude,
-              longitude: h.longitude,
-              isHub: true,
-              category: h.category,
-            )),
-      ];
-
-      if (!mounted) return;
-      final result = await showDialog<SendBirdResult>(
-        context: context,
-        builder: (_) => SendBirdDialog(
-          destinations: destinations,
-          originLatitude: widget.nest.latitude,
-          originLongitude: widget.nest.longitude,
-          speedKmh: BirdSpeed.kmh(bird.type),
-          birdType: bird.type,
-          initialIsPublic: bird.isPublic,
-        ),
-      );
-      if (result == null) return;
-
-      await widget.birdService.sendBird(
-        token,
-        bird.id,
-        nestId: result.nestId,
-        content: result.content,
-        isPublic: result.isPublic,
-        mediaBytes: result.mediaBytes,
-        mediaContentType: result.mediaContentType,
-        mediaFilename: result.mediaFilename,
-      );
-      if (!mounted) return;
-      setState(() => _residents = _residents.where((b) => b.id != bird.id).toList());
-      widget.onChanged();
-      _toast('${bird.name} is on its way!');
-    } catch (e) {
-      _toast(e.toString(), isError: true);
-    }
-  }
-
   void _toast(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -311,9 +245,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
 
   // Only reached when _myBirdsHere is non-empty (see build()) - e.g. Oliver viewing Annie's
   // nest, where a bird he already sent her is currently resting. Reuses the exact same row
-  // + send flow as an own nest's "Birds here" - the same "send home or onward" action works
-  // unchanged since _openSendFlow already excludes whichever nest the bird is currently at
-  // (this one) from both the own- and friend-nest destination lists.
+  // as an own nest's "Birds here" - tapping it opens that bird's own detail panel.
   Widget _friendBirdsBody() {
     return ListView(
       shrinkWrap: true,
@@ -392,7 +324,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
         child: InkWell(
           key: Key('nestPanelResident_${bird.id}'),
           borderRadius: BorderRadius.circular(12),
-          onTap: () => _openSendFlow(bird),
+          onTap: () => widget.onSelectBird(bird),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
             child: Row(
@@ -412,7 +344,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
                     ],
                   ),
                 ),
-                const Text('Send →', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+                const Icon(Icons.chevron_right, size: 18, color: CroColors.fog),
               ],
             ),
           ),
