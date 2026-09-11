@@ -22,4 +22,6 @@ public record User(
     List<FriendEntry>? Friends,
     string? ProfilePictureUrl = null,
     bool IsAdmin = false,
-    List<string>? BlockedUserIds = null);
+    List<string>? BlockedUserIds = null,
+    string? PasswordResetCodeHash = null,
+    DateTimeOffset? PasswordResetExpiresAt = null);

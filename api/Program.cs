@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
@@ -129,6 +130,20 @@ builder.Services.AddScoped<ProfilePictureService>();
 builder.Services.AddScoped<NestPictureService>();
 builder.Services.AddScoped<BirdPictureService>();
 builder.Services.AddScoped<BirdMediaService>();
+
+// Real SMTP sending is only wired up once Smtp:Host is actually configured (a real account
+// isn't provisioned yet - same category as Cosmos/Blob in CLAUDE.md's "Known dev-only
+// shortcuts"); until then, password-reset codes just get logged instead of emailed.
+var smtpSection = builder.Configuration.GetSection("Smtp");
+if (!string.IsNullOrEmpty(smtpSection["Host"]))
+{
+    builder.Services.Configure<SmtpOptions>(smtpSection);
+    builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+}
+else
+{
+    builder.Services.AddScoped<IEmailSender, ConsoleEmailSender>();
+}
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
@@ -431,6 +446,50 @@ app.MapPost("/login", async (LoginRequest req, CosmosUserRepository repo, IOptio
     return Results.Ok(new LoginResponse(token, expiresAt));
 })
 .WithName("Login");
+
+app.MapPost("/forgot-password", async (ForgotPasswordRequest req, CosmosUserRepository repo, IEmailSender emailSender) =>
+{
+    // Always 200 regardless of whether the email matches an account - a differing response
+    // would let a caller enumerate which emails are registered.
+    var user = await repo.GetByEmailAsync(req.Email);
+    if (user is not null)
+    {
+        var code = Random.Shared.Next(100_000, 999_999).ToString();
+        var codeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+        await repo.UpdateAsync(user with
+        {
+            PasswordResetCodeHash = codeHash,
+            PasswordResetExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
+        });
+        await emailSender.SendPasswordResetCodeAsync(user.Email, code);
+    }
+    return Results.Ok();
+})
+.WithName("ForgotPassword");
+
+app.MapPost("/reset-password", async (ResetPasswordRequest req, CosmosUserRepository repo) =>
+{
+    var user = await repo.GetByEmailAsync(req.Email);
+    var codeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(req.Code)));
+    if (user?.PasswordResetCodeHash is null
+        || user.PasswordResetExpiresAt is null
+        || user.PasswordResetExpiresAt < DateTimeOffset.UtcNow
+        || user.PasswordResetCodeHash != codeHash)
+    {
+        return Results.BadRequest(new { message = "Invalid or expired code" });
+    }
+
+    var hasher = new PasswordHasher<User>();
+    var updated = user with
+    {
+        PasswordHash = hasher.HashPassword(user, req.NewPassword),
+        PasswordResetCodeHash = null,
+        PasswordResetExpiresAt = null
+    };
+    await repo.UpdateAsync(updated);
+    return Results.Ok();
+})
+.WithName("ResetPassword");
 
 app.MapGet("/waypoints", async (ClaimsPrincipal principal, WaypointService waypointService, CosmosUserRepository userRepo) =>
 {
@@ -1689,6 +1748,8 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 record CreateUserRequest(string Username, string Email, string Password);
 record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
+record ForgotPasswordRequest(string Email);
+record ResetPasswordRequest(string Email, string Code, string NewPassword);
 // IsPublic is only honored by CreateWaypoint - UpdateWaypoint reuses this same DTO but
 // ignores the field entirely, since a nest's kind is not editable after creation.
 record SetWaypointRequest(string Name, double Latitude, double Longitude, bool IsPublic = false);

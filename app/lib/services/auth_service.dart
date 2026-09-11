@@ -34,7 +34,7 @@ class AuthService {
     throw AuthException('Invalid username or password');
   }
 
-  Future<String> signUp(String username, String email, String password) async {
+  Future<void> signUp(String username, String email, String password) async {
     final http.Response response;
     try {
       response = await api.post(
@@ -52,7 +52,34 @@ class AuthService {
     if (response.statusCode != 201) {
       throw AuthException('Could not create account');
     }
+  }
 
-    return login(username, password);
+  Future<void> forgotPassword(String email) async {
+    try {
+      await api.post(
+        Uri.parse('$apiBaseUrl/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+    } catch (_) {
+      throw AuthException('Could not reach the server');
+    }
+  }
+
+  Future<void> resetPassword(String email, String code, String newPassword) async {
+    final http.Response response;
+    try {
+      response = await api.post(
+        Uri.parse('$apiBaseUrl/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'code': code, 'newPassword': newPassword}),
+      );
+    } catch (_) {
+      throw AuthException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw AuthException('Invalid or expired code');
+    }
   }
 }
