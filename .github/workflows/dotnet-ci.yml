@@ -63,20 +63,18 @@ jobs:
               -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false \
               mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
 
-            # Two-stage probe: the explorer's static emulator.pem comes up as soon as its web
-            # server starts, well before the actual data-plane Gateway has finished spinning
-            # up its 10 partitions - `curl` without `-f` also treats a non-2xx (e.g. a 404
-            # while the explorer itself is still starting) as "ready" since it only fails on
-            # a connection error. That gap is what was misreading "ready" here while the
-            # Gateway was still initializing, immediately timing out every test's first
-            # Cosmos call. Stage 2 waits on the actual account endpoint every real request
-            # goes through, with `-f` so an error status correctly counts as not-ready.
+            # Poll the actual account endpoint every real request goes through, with `-f` so
+            # a non-2xx correctly counts as not-ready (curl without `-f` only fails on a
+            # connection error, which was misreading "ready" here off the Explorer's static
+            # emulator.pem well before the Gateway could serve anything). That first attempt
+            # also revealed the real remaining gap: the container's own log shows all 11
+            # partitions finish starting around the ~150s mark on this runner, so the prior
+            # 120s budget (and splitting it across two sequential probe stages, eating into
+            # that budget for no signal this one doesn't already give) was cutting it off
+            # moments before the emulator actually came up - not a false-ready, just too
+            # short a fuse. 5 minutes gives real headroom above that.
             ready=false
-            for i in $(seq 1 60); do
-              curl -sk -f https://localhost:8081/_explorer/emulator.pem -o /dev/null && break
-              sleep 2
-            done
-            for i in $(seq 1 60); do
+            for i in $(seq 1 150); do
               curl -sk -f https://localhost:8081/ -o /dev/null && { ready=true; break; }
               sleep 2
             done
