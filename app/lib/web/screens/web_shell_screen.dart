@@ -97,7 +97,6 @@ class WebShellScreenState extends State<WebShellScreen> {
   void initState() {
     super.initState();
     _data.addListener(_onDataChanged);
-    _data.onNewNotification = _showNotificationToast;
     _data.load();
     _data.startPolling();
   }
@@ -189,21 +188,11 @@ class WebShellScreenState extends State<WebShellScreen> {
     });
   }
 
-  // notifications minus FriendRequestReceived - that kind exists purely to drive the toast
-  // above and the timeline; the dropdown itself shows the same pending request via
-  // incomingRequests (see build()'s FloatingActionsCluster) with richer UI already.
+  // notifications minus FriendRequestReceived - that kind exists purely to drive the timeline;
+  // the dropdown itself shows the same pending request via incomingRequests (see build()'s
+  // FloatingActionsCluster) with richer UI already.
   List<AppEvent> get _dropdownNotifications =>
       _data.notifications.where((n) => n.kind != EventKind.friendRequestReceived).toList();
-
-  void _showNotificationToast(AppEvent notification) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(notification.displayText),
-        action: SnackBarAction(label: 'View', onPressed: () => _openNotification(notification)),
-      ),
-    );
-  }
 
   Future<void> _openNotification(AppEvent notification) async {
     await _data.markNotificationRead(notification.id);
@@ -345,10 +334,9 @@ class WebShellScreenState extends State<WebShellScreen> {
                   top: 18,
                   right: 22,
                   child: FloatingActionsCluster(
-                    // FriendRequestReceived events drive the toast (see onNewNotification
-                    // above) but are excluded here - incomingRequests already renders that
-                    // exact pending request as its own dropdown row, so showing both would
-                    // duplicate it.
+                    // FriendRequestReceived events are excluded here - incomingRequests already
+                    // renders that exact pending request as its own dropdown row, so showing
+                    // both would duplicate it.
                     unreadCount: _dropdownNotifications.where((n) => !n.isRead).length,
                     notifications: _dropdownNotifications,
                     onMarkAllRead: _data.markAllNotificationsRead,
