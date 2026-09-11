@@ -63,19 +63,19 @@ jobs:
               -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false \
               mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
 
-            # Poll the actual account endpoint every real request goes through, with `-f` so
-            # a non-2xx correctly counts as not-ready (curl without `-f` only fails on a
-            # connection error, which was misreading "ready" here off the Explorer's static
-            # emulator.pem well before the Gateway could serve anything). That first attempt
-            # also revealed the real remaining gap: the container's own log shows all 11
-            # partitions finish starting around the ~150s mark on this runner, so the prior
-            # 120s budget (and splitting it across two sequential probe stages, eating into
-            # that budget for no signal this one doesn't already give) was cutting it off
-            # moments before the emulator actually came up - not a false-ready, just too
-            # short a fuse. 5 minutes gives real headroom above that.
+            # Swapping the probe to the account root (previous attempt at this fix) was wrong:
+            # every real Cosmos Gateway path, root included, requires a signed Authorization
+            # header - an unauthenticated GET to `/` 401s even once the emulator is fully up,
+            # and `-f` treats that 401 as failure same as any other error, so that check could
+            # never succeed regardless of how long it waited (both retries timed out at
+            # essentially the full budget, not "sometimes early" - the tell). `_explorer/emulator.pem`
+            # is the one static, auth-free file the Explorer serves, which is why the original
+            # script checked it - its actual bug was only ever the missing `-f` (a non-2xx
+            # there was still misread as ready). `--max-time` bounds each curl call so one
+            # stalled attempt can't silently eat the retry budget.
             ready=false
             for i in $(seq 1 150); do
-              curl -sk -f https://localhost:8081/ -o /dev/null && { ready=true; break; }
+              curl -sk -f --max-time 5 https://localhost:8081/_explorer/emulator.pem -o /dev/null && { ready=true; break; }
               sleep 2
             done
             if [ "$ready" != "true" ]; then
