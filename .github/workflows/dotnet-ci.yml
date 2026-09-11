@@ -63,13 +63,24 @@ jobs:
               -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false \
               mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
 
+            # Swapping the probe to the account root (previous attempt at this fix) was wrong:
+            # every real Cosmos Gateway path, root included, requires a signed Authorization
+            # header - an unauthenticated GET to `/` 401s even once the emulator is fully up,
+            # and `-f` treats that 401 as failure same as any other error, so that check could
+            # never succeed regardless of how long it waited (both retries timed out at
+            # essentially the full budget, not "sometimes early" - the tell). `_explorer/emulator.pem`
+            # is the one static, auth-free file the Explorer serves, which is why the original
+            # script checked it - its actual bug was only ever the missing `-f` (a non-2xx
+            # there was still misread as ready). `--max-time` bounds each curl call so one
+            # stalled attempt can't silently eat the retry budget.
             ready=false
-            for i in $(seq 1 60); do
-              curl -sk https://localhost:8081/_explorer/emulator.pem -o /dev/null && { ready=true; break; }
+            for i in $(seq 1 150); do
+              curl -sk -f --max-time 5 https://localhost:8081/_explorer/emulator.pem -o /dev/null && { ready=true; break; }
               sleep 2
             done
             if [ "$ready" != "true" ]; then
               echo "Emulator did not become ready in time, retrying with a fresh container..."
+              docker logs cosmosdb-emulator 2>&1 | tail -100
               continue
             fi
 
@@ -77,6 +88,7 @@ jobs:
               exit 0
             fi
             echo "Test run failed on attempt $attempt, retrying with a fresh emulator..."
+            docker logs cosmosdb-emulator 2>&1 | tail -100
           done
           echo "All $max_attempts attempts failed."
           exit 1
