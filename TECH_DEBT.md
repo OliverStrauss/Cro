@@ -146,3 +146,30 @@ crash reporting/APM on either half (Application Insights would be the natural ad
 API given it's already targeting Azure App Service; Flutter web has no equivalent wired up
 at all). None of these block an initial small-scale launch; revisit once there's real traffic
 to justify them.
+
+## CD had been silently failing on every push since #149, and password-reset email used SMTP (which Azure App Service blocks)
+
+Discovered 2026-09-11 while chasing a "forgot-password email never arrives" report. Two
+compounding issues, both now fixed:
+
+- `dotnet-ci.yml`'s `deploy` job had failed on *every single push* to `main` since #149
+  introduced it - `cro-api`'s SCM basic-auth publishing credentials were disabled (likely an
+  Azure platform default applied after the App Service was created), which breaks
+  publish-profile-based deploys regardless of whether the profile secret itself is valid.
+  Net effect: prod was silently stuck running whatever was deployed once, manually, before
+  #163 (password reset) even existed - nobody noticed because `build` (tests) kept passing
+  and the workflow's overall status looked normal in the PR view. Fixed by re-enabling basic
+  auth (`az resource update ... basicPublishingCredentialsPolicies/scm --set
+  properties.allow=true`) and rotating `AZURE_WEBAPP_PUBLISH_PROFILE` to a fresh profile.
+  Re-enabling basic auth is a minor security relaxation vs. the alternative (OIDC/federated
+  service-principal login, no shared long-lived secret) - worth migrating the deploy step to
+  that eventually, but out of scope for just unblocking delivery. Worth adding a lightweight
+  CI check that deploy-job failures on `main` actually page/notify someone, since GitHub's PR
+  UI doesn't surface a `push`-triggered workflow's later failure back onto the PR that caused it.
+- Once deploy was unblocked, `/forgot-password` started 500ing: `SmtpEmailSender` (plain
+  `System.Net.Mail.SmtpClient`, port 587) can't complete a connection from `cro-api` at all -
+  Azure App Service's shared/Basic plans block outbound SMTP ports at the platform level for
+  anti-spam reasons, independent of credentials or sender verification. Replaced with
+  `SendGridEmailSender`, a ~30-line `HttpClient` POST to SendGrid's `v3/mail/send` HTTPS API
+  (port 443, never blocked) - no SDK dependency needed. Config moved from `Smtp:*` to
+  `SendGrid:ApiKey`/`SendGrid:FromAddress` (Azure App Service settings updated to match).

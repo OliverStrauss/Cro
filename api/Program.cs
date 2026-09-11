@@ -131,14 +131,15 @@ builder.Services.AddScoped<NestPictureService>();
 builder.Services.AddScoped<BirdPictureService>();
 builder.Services.AddScoped<BirdMediaService>();
 
-// Real SMTP sending is only wired up once Smtp:Host is actually configured (a real account
-// isn't provisioned yet - same category as Cosmos/Blob in CLAUDE.md's "Known dev-only
-// shortcuts"); until then, password-reset codes just get logged instead of emailed.
-var smtpSection = builder.Configuration.GetSection("Smtp");
-if (!string.IsNullOrEmpty(smtpSection["Host"]))
+// Real sending (via SendGrid's HTTPS API - see SendGridEmailSender for why not SMTP) is only
+// wired up once SendGrid:ApiKey is actually configured; until then, password-reset codes just
+// get logged instead of emailed - same category as Cosmos/Blob in CLAUDE.md's "Known dev-only
+// shortcuts".
+var sendGridSection = builder.Configuration.GetSection("SendGrid");
+if (!string.IsNullOrEmpty(sendGridSection["ApiKey"]))
 {
-    builder.Services.Configure<SmtpOptions>(smtpSection);
-    builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+    builder.Services.Configure<SendGridOptions>(sendGridSection);
+    builder.Services.AddHttpClient<IEmailSender, SendGridEmailSender>();
 }
 else
 {
