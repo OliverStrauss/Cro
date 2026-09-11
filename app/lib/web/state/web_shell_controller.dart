@@ -8,7 +8,7 @@ enum WebNavItem { map, nests, hubs, friends, you }
 /// when one of these is selected - there is no "nothing selected" member here. `friendBird`
 /// is a friend's public bird (read-only view, distinct from `bird` which is always the
 /// caller's own).
-enum PanelMode { nest, hub, bird, friendBird }
+enum PanelMode { nest, hub, bird, friendBird, publicBird }
 
 /// The "Your birds" dock's All/Away/Home filter chips.
 enum DockFilter { all, away, home }

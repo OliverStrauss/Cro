@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../../models/bird.dart';
 import '../../models/friend_bird.dart';
 import '../../models/hub.dart';
+import '../../models/public_bird.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
@@ -81,6 +82,7 @@ class WebShellScreenState extends State<WebShellScreen> {
   Hub? _selectedHub;
   Bird? _selectedBird;
   FriendBird? _selectedFriendBird;
+  PublicBird? _selectedPublicBird;
 
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
@@ -129,6 +131,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedHub = null;
       _selectedBird = null;
       _selectedFriendBird = null;
+      _selectedPublicBird = null;
     });
   }
 
@@ -140,6 +143,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedNest = null;
       _selectedBird = null;
       _selectedFriendBird = null;
+      _selectedPublicBird = null;
     });
     if ((_data.hubUnreadCounts[hub.id] ?? 0) > 0) _data.markHubRead(hub.id);
   }
@@ -152,6 +156,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedNest = null;
       _selectedHub = null;
       _selectedFriendBird = null;
+      _selectedPublicBird = null;
     });
   }
 
@@ -163,10 +168,23 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedNest = null;
       _selectedHub = null;
       _selectedBird = null;
+      _selectedPublicBird = null;
     });
     // Only a public bird's marker is tappable at all (see WebMapScreen), so this is never
     // called for a private one - no guard needed here.
     if (!bird.hasViewed) _markFriendBirdViewed(bird);
+  }
+
+  void _selectPublicBird(PublicBird bird) {
+    setState(() {
+      _selectedNav = WebNavItem.map;
+      _panelMode = PanelMode.publicBird;
+      _selectedPublicBird = bird;
+      _selectedNest = null;
+      _selectedHub = null;
+      _selectedBird = null;
+      _selectedFriendBird = null;
+    });
   }
 
   Future<void> _markFriendBirdViewed(FriendBird bird) async {
@@ -185,6 +203,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedHub = null;
       _selectedBird = null;
       _selectedFriendBird = null;
+      _selectedPublicBird = null;
     });
   }
 
@@ -366,6 +385,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                         selectedHub: _selectedHub,
                         selectedBird: _selectedBird,
                         selectedFriendBird: _selectedFriendBird,
+                        selectedPublicBird: _selectedPublicBird,
                         ownBirds: _data.birds,
                         ownNests: _data.ownNests,
                         friendWaypoints: _data.friendWaypoints,
@@ -419,18 +439,20 @@ class WebShellScreenState extends State<WebShellScreen> {
           friendWaypoints: _data.friendWaypoints,
           birds: _data.birds,
           friendsBirds: _data.friendsBirds,
+          publicBirds: _data.publicBirds,
           hubs: _data.hubs,
           friends: _data.friends,
           hubUnreadCounts: _data.hubUnreadCounts,
           nestResidentsByNestId: _data.nestResidentsByNestId,
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
-          selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id,
+          selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id ?? _selectedPublicBird?.id,
           bottomInset: _dockHeight,
           onSelectNest: _selectNest,
           onSelectHub: _selectHub,
           onSelectBird: _selectBird,
           onSelectFriendBird: _selectFriendBird,
+          onSelectPublicBird: _selectPublicBird,
           addingNest: _addingNest,
           onPlaceNest: _placeNest,
           onCancelAddNest: _cancelAddNest,

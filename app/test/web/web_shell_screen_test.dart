@@ -11,6 +11,7 @@ import 'package:cro_app/models/friend_bird.dart';
 import 'package:cro_app/models/friend_request.dart';
 import 'package:cro_app/models/hub.dart';
 import 'package:cro_app/models/hub_message.dart';
+import 'package:cro_app/models/public_bird.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/models/user_search_result.dart';
 import 'package:cro_app/models/waypoint.dart';
@@ -84,6 +85,9 @@ class _FakeBirdService implements BirdService {
   Future<void> markBirdViewed(String token, String birdId) async {
     lastMarkedViewedBirdId = birdId;
   }
+
+  @override
+  Future<List<PublicBird>> getPublicBirds(String token) async => [];
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
@@ -582,6 +586,9 @@ void main() {
 class _ThrowingBirdService implements BirdService {
   @override
   Future<List<Bird>> listBirds(String token) async => throw BirdException('boom');
+
+  @override
+  Future<List<PublicBird>> getPublicBirds(String token) async => [];
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>

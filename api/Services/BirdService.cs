@@ -118,6 +118,91 @@ public class BirdService(
         return resolved.Where(b => b.IsTraveling).ToList();
     }
 
+    // A single point-in-time sighting of another user's public, in-flight bird - the shape
+    // GET /birds/public returns. Deliberately carries no NestFromId/NestToId/timestamps
+    // (unlike ListTravelingForUsersAsync's Bird): Latitude/Longitude is the ONLY location
+    // data exposed, and it's never one of the flight's two real endpoints (see
+    // ListPublicInTransitAsync's fraction clamp) - that's what keeps the sender's (or
+    // whoever the bird is currently departing from, for a resent bird) nest location and
+    // flight path both unrecoverable from this response.
+    public record PublicBirdSighting(
+        string Id,
+        string SenderUserId,
+        string SenderUsername,
+        string? SenderProfilePictureUrl,
+        string Type,
+        string? Content,
+        string? AudioUrl,
+        string? ImageUrl,
+        double Latitude,
+        double Longitude);
+
+    // How far into a flight's progress fraction the exposed point is clamped away from the
+    // true endpoints - at fraction 0.0/1.0 positionAtFraction-equivalent math resolves
+    // exactly to the origin/destination's real coordinate, so without this a viewer
+    // polling right at departure or arrival could read the sender's actual nest location
+    // off the marker.
+    private static readonly (double Min, double Max) PublicSightingFractionRange = (0.05, 0.95);
+
+    // Anyone-can-see-it analog of ListTravelingForUsersAsync: unlike every other bird query
+    // in this class, this is NOT scoped to the caller or their friends - it's the one place
+    // a stranger's bird is visible at all. Excludes the caller's own birds (they already see
+    // those normally) and anyone in a blocking relationship with the caller, same
+    // both-directions check FriendService.SendRequestAsync uses. Only a single interpolated
+    // position ever leaves this method - see PublicBirdSighting and PublicSightingFractionRange.
+    // ponytail: full cross-partition scan of every public bird in the Birds container - fine
+    // at this project's user-base scale; a materialized "public birds" view/index is the
+    // upgrade path if that container ever gets large.
+    public async Task<List<PublicBirdSighting>> ListPublicInTransitAsync(string callerId)
+    {
+        var caller = await userRepository.GetByIdAsync(callerId);
+        var blockedByCaller = caller?.BlockedUserIds ?? [];
+
+        var candidates = await birdRepository.ListPublicTravelingAsync();
+        var now = DateTimeOffset.UtcNow;
+        var results = new List<PublicBirdSighting>();
+
+        foreach (var bird in candidates)
+        {
+            if (bird.UserId == callerId) continue;
+            if (bird.NestFromId is null || bird.NestToId is null || bird.DepartedAt is null || bird.EstimatedArrivalAt is null)
+            {
+                continue;
+            }
+
+            var resolved = await ResolveArrivalIfDueAsync(bird);
+            if (!resolved.IsTraveling) continue; // arrived since ListPublicTravelingAsync's query ran
+
+            var sender = await userRepository.GetByIdAsync(resolved.UserId);
+            if (sender is null) continue;
+            if (blockedByCaller.Contains(sender.Id) || (sender.BlockedUserIds ?? []).Contains(callerId)) continue;
+
+            var origin = await ResolveReachableNestAsync(resolved.UserId, resolved.NestFromId!);
+            var destination = await ResolveReachableNestAsync(resolved.UserId, resolved.NestToId!);
+            if (origin is null || destination is null) continue;
+
+            var totalDuration = resolved.EstimatedArrivalAt!.Value - resolved.DepartedAt!.Value;
+            var rawFraction = totalDuration <= TimeSpan.Zero
+                ? 1.0
+                : (now - resolved.DepartedAt.Value).TotalMilliseconds / totalDuration.TotalMilliseconds;
+            var fraction = Math.Clamp(rawFraction, PublicSightingFractionRange.Min, PublicSightingFractionRange.Max);
+
+            results.Add(new PublicBirdSighting(
+                resolved.Id,
+                sender.Id,
+                sender.Username,
+                sender.ProfilePictureUrl,
+                resolved.Type,
+                resolved.Content,
+                resolved.AudioUrl,
+                resolved.ImageUrl,
+                origin.Latitude + (destination.Latitude - origin.Latitude) * fraction,
+                origin.Longitude + (destination.Longitude - origin.Longitude) * fraction));
+        }
+
+        return results;
+    }
+
     // Spawns a brand-new bird and sends it in one step. No longer reachable from the product
     // UI - every user is auto-provisioned BirdTypeCatalog.StarterRoster instead (see
     // ProvisionStarterRosterAsync) and MaxBirdsPerUser means a normal user is already at the
