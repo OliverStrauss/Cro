@@ -716,10 +716,11 @@ app.MapDelete("/hub-suggestions/{id}", async (string id, ClaimsPrincipal princip
 .RequireAuthorization()
 .WithName("RejectHubSuggestion");
 
-// Any authenticated user can suggest a photo for an existing (Approved) Hub - unlike a
-// Hub location suggestion, this doesn't create a new Hub, just a Pending picture attached
-// to one that already exists. Same admin-approval gate as hub-suggestions above, so a
-// shared/ownerless Hub's picture can't be griefed by an unmoderated upload.
+// Any authenticated user can suggest a photo for an existing Hub, Approved or still-Pending
+// (see HubPictureService.SuggestAsync) - unlike a Hub location suggestion, this doesn't
+// create a new Hub, just a Pending picture attached to one that already exists. Same
+// admin-approval gate as hub-suggestions above, so a shared/ownerless Hub's picture can't be
+// griefed by an unmoderated upload.
 app.MapPost("/hubs/{id}/picture-suggestions", async (string id, IFormFile file, ClaimsPrincipal principal, HubPictureService hubPictureService) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;

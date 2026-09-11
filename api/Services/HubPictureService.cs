@@ -24,13 +24,16 @@ public class HubPictureService
         _suggestionRepository = suggestionRepository;
     }
 
-    // Any authenticated user can suggest a photo for an existing Approved Hub - unlike
-    // Hub location suggestions, there's no separate Pending Hub involved, just a Pending
-    // picture attached to an already-live Hub. The upload lands in blob storage
-    // immediately (so it's previewable in the admin moderation feed before approval); it
-    // only becomes the Hub's actual picture once ApproveAsync below runs. Blob named after
-    // the *suggestion's* own id, not the Hub's, so several pending suggestions for the same
-    // Hub can coexist without overwriting each other before one is chosen.
+    // Any authenticated user can suggest a photo for an Approved Hub, or for their own
+    // still-Pending Hub suggestion at suggestion time (see POST /hub-suggestions) - either
+    // way there's no separate approval step tying the picture to the Hub's own status, just
+    // a Pending picture attached by hub id. The upload lands in blob storage immediately (so
+    // it's previewable in the admin moderation feed before approval); it only becomes the
+    // Hub's actual picture once ApproveAsync below runs. Blob named after the *suggestion's*
+    // own id, not the Hub's, so several pending suggestions for the same Hub can coexist
+    // without overwriting each other before one is chosen. A Pending Hub keeps its id across
+    // approval (HubService.ApproveAsync recreates it in the Approved partition with the same
+    // Id), so a picture suggestion made before the Hub itself is approved still resolves.
     public async Task<HubPictureSuggestion> SuggestAsync(string hubId, string userId, Stream content, string contentType, long contentLength)
     {
         if (!ImageUploadValidation.AllowedContentTypes.Contains(contentType))
@@ -44,9 +47,9 @@ public class HubPictureService
 
         var hub = await _hubRepository.GetAsync(hubId)
             ?? throw new ServiceException(404, "Hub not found.");
-        if (hub.Status != HubStatus.Approved)
+        if (hub.Status != HubStatus.Approved && hub.Status != HubStatus.Pending)
         {
-            throw new ServiceException(409, "Only an approved Hub can receive a photo suggestion.");
+            throw new ServiceException(409, "This Hub can't receive a photo suggestion.");
         }
 
         var suggestionId = Guid.NewGuid().ToString();
