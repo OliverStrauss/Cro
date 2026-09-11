@@ -63,13 +63,26 @@ jobs:
               -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false \
               mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
 
+            # Two-stage probe: the explorer's static emulator.pem comes up as soon as its web
+            # server starts, well before the actual data-plane Gateway has finished spinning
+            # up its 10 partitions - `curl` without `-f` also treats a non-2xx (e.g. a 404
+            # while the explorer itself is still starting) as "ready" since it only fails on
+            # a connection error. That gap is what was misreading "ready" here while the
+            # Gateway was still initializing, immediately timing out every test's first
+            # Cosmos call. Stage 2 waits on the actual account endpoint every real request
+            # goes through, with `-f` so an error status correctly counts as not-ready.
             ready=false
             for i in $(seq 1 60); do
-              curl -sk https://localhost:8081/_explorer/emulator.pem -o /dev/null && { ready=true; break; }
+              curl -sk -f https://localhost:8081/_explorer/emulator.pem -o /dev/null && break
+              sleep 2
+            done
+            for i in $(seq 1 60); do
+              curl -sk -f https://localhost:8081/ -o /dev/null && { ready=true; break; }
               sleep 2
             done
             if [ "$ready" != "true" ]; then
               echo "Emulator did not become ready in time, retrying with a fresh container..."
+              docker logs cosmosdb-emulator 2>&1 | tail -100
               continue
             fi
 
@@ -77,6 +90,7 @@ jobs:
               exit 0
             fi
             echo "Test run failed on attempt $attempt, retrying with a fresh emulator..."
+            docker logs cosmosdb-emulator 2>&1 | tail -100
           done
           echo "All $max_attempts attempts failed."
           exit 1
