@@ -59,6 +59,7 @@ class _FakeBirdService implements BirdService {
     String birdId, {
     required String nestId,
     String? content,
+    bool isPublic = false,
     List<int>? mediaBytes,
     String? mediaContentType,
     String? mediaFilename,

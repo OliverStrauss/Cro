@@ -121,6 +121,7 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         string birdId,
         string nestId,
         string? content = null,
+        bool isPublic = false,
         (byte[] Bytes, string ContentType, string Filename)? media = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"/birds/{birdId}/send");
@@ -131,6 +132,7 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         var form = new MultipartFormDataContent
         {
             { new StringContent(nestId), "nestId" },
+            { new StringContent(isPublic.ToString()), "isPublic" },
         };
         if (content is not null)
         {
@@ -194,6 +196,42 @@ public class BirdSendEndpointTests : IClassFixture<WebApplicationFactory<Program
         Assert.False(landed.IsTraveling);
 
         return (landed, home, userId, token);
+    }
+
+    [Fact]
+    public async Task Send_WithIsPublicTrue_MarksTheBirdPublic()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-public");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var response = await SendBirdAsync(token, bird.Id, away.Id, isPublic: true);
+        response.EnsureSuccessStatusCode();
+        var sent = await response.Content.ReadFromJsonAsync<BirdDto>();
+
+        Assert.True(sent!.IsPublic);
+    }
+
+    [Fact]
+    public async Task Send_WithIsPublicFalse_FlipsAPreviouslyPublicBirdBackToPrivate()
+    {
+        var (bird, home, _, token) = await LandBirdAtHomeAsync("bird-send-toggle");
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        // Same coordinates as `home` (zero-distance), so each hop below resolves instantly on
+        // the next query - same trick LandBirdAtHomeAsync uses - letting the two sends below
+        // happen back-to-back without the second one 409ing on "already traveling".
+        var bounceHub = await CreateHubAsync(adminToken, $"Toggle Bounce {Guid.NewGuid():N}", home.Latitude, home.Longitude);
+
+        var madePublic = await SendBirdAsync(token, bird.Id, bounceHub.Id, isPublic: true);
+        madePublic.EnsureSuccessStatusCode();
+        var publicBird = (await madePublic.Content.ReadFromJsonAsync<BirdDto>())!;
+        Assert.True(publicBird.IsPublic);
+
+        var madePrivate = await SendBirdAsync(token, publicBird.Id, home.Id, isPublic: false);
+        madePrivate.EnsureSuccessStatusCode();
+        var privateBird = await madePrivate.Content.ReadFromJsonAsync<BirdDto>();
+
+        Assert.False(privateBird!.IsPublic);
     }
 
     [Fact]

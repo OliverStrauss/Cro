@@ -228,6 +228,7 @@ public class BirdService(
         string birdId,
         string destinationNestId,
         string? content,
+        bool isPublic,
         Stream? mediaStream,
         string? mediaContentType,
         long mediaContentLength)
@@ -294,9 +295,10 @@ public class BirdService(
             UpdatedAt = now,
             AudioUrl = audioUrl,
             ImageUrl = imageUrl,
-            // A resend keeps the bird's existing IsPublic value, same as ComposeAndSendAsync -
-            // a Hub-bound resend no longer forces it true (see that method's comment).
-            IsPublic = bird.IsPublic,
+            // The sender picks public/private per leg on SendBirdDialog, same as
+            // ComposeAndSendAsync's compose-time toggle - a resend no longer just carries the
+            // bird's previous value forward.
+            IsPublic = isPublic,
             NestFromName = origin.Name,
             NestToName = destination.Name,
         };

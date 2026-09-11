@@ -139,7 +139,12 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
     if (widget.ownNests.isEmpty || !mounted) return;
 
     try {
-      await widget.birdService.sendBird(widget.authState.token!, widget.bird.id, nestId: widget.ownNests.first.id);
+      await widget.birdService.sendBird(
+        widget.authState.token!,
+        widget.bird.id,
+        nestId: widget.ownNests.first.id,
+        isPublic: widget.bird.isPublic,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${widget.bird.name} is on its way home')));
       widget.onDataChanged();
@@ -207,6 +212,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
         originLongitude: origin.lng,
         speedKmh: BirdSpeed.kmh(bird.type),
         birdType: bird.type,
+        initialIsPublic: bird.isPublic,
       ),
     );
     if (result == null || !mounted) return;
@@ -217,6 +223,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
         bird.id,
         nestId: result.nestId,
         content: result.content,
+        isPublic: result.isPublic,
         mediaBytes: result.mediaBytes,
         mediaContentType: result.mediaContentType,
         mediaFilename: result.mediaFilename,

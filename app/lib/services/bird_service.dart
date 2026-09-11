@@ -40,13 +40,15 @@ class BirdService {
     String birdId, {
     required String nestId,
     String? content,
+    bool isPublic = false,
     List<int>? mediaBytes,
     String? mediaContentType,
     String? mediaFilename,
   }) async {
     final request = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/birds/$birdId/send'))
       ..headers['Authorization'] = 'Bearer $token'
-      ..fields['nestId'] = nestId;
+      ..fields['nestId'] = nestId
+      ..fields['isPublic'] = isPublic.toString();
     if (content != null) {
       request.fields['content'] = content;
     }

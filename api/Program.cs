@@ -999,7 +999,8 @@ app.MapPost("/birds/{id}/send", async (
     [FromForm] string? content,
     IFormFile? file,
     ClaimsPrincipal principal,
-    BirdService birdService) =>
+    BirdService birdService,
+    [FromForm] bool isPublic = false) =>
 {
     var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (userId is null)
@@ -1010,7 +1011,7 @@ app.MapPost("/birds/{id}/send", async (
     var mediaStream = file?.OpenReadStream();
     try
     {
-        return Results.Ok(await birdService.SendAsync(userId, id, nestId, content, mediaStream, file?.ContentType, file?.Length ?? 0));
+        return Results.Ok(await birdService.SendAsync(userId, id, nestId, content, isPublic, mediaStream, file?.ContentType, file?.Length ?? 0));
     }
     catch (ServiceException ex)
     {

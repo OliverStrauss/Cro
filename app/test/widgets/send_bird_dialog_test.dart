@@ -152,4 +152,46 @@ void main() {
     expect(result?.nestId, 'n2');
     expect(result?.content, 'hello');
   });
+
+  testWidgets('public/private switch defaults off, honors initialIsPublic, and its value reaches the result', (tester) async {
+    SendBirdResult? result;
+    await tester.pumpWidget(MaterialApp(
+      theme: croTheme,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () async {
+              result = await showDialog<SendBirdResult>(
+                context: context,
+                builder: (_) => SendBirdDialog(
+                  destinations: [nearNest],
+                  originLatitude: 0,
+                  originLongitude: 0,
+                  speedKmh: 60,
+                  initialIsPublic: true,
+                ),
+              );
+            },
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('sendBirdPublicSwitch'))).value, isTrue);
+
+    await tester.tap(find.byKey(const Key('sendBirdPublicSwitch')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Near Nest').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
+    await tester.pumpAndSettle();
+
+    expect(result?.isPublic, isFalse);
+  });
 }

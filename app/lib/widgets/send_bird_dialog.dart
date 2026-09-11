@@ -43,6 +43,9 @@ class SendBirdDestination {
 class SendBirdResult {
   final String nestId;
   final String? content;
+  // Whether this leg (and everything about it - content/media) is visible to friends on the
+  // map, same meaning as Bird.isPublic. Picked per-send now rather than fixed at compose time.
+  final bool isPublic;
   // This leg's payload media for a Parrot (audio) or Pigeon/Raven (image) - null for a
   // text-only Cro. Mirrors ComposeBirdResult's shape from the retired compose flow.
   final List<int>? mediaBytes;
@@ -52,6 +55,7 @@ class SendBirdResult {
   SendBirdResult({
     required this.nestId,
     this.content,
+    this.isPublic = false,
     this.mediaBytes,
     this.mediaContentType,
     this.mediaFilename,
@@ -107,6 +111,9 @@ class SendBirdDialog extends StatefulWidget {
   final double originLongitude;
   final double speedKmh;
   final String birdType;
+  // Pre-checks the public/private switch to this leg's current value - a bird already public
+  // stays public by default on its next send instead of silently reverting to private.
+  final bool initialIsPublic;
   final AudioRecorder? recorder;
   final ImagePicker? imagePicker;
 
@@ -117,6 +124,7 @@ class SendBirdDialog extends StatefulWidget {
     required this.originLongitude,
     required this.speedKmh,
     this.birdType = BirdType.cro,
+    this.initialIsPublic = false,
     this.recorder,
     this.imagePicker,
   });
@@ -132,6 +140,7 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
   bool _hubMode = false;
   String? _selectedCategory;
   String? _selectedNestId;
+  bool _isPublic = false;
   final _contentController = TextEditingController();
 
   bool _isRecording = false;
@@ -149,6 +158,7 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
   @override
   void initState() {
     super.initState();
+    _isPublic = widget.initialIsPublic;
     _views = widget.destinations.map((d) {
       final km = _haversineKm(
         widget.originLatitude,
@@ -333,7 +343,20 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                   onSelected: (value) =>
                       setState(() => _selectedNestId = value),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 4),
+              SwitchListTile(
+                key: const Key('sendBirdPublicSwitch'),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Make this bird public'),
+                subtitle: const Text(
+                  "Friends can see it on the map and open what it's carrying",
+                  style: TextStyle(fontSize: 11.5, color: CroColors.fog),
+                ),
+                value: _isPublic,
+                onChanged: (value) => setState(() => _isPublic = value),
+              ),
+              const SizedBox(height: 12),
               ..._buildPayloadFields(context),
               const SizedBox(height: 16),
               Row(
@@ -354,6 +377,7 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                               content: _contentController.text.trim().isEmpty
                                   ? null
                                   : _contentController.text.trim(),
+                              isPublic: _isPublic,
                               mediaBytes: _wantsAudio
                                   ? _audioBytes
                                   : (_wantsImage ? _imageBytes : null),

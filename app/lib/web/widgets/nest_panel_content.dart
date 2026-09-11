@@ -204,6 +204,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
           originLongitude: widget.nest.longitude,
           speedKmh: BirdSpeed.kmh(bird.type),
           birdType: bird.type,
+          initialIsPublic: bird.isPublic,
         ),
       );
       if (result == null) return;
@@ -213,6 +214,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
         bird.id,
         nestId: result.nestId,
         content: result.content,
+        isPublic: result.isPublic,
         mediaBytes: result.mediaBytes,
         mediaContentType: result.mediaContentType,
         mediaFilename: result.mediaFilename,
