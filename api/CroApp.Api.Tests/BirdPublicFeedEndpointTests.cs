@@ -210,6 +210,42 @@ public class BirdPublicFeedEndpointTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Fact]
+    public async Task PublicBirds_ExcludesABirdFromAnAcceptedFriend()
+    {
+        // A friend's public bird is already shown via GET /friends/birds with the
+        // line-tracker treatment - it must not also appear here, or the map renders it twice.
+        var senderUsername = $"pubfeed-friend-sender-{Guid.NewGuid():N}";
+        var (_, senderToken) = await RegisterAndLoginAsync(senderUsername, "correct-horse-battery-staple");
+        var home = await CreateNestAsync(senderToken, "Home", 42.0, -93.5);
+
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var bounceHub = await CreateHubAsync(adminToken, $"Setup Bounce {Guid.NewGuid():N}", 42.0, -93.5);
+        var away = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 60.0, -93.6);
+
+        var composeResponse = await ComposeBirdAsync(senderToken, "Cro", "Setup Bird", home.Id, bounceHub.Id, content: "setup");
+        composeResponse.EnsureSuccessStatusCode();
+        var composed = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+        (await SendBirdAsync(senderToken, composed.Id, home.Id)).EnsureSuccessStatusCode();
+        var residents = await (await GetNestResidentsAsync(senderToken, home.Id)).Content.ReadFromJsonAsync<List<BirdDto>>();
+        var bird = residents!.Single(b => b.Id == composed.Id);
+
+        var (viewerId, viewerToken) = await RegisterAndLoginAsync($"pubfeed-friend-viewer-{Guid.NewGuid():N}", "correct-horse-battery-staple");
+        (await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", viewerToken, new { Username = senderUsername })))
+            .EnsureSuccessStatusCode();
+        (await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{viewerId}/accept", senderToken)))
+            .EnsureSuccessStatusCode();
+
+        var sendResponse = await SendBirdAsync(senderToken, bird.Id, away.Id, "For my friend", isPublic: true);
+        sendResponse.EnsureSuccessStatusCode();
+
+        var response = await GetPublicBirdsAsync(viewerToken);
+        response.EnsureSuccessStatusCode();
+
+        var sightings = await response.Content.ReadFromJsonAsync<List<PublicBirdSightingDto>>();
+        Assert.DoesNotContain(sightings!, s => s.Id == bird.Id);
+    }
+
+    [Fact]
     public async Task PublicBirds_ExcludesTheCallersOwnBird()
     {
         var (bird, _, senderToken) = await LandBirdAtHomeAsync("pubfeed-own");

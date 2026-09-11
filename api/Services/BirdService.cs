@@ -147,9 +147,12 @@ public class BirdService(
     // Anyone-can-see-it analog of ListTravelingForUsersAsync: unlike every other bird query
     // in this class, this is NOT scoped to the caller or their friends - it's the one place
     // a stranger's bird is visible at all. Excludes the caller's own birds (they already see
-    // those normally) and anyone in a blocking relationship with the caller, same
-    // both-directions check FriendService.SendRequestAsync uses. Only a single interpolated
-    // position ever leaves this method - see PublicBirdSighting and PublicSightingFractionRange.
+    // those normally), accepted friends (already shown via GET /friends/birds with the
+    // line-tracker treatment - without this exclusion a friend's public bird would render
+    // twice on the map, once per endpoint), and anyone in a blocking relationship with the
+    // caller, same both-directions check FriendService.SendRequestAsync uses. Only a single
+    // interpolated position ever leaves this method - see PublicBirdSighting and
+    // PublicSightingFractionRange.
     // ponytail: full cross-partition scan of every public bird in the Birds container - fine
     // at this project's user-base scale; a materialized "public birds" view/index is the
     // upgrade path if that container ever gets large.
@@ -157,6 +160,10 @@ public class BirdService(
     {
         var caller = await userRepository.GetByIdAsync(callerId);
         var blockedByCaller = caller?.BlockedUserIds ?? [];
+        var acceptedFriendIds = (caller?.Friends ?? [])
+            .Where(f => f.Status == FriendStatus.Accepted)
+            .Select(f => f.Id)
+            .ToHashSet();
 
         var candidates = await birdRepository.ListPublicTravelingAsync();
         var now = DateTimeOffset.UtcNow;
@@ -165,6 +172,7 @@ public class BirdService(
         foreach (var bird in candidates)
         {
             if (bird.UserId == callerId) continue;
+            if (acceptedFriendIds.Contains(bird.UserId)) continue;
             if (bird.NestFromId is null || bird.NestToId is null || bird.DepartedAt is null || bird.EstimatedArrivalAt is null)
             {
                 continue;
