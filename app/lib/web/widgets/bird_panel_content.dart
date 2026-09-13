@@ -15,9 +15,7 @@ import '../../widgets/send_bird_dialog.dart';
 import 'dock_bird_card.dart';
 import 'panel_header.dart';
 
-// This app's thematic reaction set - distinct from the shared `availableReactionEmojis`
-// (models/bird_reaction.dart), which the *phone* app's BirdDetailsSheet also uses and which
-// this change doesn't touch.
+// Must match BirdReactionEmoji.Allowed on the server (api/Models/BirdReaction.cs).
 const _webReactionEmojis = ['🕊️', '🌿', '⭐', '🔥'];
 
 /// The bird detail panel body - adapted from the phone app's BirdDetailsSheet: where/when,

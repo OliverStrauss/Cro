@@ -13,7 +13,10 @@ namespace CroApp.Api.Models;
 // Bird document itself.
 public static class BirdReactionEmoji
 {
-    public static readonly HashSet<string> Allowed = ["👍", "❤️", "😂", "😮", "🎉"];
+    // Must match the web UI's _webReactionEmojis (bird_panel_content.dart,
+    // friend_bird_panel_content.dart) - the web app's reaction set, not the old
+    // generic-messaging-app set.
+    public static readonly HashSet<string> Allowed = ["🕊️", "🌿", "⭐", "🔥"];
 }
 
 public record BirdReaction(
