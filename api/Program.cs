@@ -131,15 +131,15 @@ builder.Services.AddScoped<NestPictureService>();
 builder.Services.AddScoped<BirdPictureService>();
 builder.Services.AddScoped<BirdMediaService>();
 
-// Real sending (via SendGrid's HTTPS API - see SendGridEmailSender for why not SMTP) is only
-// wired up once SendGrid:ApiKey is actually configured; until then, password-reset codes just
-// get logged instead of emailed - same category as Cosmos/Blob in CLAUDE.md's "Known dev-only
-// shortcuts".
-var sendGridSection = builder.Configuration.GetSection("SendGrid");
-if (!string.IsNullOrEmpty(sendGridSection["ApiKey"]))
+// Real sending (via Azure Communication Services' Email API - see AcsEmailSender for why not
+// SMTP) is only wired up once Acs:ConnectionString is actually configured; until then,
+// password-reset codes just get logged instead of emailed - same category as Cosmos/Blob in
+// CLAUDE.md's "Known dev-only shortcuts".
+var acsSection = builder.Configuration.GetSection("Acs");
+if (!string.IsNullOrEmpty(acsSection["ConnectionString"]))
 {
-    builder.Services.Configure<SendGridOptions>(sendGridSection);
-    builder.Services.AddHttpClient<IEmailSender, SendGridEmailSender>();
+    builder.Services.Configure<AcsEmailOptions>(acsSection);
+    builder.Services.AddScoped<IEmailSender, AcsEmailSender>();
 }
 else
 {

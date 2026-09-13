@@ -169,7 +169,14 @@ compounding issues, both now fixed:
 - Once deploy was unblocked, `/forgot-password` started 500ing: `SmtpEmailSender` (plain
   `System.Net.Mail.SmtpClient`, port 587) can't complete a connection from `cro-api` at all -
   Azure App Service's shared/Basic plans block outbound SMTP ports at the platform level for
-  anti-spam reasons, independent of credentials or sender verification. Replaced with
-  `SendGridEmailSender`, a ~30-line `HttpClient` POST to SendGrid's `v3/mail/send` HTTPS API
-  (port 443, never blocked) - no SDK dependency needed. Config moved from `Smtp:*` to
-  `SendGrid:ApiKey`/`SendGrid:FromAddress` (Azure App Service settings updated to match).
+  anti-spam reasons, independent of credentials or sender verification. First swapped in a
+  SendGrid-over-HTTPS sender, but that hit repeated 401s from malformed/invalid API keys
+  copied out of SendGrid's dashboard - settled on Azure Communication Services' Email API
+  instead (`AcsEmailSender`, using the official `Azure.Communication.Email` SDK rather than
+  hand-rolling the REST API's HMAC request signing), since it's provisioned and keyed entirely
+  via `az` CLI in the same subscription - no dashboard, no secret to copy by hand. Provisioned:
+  a `cro-comm` Communication Services resource, a `cro-email-svc` Email Service with an
+  `AzureManaged` domain (auto-verified, no external DNS needed - sends from
+  `DoNotReply@<guid>.azurecomm.net`), linked together. Pay-per-email (~$0.00025/email), not a
+  persistent free tier like SendGrid's, but negligible at this app's volume. Config is
+  `Acs:ConnectionString`/`Acs:FromAddress` (Azure App Service settings updated to match).
