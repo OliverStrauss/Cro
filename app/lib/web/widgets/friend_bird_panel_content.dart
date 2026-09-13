@@ -169,19 +169,16 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                '${(_progress * 100).round()}% of the way there',
-                style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-              ),
+              Text('${(_progress * 100).round()}% of the way there', style: CroTextStyles.data(size: 11.5)),
               const SizedBox(height: 12),
               if (BirdPayloadView.hasPayload(content: bird.content, audioUrl: bird.audioUrl, imageUrl: bird.imageUrl)) ...[
                 Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: CroBorders.radius, border: Border.all(color: CroColors.hairline)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('What it carries', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      Text('WHAT IT CARRIES', style: CroTextStyles.label(size: 11.5)),
                       const SizedBox(height: 8),
                       BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
                     ],
@@ -189,7 +186,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
                 ),
                 const SizedBox(height: 18),
               ],
-              const Text('Reactions', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+              Text('REACTIONS', style: CroTextStyles.label(size: 12)),
               const SizedBox(height: 9),
               Wrap(
                 key: const Key('webFriendBirdReactionRow'),
@@ -200,18 +197,15 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
               const SizedBox(height: 18),
               Material(
                 color: CroColors.warmSurface,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: CroBorders.radius,
                 child: InkWell(
                   key: const Key('friendBirdPanelFollowOnMap'),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: CroBorders.radius,
                   onTap: widget.onFollowOnMap,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Center(
-                      child: Text(
-                        'Follow on the map',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
-                      ),
+                      child: Text('FOLLOW ON THE MAP', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
                     ),
                   ),
                 ),
@@ -226,16 +220,10 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
   Widget _labelValueRow(String label, String value) {
     return Row(
       children: [
-        Text(label, style: const TextStyle(fontSize: 12.5, color: CroColors.fog)),
+        Text(label.toUpperCase(), style: CroTextStyles.label(size: 11, color: CroColors.fog)),
         const Spacer(),
         Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-          ),
+          child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: CroTextStyles.data(size: 12.5, color: CroColors.ink, weight: FontWeight.w600)),
         ),
       ],
     );
@@ -264,7 +252,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
               Text(emoji, style: const TextStyle(fontSize: 14)),
               if (count > 0) ...[
                 const SizedBox(width: 5),
-                Text('$count', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: mine ? CroColors.deepWaypoint : CroColors.fog)),
+                Text('$count', style: CroTextStyles.label(size: 11, color: mine ? CroColors.deepWaypoint : CroColors.fog)),
               ],
             ],
           ),

@@ -79,11 +79,11 @@ class _PublicBirdPanelContentState extends State<PublicBirdPanelContent> {
               if (BirdPayloadView.hasPayload(content: bird.content, audioUrl: bird.audioUrl, imageUrl: bird.imageUrl)) ...[
                 Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(color: CroColors.altSurface, borderRadius: CroBorders.radius, border: Border.all(color: CroColors.hairline)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('What it carries', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      Text('WHAT IT CARRIES', style: CroTextStyles.label(size: 11.5)),
                       const SizedBox(height: 8),
                       BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
                     ],
@@ -93,17 +93,17 @@ class _PublicBirdPanelContentState extends State<PublicBirdPanelContent> {
               ],
               Material(
                 color: _sent ? CroColors.altSurface : CroColors.warmSurface,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: CroBorders.radius,
                 child: InkWell(
                   key: const Key('publicBirdPanelAddFriend'),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: CroBorders.radius,
                   onTap: _isSending || _sent ? null : _sendRequest,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Center(
                       child: Text(
-                        _sent ? 'Request sent' : 'Add ${bird.senderUsername} as a friend',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                        (_sent ? 'Request sent' : 'Add ${bird.senderUsername} as a friend').toUpperCase(),
+                        style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint),
                       ),
                     ),
                   ),
