@@ -455,7 +455,7 @@ app.MapPost("/login", async (LoginRequest req, CosmosUserRepository repo, IOptio
         return Results.Unauthorized();
     }
 
-    if (authOpts.Value.RequireEmailVerification && !user.IsEmailVerified)
+    if (authOpts.Value.RequireEmailVerification && user.IsEmailVerified == false)
     {
         return Results.Json(new { message = "Please verify your email before logging in." }, statusCode: StatusCodes.Status403Forbidden);
     }
@@ -492,7 +492,7 @@ app.MapPost("/resend-verification-email", async (ResendVerificationEmailRequest 
     // Always 200 regardless of whether the email matches an unverified account - same
     // enumeration-avoidance as /forgot-password.
     var user = await repo.GetByEmailAsync(req.Email);
-    if (user is not null && !user.IsEmailVerified)
+    if (user is not null && user.IsEmailVerified == false)
     {
         var code = Random.Shared.Next(100_000, 999_999).ToString();
         var codeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));

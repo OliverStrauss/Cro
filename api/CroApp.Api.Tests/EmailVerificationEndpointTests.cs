@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using CroApp.Api.Services;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,17 +15,18 @@ public class EmailVerificationEndpointTests : IClassFixture<WebApplicationFactor
 {
     private readonly HttpClient _client;
     private readonly FakeEmailSender _emailSender = new();
+    private readonly string _connectionString;
 
     public EmailVerificationEndpointTests(WebApplicationFactory<Program> factory)
     {
-        var connectionString = TestConfig.ResolveCosmosConnectionString();
+        _connectionString = TestConfig.ResolveCosmosConnectionString();
 
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(TestConfig.Build(cosmosConnectionString: connectionString));
+                config.AddInMemoryCollection(TestConfig.Build(cosmosConnectionString: _connectionString));
                 // Overrides TestConfig.Build()'s default "false" - this class is the one place
                 // that specifically exercises the verification-required behavior itself.
                 config.AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:RequireEmailVerification"] = "true" });
@@ -39,6 +42,41 @@ public class EmailVerificationEndpointTests : IClassFixture<WebApplicationFactor
         var createResponse = await _client.PostAsJsonAsync("/users", new { Username = username, Email = email, Password = password });
         createResponse.EnsureSuccessStatusCode();
         return username;
+    }
+
+    // Seeds a raw Cosmos document with no isEmailVerified field at all - reproduces a real
+    // pre-existing account from before this feature existed, the same way
+    // LoginEndpointTests.SeedPasswordlessUserAsync reproduces a pre-Password legacy document.
+    // Regression test for a real prod incident: a non-nullable `bool IsEmailVerified = true`
+    // looked safe for old documents but wasn't, because Cosmos's default (Newtonsoft-based)
+    // serializer doesn't apply a record constructor parameter's C# default value for an absent
+    // JSON property - it silently fell back to `false` and locked every pre-existing account
+    // out of login. Only a real deserialization round-trip through Cosmos (not constructing a
+    // User in-process) can catch that class of bug - see Models/User.cs's IsEmailVerified comment.
+    private async Task SeedLegacyUnflaggedUserAsync(string username, string password)
+    {
+        var clientOptions = new CosmosClientOptions
+        {
+            HttpClientFactory = () => new HttpClient(new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            }),
+            ConnectionMode = ConnectionMode.Gateway
+        };
+        using var cosmosClient = new CosmosClient(_connectionString, clientOptions);
+        var container = cosmosClient.GetContainer("CroApp", "Users");
+
+        var hasher = new PasswordHasher<CroApp.Api.Models.User>();
+        var passwordHash = hasher.HashPassword(null!, password);
+
+        await container.CreateItemAsync(new
+        {
+            id = Guid.NewGuid().ToString(),
+            username,
+            email = $"{username}@example.com",
+            createdAt = DateTimeOffset.UtcNow,
+            passwordHash
+        });
     }
 
     [Fact]
@@ -107,6 +145,18 @@ public class EmailVerificationEndpointTests : IClassFixture<WebApplicationFactor
         // (EmailVerificationCodeHash is cleared on successful verification either way, but this
         // also guards against the resend having silently kept the old hash).
         Assert.NotEqual(firstCode, _emailSender.LastVerificationCode);
+    }
+
+    [Fact]
+    public async Task Login_ForPreExistingAccountWithNoVerificationFieldAtAll_IsAllowed()
+    {
+        var username = $"legacy-user-{Guid.NewGuid():N}";
+        const string password = "correct-horse-battery-staple";
+        await SeedLegacyUnflaggedUserAsync(username, password);
+
+        var loginResponse = await _client.PostAsJsonAsync("/login", new { Username = username, Password = password });
+
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
     }
 
     [Fact]
