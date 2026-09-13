@@ -220,9 +220,9 @@ class _HubPanelContentState extends State<HubPanelContent> {
           child: CoordinateReadout(latitude: hub.latitude, longitude: hub.longitude, centered: true),
         ),
         const SizedBox(height: 12),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 22),
-          child: Text('The board', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Text('THE BOARD', style: CroTextStyles.label(size: 12.5)),
         ),
         const SizedBox(height: 8),
         Flexible(child: _body()),
