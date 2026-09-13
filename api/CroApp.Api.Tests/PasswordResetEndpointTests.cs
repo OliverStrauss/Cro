@@ -117,5 +117,7 @@ public class PasswordResetEndpointTests : IClassFixture<WebApplicationFactory<Pr
             LastCode = code;
             return Task.CompletedTask;
         }
+
+        public Task SendEmailVerificationCodeAsync(string toEmail, string code) => Task.CompletedTask;
     }
 }

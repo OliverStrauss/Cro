@@ -42,6 +42,11 @@ internal static class TestConfig
         ["BlobStorage:BirdMediaContainerName"] = "bird-media",
         ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
         ["Jwt:Issuer"] = "CroApp.Api.Tests",
-        ["Jwt:Audience"] = "CroApp.Api.Tests"
+        ["Jwt:Audience"] = "CroApp.Api.Tests",
+        // Off by default so the ~15 other fixtures that register-then-login a user (to get an
+        // auth token for an unrelated endpoint under test) don't all need to verify email
+        // first. EmailVerificationEndpointTests overrides this back to "true" for the handful
+        // of tests that specifically exercise the verification-required behavior itself.
+        ["Auth:RequireEmailVerification"] = "false"
     };
 }

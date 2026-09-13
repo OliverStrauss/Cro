@@ -12,7 +12,11 @@ namespace CroApp.Api.Models;
 // BlockedUserIds is nullable for the same pre-existing-document reason as Friends - every
 // read defends with user.BlockedUserIds ?? []. A block is one-directional (only the
 // blocker's list matters), checked from both sides in FriendService.SendRequestAsync so
-// neither party can request the other.
+// neither party can request the other. IsEmailVerified defaults to true (not false) for the
+// same pre-existing-document reason - every account created before this feature existed
+// deserializes as already verified, so signup verification only gates genuinely new signups
+// rather than retroactively locking anyone out; POST /users is the only place that
+// constructs a user with this explicitly false.
 public record User(
     [property: JsonPropertyName("id")] string Id,
     string Username,
@@ -24,4 +28,7 @@ public record User(
     bool IsAdmin = false,
     List<string>? BlockedUserIds = null,
     string? PasswordResetCodeHash = null,
-    DateTimeOffset? PasswordResetExpiresAt = null);
+    DateTimeOffset? PasswordResetExpiresAt = null,
+    bool IsEmailVerified = true,
+    string? EmailVerificationCodeHash = null,
+    DateTimeOffset? EmailVerificationExpiresAt = null);

@@ -31,7 +31,7 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task CreateThenGetUser_RoundTripsSuccessfully()
     {
-        var createRequest = new { Username = $"test-user-{Guid.NewGuid():N}", Email = "test@example.com", Password = "correct-horse-battery-staple" };
+        var createRequest = new { Username = $"test-user-{Guid.NewGuid():N}", Email = $"test-{Guid.NewGuid():N}@example.com", Password = "correct-horse-battery-staple" };
 
         var createResponse = await _client.PostAsJsonAsync("/users", createRequest);
         createResponse.EnsureSuccessStatusCode();
@@ -53,11 +53,26 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task CreateUser_WithDuplicateUsername_ReturnsConflictAndDoesNotCreateSecondUser()
     {
         var username = $"test-user-{Guid.NewGuid():N}";
-        var createRequest = new { Username = username, Email = "first@example.com", Password = "correct-horse-battery-staple" };
+        var createRequest = new { Username = username, Email = $"first-{Guid.NewGuid():N}@example.com", Password = "correct-horse-battery-staple" };
         var firstResponse = await _client.PostAsJsonAsync("/users", createRequest);
         firstResponse.EnsureSuccessStatusCode();
 
-        var duplicateRequest = new { Username = username, Email = "second@example.com", Password = "another-password" };
+        var duplicateRequest = new { Username = username, Email = $"second-{Guid.NewGuid():N}@example.com", Password = "another-password" };
+        var duplicateResponse = await _client.PostAsJsonAsync("/users", duplicateRequest);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, duplicateResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateUser_WithDuplicateEmail_ReturnsConflictAndDoesNotCreateSecondUser()
+    {
+        var email = $"dup-{Guid.NewGuid():N}@example.com";
+        var createRequest = new { Username = $"test-user-{Guid.NewGuid():N}", Email = email, Password = "correct-horse-battery-staple" };
+        var firstResponse = await _client.PostAsJsonAsync("/users", createRequest);
+        firstResponse.EnsureSuccessStatusCode();
+
+        // Different case/whitespace on purpose - uniqueness must be case-insensitive.
+        var duplicateRequest = new { Username = $"test-user-{Guid.NewGuid():N}", Email = $"  {email.ToUpperInvariant()}  ", Password = "another-password" };
         var duplicateResponse = await _client.PostAsJsonAsync("/users", duplicateRequest);
 
         Assert.Equal(System.Net.HttpStatusCode.Conflict, duplicateResponse.StatusCode);

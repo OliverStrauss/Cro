@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/auth_error_banner.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/auth_text_field.dart';
+import 'verify_email_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   final AuthState authState;
@@ -47,7 +48,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
         _emailController.text,
         _passwordController.text,
       );
-      if (mounted) Navigator.of(context).pop(true);
+      if (!mounted) return;
+      final verified = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => VerifyEmailScreen(initialEmail: _emailController.text)),
+      );
+      if (mounted) Navigator.of(context).pop(verified == true);
     } catch (e) {
       setState(() => _errorMessage = e.toString());
     } finally {

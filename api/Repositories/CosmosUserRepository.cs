@@ -58,10 +58,13 @@ public class CosmosUserRepository
 
     public async Task<User?> GetByEmailAsync(string email)
     {
-        // Cross-partition query, same tradeoff as GetByUsernameAsync above.
+        // Cross-partition query, same tradeoff as GetByUsernameAsync above. Case-insensitive
+        // and trimmed so "Test@X.com" and "test@x.com " are treated as the same address for
+        // uniqueness/lookup purposes, matching how virtually every real mail provider treats
+        // addresses in practice regardless of what RFC 5321 technically permits.
         var query = _container.GetItemQueryIterator<User>(
-            new QueryDefinition("SELECT * FROM c WHERE c.email = @email")
-                .WithParameter("@email", email));
+            new QueryDefinition("SELECT * FROM c WHERE LOWER(c.email) = @email")
+                .WithParameter("@email", email.Trim().ToLowerInvariant()));
 
         while (query.HasMoreResults)
         {
