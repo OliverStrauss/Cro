@@ -82,15 +82,16 @@ class YourBirdsDock extends StatelessWidget {
           padding: const EdgeInsets.only(right: 22, bottom: 20),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.34), blurRadius: 22, offset: const Offset(0, 8))],
+              borderRadius: CroBorders.radius,
+              border: Border.all(color: CroColors.hairline),
+              boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.22), blurRadius: 18, offset: const Offset(0, 6))],
             ),
             child: Material(
-              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
-              borderRadius: BorderRadius.circular(14),
+              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.98),
+              borderRadius: CroBorders.radius,
               child: InkWell(
                 key: const Key('dockShowPill'),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: CroBorders.radius,
                 onTap: onShow,
                 child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
@@ -105,11 +106,11 @@ class YourBirdsDock extends StatelessWidget {
                       child: const Icon(Icons.arrow_forward_rounded, size: 11, color: CroColors.surface),
                     ),
                     const SizedBox(width: 10),
-                    Text('Your birds', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13)),
+                    Text('YOUR BIRDS', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 12)),
                     const SizedBox(width: 10),
-                    Text(summary, style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
+                    Text(summary, style: CroTextStyles.data(size: 11.5)),
                     const SizedBox(width: 10),
-                    const Text('Show', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+                    Text('SHOW', style: CroTextStyles.label(size: 11.5, color: CroColors.deepWaypoint)),
                   ],
                 ),
                 ),
@@ -136,10 +137,11 @@ class YourBirdsDock extends StatelessWidget {
       margin: const EdgeInsets.only(left: 22, right: 22, bottom: 20),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(20),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.98),
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
         boxShadow: [
-          BoxShadow(color: CroColors.ink.withValues(alpha: 0.3), blurRadius: 30, offset: const Offset(0, 10)),
+          BoxShadow(color: CroColors.ink.withValues(alpha: 0.22), blurRadius: 24, offset: const Offset(0, 8)),
         ],
       ),
       child: Column(
@@ -148,14 +150,10 @@ class YourBirdsDock extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Your birds', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 14.5)),
+              Text('YOUR BIRDS', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13)),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  summary,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: CroColors.fog),
-                ),
+                child: Text(summary, overflow: TextOverflow.ellipsis, style: CroTextStyles.data(size: 12)),
               ),
               for (final f in DockFilter.values) _FilterChip(filter: f, active: filter == f, onTap: () => onFilterChanged(f)),
               const SizedBox(width: 4),
@@ -163,13 +161,13 @@ class YourBirdsDock extends StatelessWidget {
                 type: MaterialType.transparency,
                 child: InkWell(
                   key: const Key('dockDetailToggle'),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: CroBorders.radiusSmall,
                   onTap: onToggleExpanded,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                     child: Text(
-                      expanded ? 'Less detail' : 'More detail',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                      expanded ? 'LESS DETAIL' : 'MORE DETAIL',
+                      style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint),
                     ),
                   ),
                 ),
@@ -179,14 +177,11 @@ class YourBirdsDock extends StatelessWidget {
                 type: MaterialType.transparency,
                 child: InkWell(
                   key: const Key('dockHideButton'),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: CroBorders.radiusSmall,
                   onTap: onHide,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: Text(
-                      'Hide',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog),
-                    ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Text('HIDE', style: CroTextStyles.label(size: 11, color: CroColors.fog)),
                   ),
                 ),
               ),
@@ -209,7 +204,7 @@ class YourBirdsDock extends StatelessWidget {
                         trailing: expanded
                             ? Text(
                                 '${v.bird.type} · ${BirdType.description(v.bird.type)}',
-                                style: const TextStyle(fontSize: 11, color: CroColors.fog),
+                                style: CroTextStyles.data(size: 11),
                               )
                             : null,
                       ),
@@ -242,24 +237,21 @@ class _FilterChip extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: 6),
       child: Material(
-        color: active ? CroColors.waypointBlue.withValues(alpha: 0.16) : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.transparent,
+        borderRadius: CroBorders.radiusSmall,
         child: InkWell(
           key: Key('dockFilter_${filter.name}'),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: CroBorders.radiusSmall,
           onTap: onTap,
           child: Container(
             // Padding grows the tap target beyond the visible chip (still a compact inline
             // toolbar control, but closer to a comfortable hit area than the original 5px).
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-            child: Text(
-              _label,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: active ? CroColors.deepWaypoint : CroColors.fog,
-              ),
+            decoration: BoxDecoration(
+              borderRadius: CroBorders.radiusSmall,
+              border: active ? Border.all(color: CroColors.waypointBlue) : null,
             ),
+            child: Text(_label.toUpperCase(), style: CroTextStyles.label(size: 11, color: active ? CroColors.deepWaypoint : CroColors.fog)),
           ),
         ),
       ),

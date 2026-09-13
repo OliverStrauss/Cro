@@ -164,10 +164,15 @@ class DockBirdView {
 
   Color get cardBorder => switch (state) {
     BirdDockState.home => CroColors.ink.withValues(alpha: 0.1),
-    BirdDockState.flight => CroColors.waypointBlue.withValues(alpha: 0.4),
-    BirdDockState.away => CroColors.deliveryAmber.withValues(alpha: 0.45),
-    BirdDockState.hub => CroColors.deliveryAmber.withValues(alpha: 0.45),
+    BirdDockState.flight => CroColors.waypointBlue.withValues(alpha: 0.5),
+    BirdDockState.away => CroColors.deliveryAmber.withValues(alpha: 0.5),
+    BirdDockState.hub => CroColors.deliveryAmber.withValues(alpha: 0.5),
   };
+
+  // State reads in line weight too, not color alone (see the direction contract's
+  // emission-line-rail raise): a bird actually in motion gets a bolder ruled edge than one
+  // settled somewhere, so the state is legible even without color vision.
+  double get cardBorderWidth => state == BirdDockState.flight ? 2 : 1;
 }
 
 /// One card in the "Your birds" dock - every bird in the caller's flock shows here
@@ -183,17 +188,17 @@ class DockBirdCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: view.cardBg,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: CroBorders.radius,
       child: InkWell(
         key: Key('dockCard_${view.bird.id}'),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: CroBorders.radius,
         onTap: onTap,
         child: Container(
           constraints: const BoxConstraints(minWidth: 168),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            border: Border.all(color: view.cardBorder),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: view.cardBorder, width: view.cardBorderWidth),
+            borderRadius: CroBorders.radius,
           ),
           child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,10 +225,7 @@ class DockBirdCard extends StatelessWidget {
                           context,
                         ).textTheme.titleSmall?.copyWith(fontSize: 13.5, fontWeight: FontWeight.w700),
                       ),
-                      Text(
-                        view.stateLabel,
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: view.stateColor),
-                      ),
+                      Text(view.stateLabel.toUpperCase(), style: CroTextStyles.label(size: 10, color: view.stateColor)),
                     ],
                   ),
                 ),
@@ -246,25 +248,17 @@ class DockBirdCard extends StatelessWidget {
                     color: view.hostColor,
                     borderRadius: BorderRadius.circular(view.hostIsHub ? 5 : 9),
                   ),
-                  child: Text(
-                    view.hostInitial,
-                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: CroColors.surface),
-                  ),
+                  child: Text(view.hostInitial, style: CroTextStyles.label(size: 9, color: CroColors.surface)),
                 ),
                 const SizedBox(width: 7),
                 Expanded(
-                  child: Text(
-                    view.hostName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11.5),
-                  ),
+                  child: Text(view.hostName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5)),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             ClipRRect(
-              borderRadius: BorderRadius.circular(3),
+              borderRadius: CroBorders.radiusSmall,
               child: LinearProgressIndicator(
                 value: view.progress,
                 minHeight: 5,
@@ -273,12 +267,7 @@ class DockBirdCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              view.metaText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: CroColors.fog),
-            ),
+            Text(view.metaText, maxLines: 1, overflow: TextOverflow.ellipsis, style: CroTextStyles.data(size: 11)),
             if (trailing != null) ...[
               const Padding(padding: EdgeInsets.symmetric(vertical: 6)),
               trailing!,
