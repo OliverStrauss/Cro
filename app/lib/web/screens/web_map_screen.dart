@@ -421,7 +421,7 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
               child: Container(
                 key: const Key('webAddNestBanner'),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                decoration: BoxDecoration(color: CroColors.ink, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: CroColors.ink, borderRadius: CroBorders.radius),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -436,14 +436,11 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                       type: MaterialType.transparency,
                       child: InkWell(
                         key: const Key('webCancelAddNest'),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: CroBorders.radiusSmall,
                         onTap: widget.onCancelAddNest,
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
-                          ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          child: Text('CANCEL', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
                         ),
                       ),
                     ),
@@ -461,7 +458,7 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
               child: Container(
                 key: const Key('webAddHubBanner'),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                decoration: BoxDecoration(color: CroColors.ink, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: CroColors.ink, borderRadius: CroBorders.radius),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -476,14 +473,11 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                       type: MaterialType.transparency,
                       child: InkWell(
                         key: const Key('webCancelAddHub'),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: CroBorders.radiusSmall,
                         onTap: widget.onCancelAddHub,
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: CroColors.skyTint),
-                          ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          child: Text('CANCEL', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
                         ),
                       ),
                     ),
@@ -518,18 +512,16 @@ class _TrailsLegend extends StatelessWidget {
       key: const Key('webMapTrailsLegend'),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.93),
-        borderRadius: BorderRadius.circular(14),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
         boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 3))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'TRAILS',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.4),
-          ),
+          Text('TRAILS', style: CroTextStyles.label(size: 11)),
           const SizedBox(height: 6),
           for (final (color, label) in rows) ...[
             const SizedBox(height: 6),
@@ -538,7 +530,7 @@ class _TrailsLegend extends StatelessWidget {
               children: [
                 Container(width: 18, height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
                 const SizedBox(width: 8),
-                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                Text(label, style: CroTextStyles.data(size: 12, color: CroColors.ink, weight: FontWeight.w500)),
               ],
             ),
           ],
@@ -649,10 +641,7 @@ class _UnreadCountBadge extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: CroColors.surface, width: 1.5),
       ),
-      child: Text(
-        count > 9 ? '9+' : '$count',
-        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: CroColors.surface, height: 1),
-      ),
+      child: Text(count > 9 ? '9+' : '$count', style: CroTextStyles.label(size: 9, color: CroColors.surface)),
     );
   }
 }
