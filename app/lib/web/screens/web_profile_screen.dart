@@ -347,14 +347,14 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                const Text('Your friends', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                Text('YOUR FRIENDS', style: CroTextStyles.label(size: 13)),
                 const SizedBox(width: 10),
-                const Text('Trail colors are assigned automatically', style: TextStyle(fontSize: 12, color: CroColors.fog)),
+                Text('trail colors are assigned automatically', style: CroTextStyles.data(size: 11.5)),
               ],
             ),
             const SizedBox(height: 12),
             if (_friends.isEmpty)
-              const Text('No friends yet', key: Key('noFriendsMessage'), style: TextStyle(fontSize: 12.5, color: CroColors.fog))
+              Text('No friends yet', key: const Key('noFriendsMessage'), style: CroTextStyles.data(size: 12.5))
             else
               Wrap(
                 spacing: 12,
@@ -362,7 +362,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                 children: [for (final friend in _friends) _friendCard(friend)],
               ),
             const SizedBox(height: 26),
-            const Text('Find people', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            Text('FIND PEOPLE', style: CroTextStyles.label(size: 13)),
             const SizedBox(height: 12),
             SizedBox(
               width: 420,
@@ -375,21 +375,21 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             if (_searchResults.isNotEmpty) _searchResultsList(),
             if (_incoming.isNotEmpty) ...[
               const SizedBox(height: 26),
-              const Text('Invites for you', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              Text('INVITES FOR YOU', style: CroTextStyles.label(size: 13)),
               const SizedBox(height: 12),
               Wrap(spacing: 12, runSpacing: 12, children: [for (final r in _incoming) _inviteCard(r)]),
             ],
             if (_outgoing.isNotEmpty) ...[
               const SizedBox(height: 26),
-              const Text('Waiting on them', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              Text('WAITING ON THEM', style: CroTextStyles.label(size: 13)),
               const SizedBox(height: 12),
               SizedBox(width: 420, child: Column(children: [for (final r in _outgoing) _outgoingRow(r)])),
             ],
             const SizedBox(height: 26),
-            const Text('Blocked', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            Text('BLOCKED', style: CroTextStyles.label(size: 13)),
             const SizedBox(height: 12),
             if (_blocked.isEmpty)
-              const Text('No blocked users', style: TextStyle(fontSize: 12.5, color: CroColors.fog))
+              Text('No blocked users', style: CroTextStyles.data(size: 12.5))
             else
               SizedBox(width: 420, child: Column(children: [for (final b in _blocked) _blockedRow(b)])),
           ],
@@ -403,8 +403,8 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,13 +440,13 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               children: [
                 Text(widget.username, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 3),
-                const Text('Click your picture to change it', style: TextStyle(fontSize: 12.5, color: CroColors.fog)),
+                Text('Click your picture to change it', style: CroTextStyles.data(size: 12.5)),
                 if (widget.isAdmin) ...[
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(color: CroColors.deliveryAmber.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Admin', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CroColors.amberInk)),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(border: Border.all(color: CroColors.deliveryAmber), borderRadius: CroBorders.radiusSmall),
+                    child: Text('ADMIN', style: CroTextStyles.stamp()),
                   ),
                 ],
               ],
@@ -456,11 +456,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             type: MaterialType.transparency,
             child: InkWell(
               key: const Key('webSignOutButton'),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: CroBorders.radiusSmall,
               onTap: widget.authState.logout,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Text('Sign out', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.alertAway)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text('SIGN OUT', style: CroTextStyles.label(size: 11, color: CroColors.alertAway)),
               ),
             ),
           ),
@@ -469,6 +469,12 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
     );
   }
 
+  // A remove (x) and, for admins, a make-admin control used to float as circular badges
+  // peeking off this card's top-right/bottom-right corners (negative Positioned offsets) -
+  // at the grid's 12px gap they could overlap the neighboring card's own corner badge. Both
+  // now sit inline in a footer row within the card's own bounds instead, hairline-divided
+  // from the identity block above - fits the ledger-row language the rest of the world uses,
+  // and structurally can't overlap a neighbor.
   Widget _friendCard(Friend friend) {
     final color = hexToColor(friend.color ?? '#6B7280');
     final nestCount = _nestCountFor(friend.username);
@@ -479,107 +485,79 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
+          AvatarWithFallback(imageUrl: friend.profilePictureUrl, initialsSource: friend.username, radius: 26, hasBorder: true, borderColor: color),
+          const SizedBox(height: 8),
+          Text(
+            friend.username,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              AvatarWithFallback(imageUrl: friend.profilePictureUrl, initialsSource: friend.username, radius: 26, hasBorder: true, borderColor: color),
-              const SizedBox(height: 8),
-              Text(
-                friend.username,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(width: 14, height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      nestCount == 1 ? '1 nest on your map' : '$nestCount nests',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: CroColors.fog),
-                    ),
-                  ),
-                ],
+              Container(width: 14, height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  nestCount == 1 ? '1 nest on your map' : '$nestCount nests',
+                  overflow: TextOverflow.ellipsis,
+                  style: CroTextStyles.data(size: 11),
+                ),
               ),
             ],
           ),
-          Positioned(
-            top: -14,
-            right: -14,
-            child: Tooltip(
-              message: isConfirmingRemove ? 'Tap again to remove' : 'Remove friend',
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  key: Key('webRemoveFriendButton_${friend.userId}'),
-                  customBorder: const CircleBorder(),
-                  onTap: () => _removeFriend(friend.userId),
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Center(
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: isConfirmingRemove ? Theme.of(context).colorScheme.error : CroColors.ink.withValues(alpha: 0.15)),
-                        ),
-                        child: Text(
-                          '×',
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                            color: isConfirmingRemove ? Theme.of(context).colorScheme.error : CroColors.fog,
-                          ),
-                        ),
+          const SizedBox(height: 10),
+          const Divider(),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (widget.isAdmin && !friend.isAdmin) ...[
+                Tooltip(
+                  message: 'Make admin',
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: Key('webMakeAdminButton_${friend.userId}'),
+                      borderRadius: CroBorders.radiusSmall,
+                      onTap: () => _confirmMakeAdmin(friend),
+                      child: const Padding(
+                        padding: EdgeInsets.all(5),
+                        child: Icon(Icons.shield_outlined, size: 15, color: CroColors.deepWaypoint),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          if (widget.isAdmin && !friend.isAdmin)
-            Positioned(
-              bottom: -4,
-              right: -4,
-              child: Tooltip(
-                message: 'Make admin',
+                const SizedBox(width: 4),
+              ],
+              Tooltip(
+                message: isConfirmingRemove ? 'Tap again to remove' : 'Remove friend',
                 child: Material(
                   type: MaterialType.transparency,
                   child: InkWell(
-                    key: Key('webMakeAdminButton_${friend.userId}'),
-                    customBorder: const CircleBorder(),
-                    onTap: () => _confirmMakeAdmin(friend),
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: CroColors.ink.withValues(alpha: 0.15)),
+                    key: Key('webRemoveFriendButton_${friend.userId}'),
+                    borderRadius: CroBorders.radiusSmall,
+                    onTap: () => _removeFriend(friend.userId),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                      child: Text(
+                        isConfirmingRemove ? 'CONFIRM?' : 'REMOVE',
+                        style: CroTextStyles.label(size: 10, color: isConfirmingRemove ? Theme.of(context).colorScheme.error : CroColors.fog),
                       ),
-                      child: const Icon(Icons.shield_outlined, size: 12, color: CroColors.deepWaypoint),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -592,8 +570,8 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       margin: const EdgeInsets.only(top: 10),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: const [BoxShadow(color: Color(0x1F2B2F33), blurRadius: 14, offset: Offset(0, 4))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -618,11 +596,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                     type: MaterialType.transparency,
                     child: InkWell(
                       key: Key('webSendRequestButton_${r.userId}'),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: CroBorders.radiusSmall,
                       onTap: () => _sendRequest(r.username),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: Text('Send request', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text('SEND REQUEST', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
                       ),
                     ),
                   ),
@@ -631,16 +609,13 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                     type: MaterialType.transparency,
                     child: InkWell(
                       key: Key('webBlockSearchButton_${r.userId}'),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: CroBorders.radiusSmall,
                       onTap: () => _blockFromSearch(r.userId),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                         child: Text(
-                          _confirmBlockSearchId == r.userId ? 'Confirm?' : 'Block',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _confirmBlockSearchId == r.userId ? Theme.of(context).colorScheme.error : CroColors.fog,
-                          ),
+                          _confirmBlockSearchId == r.userId ? 'CONFIRM?' : 'BLOCK',
+                          style: CroTextStyles.label(size: 11, color: _confirmBlockSearchId == r.userId ? Theme.of(context).colorScheme.error : CroColors.fog),
                         ),
                       ),
                     ),
@@ -660,8 +635,8 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -674,36 +649,22 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Material(
-                color: CroColors.waypointBlue,
-                borderRadius: BorderRadius.circular(9),
-                child: InkWell(
-                  key: Key('webAcceptInviteButton_${request.userId}'),
-                  borderRadius: BorderRadius.circular(9),
-                  onTap: () => _accept(request.userId),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                    child: Text('Accept', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.surface)),
-                  ),
-                ),
+              ElevatedButton(
+                key: Key('webAcceptInviteButton_${request.userId}'),
+                onPressed: () => _accept(request.userId),
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8), textStyle: CroTextStyles.label(size: 11, color: CroColors.surface)),
+                child: const Text('ACCEPT'),
               ),
               const SizedBox(width: 8),
-              Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  key: Key('webDeclineInviteButton_${request.userId}'),
-                  borderRadius: BorderRadius.circular(9),
-                  onTap: () => _decline(request.userId),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: CroColors.ink.withValues(alpha: 0.15))),
-                    child: const Text('Decline', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.fog)),
-                  ),
-                ),
+              OutlinedButton(
+                key: Key('webDeclineInviteButton_${request.userId}'),
+                onPressed: () => _decline(request.userId),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), textStyle: CroTextStyles.label(size: 11, color: CroColors.fog)),
+                child: const Text('DECLINE'),
               ),
             ],
           ),
@@ -717,7 +678,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       key: Key('webOutgoingRow_${request.userId}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: CroBorders.radiusSmall, border: Border.all(color: CroColors.hairline)),
       child: Row(
         children: [
           Expanded(
@@ -728,7 +689,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
             ),
           ),
-          const Text('Waiting', style: TextStyle(fontSize: 11.5, color: CroColors.fog)),
+          Text('WAITING', style: CroTextStyles.label(size: 10.5, color: CroColors.fog)),
           const SizedBox(width: 10),
           Tooltip(
             message: 'Cancel request',
@@ -755,7 +716,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       key: Key('webBlockedRow_${user.userId}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: CroBorders.radiusSmall, border: Border.all(color: CroColors.hairline)),
       child: Row(
         children: [
           Expanded(
@@ -770,11 +731,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             type: MaterialType.transparency,
             child: InkWell(
               key: Key('webUnblockButton_${user.userId}'),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: CroBorders.radiusSmall,
               onTap: () => _unblock(user.userId),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Text('Unblock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text('UNBLOCK', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
               ),
             ),
           ),

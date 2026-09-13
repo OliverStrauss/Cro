@@ -76,6 +76,9 @@ class CroBorders {
   static Border hairline({Color color = CroColors.ink, double alpha = 0.14, double width = 1}) =>
       Border.all(color: color.withValues(alpha: alpha), width: width);
 
+  static BorderSide hairlineSide({Color color = CroColors.ink, double alpha = 0.14, double width = 1}) =>
+      BorderSide(color: color.withValues(alpha: alpha), width: width);
+
   static const radius = BorderRadius.all(Radius.circular(4));
   static const radiusSmall = BorderRadius.all(Radius.circular(3));
 }
@@ -120,7 +123,7 @@ final ThemeData croTheme = ThemeData(
     color: CroColors.surface,
     elevation: 0,
     surfaceTintColor: Colors.transparent,
-    shape: RoundedRectangleBorder(borderRadius: CroBorders.radius, side: CroBorders.hairline()),
+    shape: RoundedRectangleBorder(borderRadius: CroBorders.radius, side: CroBorders.hairlineSide()),
     margin: EdgeInsets.zero,
   ),
   dividerTheme: const DividerThemeData(color: CroColors.hairline, thickness: 1, space: 1),
@@ -152,15 +155,15 @@ final ThemeData croTheme = ThemeData(
     filled: true,
     fillColor: CroColors.surface,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: OutlineInputBorder(borderRadius: CroBorders.radius, borderSide: CroBorders.hairline()),
-    enabledBorder: OutlineInputBorder(borderRadius: CroBorders.radius, borderSide: CroBorders.hairline()),
+    border: OutlineInputBorder(borderRadius: CroBorders.radius, borderSide: CroBorders.hairlineSide()),
+    enabledBorder: OutlineInputBorder(borderRadius: CroBorders.radius, borderSide: CroBorders.hairlineSide()),
     focusedBorder: OutlineInputBorder(borderRadius: CroBorders.radius, borderSide: const BorderSide(color: CroColors.waypointBlue, width: 1.5)),
     labelStyle: CroTextStyles.data(size: 12.5, color: CroColors.fog),
   ),
   dialogTheme: DialogThemeData(
     backgroundColor: CroColors.surface,
     surfaceTintColor: Colors.transparent,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), side: CroBorders.hairline()),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), side: CroBorders.hairlineSide()),
   ),
   tooltipTheme: TooltipThemeData(
     decoration: BoxDecoration(color: CroColors.ink, borderRadius: CroBorders.radiusSmall),
