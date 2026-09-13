@@ -180,3 +180,7 @@ compounding issues, both now fixed:
   `DoNotReply@<guid>.azurecomm.net`), linked together. Pay-per-email (~$0.00025/email), not a
   persistent free tier like SendGrid's, but negligible at this app's volume. Config is
   `Acs:ConnectionString`/`Acs:FromAddress` (Azure App Service settings updated to match).
+  Sender address is cosmetically rough (an auto-generated GUID subdomain) since Cro doesn't
+  own a real domain yet - functionally fine, purely a trust/polish issue. Revisit (add a
+  custom domain to the `cro-email-svc` Email Service, verify via DNS TXT/CNAME records) once
+  Cro has a real domain for other reasons.
