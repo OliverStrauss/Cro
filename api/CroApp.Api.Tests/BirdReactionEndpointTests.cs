@@ -118,12 +118,12 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
         var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: true);
 
-        var response = await AddReactionAsync(token, bird.Id, "👍");
+        var response = await AddReactionAsync(token, bird.Id, "🕊️");
         response.EnsureSuccessStatusCode();
         var summary = await response.Content.ReadFromJsonAsync<List<ReactionSummaryDto>>();
 
         var entry = Assert.Single(summary!);
-        Assert.Equal("👍", entry.Emoji);
+        Assert.Equal("🕊️", entry.Emoji);
         Assert.Equal(1, entry.Count);
         Assert.True(entry.ReactedByMe);
     }
@@ -155,7 +155,7 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
         var dest = await CreateNestAsync(friendToken, "Friend's Home", 50.0, 50.0, isPublic: false);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: false);
 
-        var response = await AddReactionAsync(token, bird.Id, "👍");
+        var response = await AddReactionAsync(token, bird.Id, "🕊️");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -189,8 +189,8 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
 
         var reactorToken = await RegisterAndLoginAsync($"react-reactor-{Guid.NewGuid():N}", "correct-horse-battery-staple");
 
-        (await AddReactionAsync(reactorToken, bird.Id, "❤️")).EnsureSuccessStatusCode();
-        var second = await AddReactionAsync(reactorToken, bird.Id, "❤️");
+        (await AddReactionAsync(reactorToken, bird.Id, "🌿")).EnsureSuccessStatusCode();
+        var second = await AddReactionAsync(reactorToken, bird.Id, "🌿");
         second.EnsureSuccessStatusCode();
         var summary = await second.Content.ReadFromJsonAsync<List<ReactionSummaryDto>>();
 
@@ -209,14 +209,14 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
         var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: true);
 
-        (await AddReactionAsync(token, bird.Id, "👍")).EnsureSuccessStatusCode();
-        var response = await AddReactionAsync(token, bird.Id, "😮");
+        (await AddReactionAsync(token, bird.Id, "🕊️")).EnsureSuccessStatusCode();
+        var response = await AddReactionAsync(token, bird.Id, "⭐");
         response.EnsureSuccessStatusCode();
         var summary = await response.Content.ReadFromJsonAsync<List<ReactionSummaryDto>>();
 
         Assert.Equal(2, summary!.Count);
-        Assert.Contains(summary, e => e.Emoji == "👍");
-        Assert.Contains(summary, e => e.Emoji == "😮");
+        Assert.Contains(summary, e => e.Emoji == "🕊️");
+        Assert.Contains(summary, e => e.Emoji == "⭐");
     }
 
     [Fact]
@@ -230,16 +230,16 @@ public class BirdReactionEndpointTests : IClassFixture<WebApplicationFactory<Pro
         var dest = await CreateHubAsync(adminToken, $"Away Hub {Guid.NewGuid():N}", 50.0, 50.0);
         var bird = await ComposeBirdAsync(token, origin.Id, dest.Id, isPublic: true);
 
-        (await AddReactionAsync(token, bird.Id, "👍")).EnsureSuccessStatusCode();
-        (await AddReactionAsync(token, bird.Id, "😮")).EnsureSuccessStatusCode();
+        (await AddReactionAsync(token, bird.Id, "🕊️")).EnsureSuccessStatusCode();
+        (await AddReactionAsync(token, bird.Id, "⭐")).EnsureSuccessStatusCode();
 
-        var deleteResponse = await RemoveReactionAsync(token, bird.Id, "👍");
+        var deleteResponse = await RemoveReactionAsync(token, bird.Id, "🕊️");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         var afterResponse = await GetReactionsAsync(token, bird.Id);
         var after = await afterResponse.Content.ReadFromJsonAsync<List<ReactionSummaryDto>>();
         var remaining = Assert.Single(after!);
-        Assert.Equal("😮", remaining.Emoji);
+        Assert.Equal("⭐", remaining.Emoji);
     }
 
     [Fact]

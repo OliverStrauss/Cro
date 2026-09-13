@@ -14,6 +14,3 @@ class BirdReactionSummary {
         reactedByMe: json['reactedByMe'] as bool,
       );
 }
-
-// Fixed allowlist, must match BirdReactionEmoji.Allowed on the server.
-const availableReactionEmojis = ['👍', '❤️', '😂', '😮', '🎉'];

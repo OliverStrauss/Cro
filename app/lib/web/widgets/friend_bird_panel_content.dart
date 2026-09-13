@@ -12,7 +12,8 @@ import '../../utils/color_utils.dart';
 import '../../widgets/bird_payload_view.dart';
 import 'panel_header.dart';
 
-// Public-only reaction set, matching bird_panel_content.dart's web-scoped emoji list.
+// Must match BirdReactionEmoji.Allowed on the server (api/Models/BirdReaction.cs), and
+// bird_panel_content.dart's own copy of this list.
 const _webReactionEmojis = ['🕊️', '🌿', '⭐', '🔥'];
 
 /// Read-only detail view for a friend's public bird - opened by tapping a public friend bird
