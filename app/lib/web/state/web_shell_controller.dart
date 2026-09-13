@@ -2,7 +2,7 @@ import '../../models/bird.dart';
 import '../../models/friend_request.dart';
 
 /// Which top-level screen the icon rail has selected.
-enum WebNavItem { map, nests, hubs, friends, you }
+enum WebNavItem { map, nests, hubs, profile }
 
 /// What the right-hand context panel is currently showing. The panel itself is only mounted
 /// when one of these is selected - there is no "nothing selected" member here. `friendBird`
@@ -27,6 +27,7 @@ class WebShellController {
   static int nestsBadgeCount(Map<String, List<Bird>> nestResidentsByNestId) =>
       nestResidentsByNestId.values.expand((birds) => birds).where((b) => !b.isRead).length;
 
-  /// Incoming friend-request count - drives the Friends rail badge.
+  /// Incoming friend-request count - drives the Profile rail badge (Friends is merged into
+  /// Profile, so this now rides on that icon instead of its own).
   static int friendsBadgeCount(List<FriendRequest> incoming) => incoming.length;
 }

@@ -130,7 +130,6 @@ class _FakeProfileService implements ProfileService {
 }
 
 class _FakeEventService implements EventService {
-  List<AppEvent> eventsToReturn = [];
   List<AppEvent> notificationsToReturn = [];
   bool markAllCalled = false;
   String? lastMarkedReadId;
@@ -138,9 +137,6 @@ class _FakeEventService implements EventService {
   // test hold one poll's response in flight to deterministically race it against a
   // concurrent mark-read mutation (see the poll-race regression test below).
   Completer<List<AppEvent>>? pendingNotifications;
-
-  @override
-  Future<List<AppEvent>> listEvents(String token, {int limit = 200}) async => eventsToReturn;
 
   @override
   Future<List<AppEvent>> listNotifications(String token, {int limit = 50}) {
@@ -270,7 +266,7 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
   });
 
-  testWidgets('nests/friends nav badges reflect delivered-unread birds and incoming requests', (tester) async {
+  testWidgets('nests/profile nav badges reflect delivered-unread birds and incoming requests', (tester) async {
     setDesktopSize(tester);
     waypointService.waypointsToReturn = [
       Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
@@ -284,7 +280,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('railBadge_Nests')), findsOneWidget);
-    expect(find.byKey(const Key('railBadge_Friends')), findsOneWidget);
+    expect(find.byKey(const Key('railBadge_Profile')), findsOneWidget);
   });
 
   testWidgets('switching nav items renders the corresponding screen', (tester) async {
@@ -300,13 +296,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('webHubsScreen')), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('webNavFriends')));
+    await tester.tap(find.byKey(const Key('webNavProfile')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('webFriendsScreen')), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('webNavYou')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('webYouScreen')), findsOneWidget);
+    expect(find.byKey(const Key('webProfileScreen')), findsOneWidget);
   });
 
   testWidgets('tapping an own nest marker opens the nest panel, and closing it unmounts the panel', (tester) async {
@@ -562,7 +554,7 @@ void main() {
     expect((avatarContainers.single.decoration as BoxDecoration).color, hexToColor('#1E88E5'));
   });
 
-  testWidgets('a pending incoming friend request shows in the notification feed and routes to Friends when tapped', (
+  testWidgets('a pending incoming friend request shows in the notification feed and routes to Profile when tapped', (
     tester,
   ) async {
     setDesktopSize(tester);
@@ -579,7 +571,7 @@ void main() {
     await tester.tap(find.byKey(const Key('webFriendRequestNotification_u2')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('webFriendsScreen')), findsOneWidget);
+    expect(find.byKey(const Key('webProfileScreen')), findsOneWidget);
   });
 }
 

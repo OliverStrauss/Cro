@@ -69,7 +69,6 @@ class WebShellData extends ChangeNotifier {
   Map<String, int> hubUnreadCounts = {};
   List<FriendRequest> incomingRequests = [];
   List<Friend> friends = [];
-  List<AppEvent> events = [];
   List<AppEvent> notifications = [];
   String username = '';
   String? profilePictureUrl;
@@ -122,7 +121,6 @@ class WebShellData extends ChangeNotifier {
         birdService.getPublicBirds(token),
         hubService.getUnreadCounts(token),
         friendsService.getIncomingRequests(token),
-        eventService.listEvents(token),
         eventService.listNotifications(token),
         friendsService.getFriends(token),
         friendsService.getFriendsWaypoints(token),
@@ -133,18 +131,17 @@ class WebShellData extends ChangeNotifier {
       publicBirds = results[2] as List<PublicBird>;
       hubUnreadCounts = results[3] as Map<String, int>;
       incomingRequests = results[4] as List<FriendRequest>;
-      events = results[5] as List<AppEvent>;
       // See _notifSeq's declaration - a mark-read that landed while this fetch was in flight
       // makes this response stale, so it's dropped rather than reverting the fresher local edit.
       if (notifSeqAtStart == _notifSeq) {
-        notifications = results[6] as List<AppEvent>;
+        notifications = results[5] as List<AppEvent>;
       }
-      friends = results[7] as List<Friend>;
+      friends = results[6] as List<Friend>;
       // Otherwise a friend's nest only appears once this user's own next full load() runs
       // (e.g. accepting a request themselves, which already reloads everything) - the other
       // side of a new friendship had no such trigger and stayed stuck on stale friendWaypoints
       // until a page reload.
-      friendWaypoints = results[8] as List<Waypoint>;
+      friendWaypoints = results[7] as List<Waypoint>;
       _notify();
     } catch (_) {
       // Swallow - same "a blip on a silent background poll shouldn't blank an
@@ -169,7 +166,6 @@ class WebShellData extends ChangeNotifier {
         hubService.listHubs(token),
         hubService.getUnreadCounts(token),
         friendsService.getIncomingRequests(token),
-        eventService.listEvents(token),
         eventService.listNotifications(token),
         friendsService.getFriends(token),
         if (userId != null) profileService.getUser(userId),
@@ -182,11 +178,10 @@ class WebShellData extends ChangeNotifier {
       hubs = results[5] as List<Hub>;
       hubUnreadCounts = results[6] as Map<String, int>;
       incomingRequests = results[7] as List<FriendRequest>;
-      events = results[8] as List<AppEvent>;
-      notifications = results[9] as List<AppEvent>;
-      friends = results[10] as List<Friend>;
-      if (results.length > 11) {
-        final profile = results[11] as UserProfile;
+      notifications = results[8] as List<AppEvent>;
+      friends = results[9] as List<Friend>;
+      if (results.length > 10) {
+        final profile = results[10] as UserProfile;
         username = profile.username;
         profilePictureUrl = profile.profilePictureUrl;
         isAdmin = profile.isAdmin;

@@ -8,37 +8,47 @@ import '../../models/friend_request.dart';
 import '../../models/user_search_result.dart';
 import '../../models/waypoint.dart';
 import '../../services/friends_service.dart';
+import '../../services/profile_service.dart';
 import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../widgets/avatar_with_fallback.dart';
 
-/// The Friends screen: friend cards (auto-assigned trail color, no picker - see the web
-/// redesign's README on this divergence), a live username search excluding people already
-/// in some relationship with the caller, incoming/outgoing requests, and blocked users.
-class WebFriendsScreen extends StatefulWidget {
+/// The Profile screen: a top card (avatar upload, admin badge, sign out) followed by the
+/// friends view (auto-assigned trail color friend cards, live username search excluding
+/// people already in some relationship with the caller, incoming/outgoing requests, and
+/// blocked users) - merged from the old separate You/Friends screens, whose settings list
+/// (beyond sign out) was just dead-weight navigation shortcuts to screens already reachable
+/// from the icon rail.
+class WebProfileScreen extends StatefulWidget {
   final AuthState authState;
+  final ProfileService profileService;
   final FriendsService friendsService;
-  final List<Waypoint> friendWaypoints;
+  final String username;
+  final String? profilePictureUrl;
   final bool isAdmin;
-  // Called after any action that changes the friends graph (accept/decline/remove/block)
-  // so the shell can refresh the rail's incoming-invite badge to match.
+  final List<Waypoint> friendWaypoints;
   final VoidCallback onDataChanged;
 
-  const WebFriendsScreen({
+  const WebProfileScreen({
     super.key,
     required this.authState,
+    required this.profileService,
     required this.friendsService,
-    required this.friendWaypoints,
+    required this.username,
+    required this.profilePictureUrl,
     required this.isAdmin,
+    required this.friendWaypoints,
     required this.onDataChanged,
   });
 
   @override
-  State<WebFriendsScreen> createState() => _WebFriendsScreenState();
+  State<WebProfileScreen> createState() => _WebProfileScreenState();
 }
 
-class _WebFriendsScreenState extends State<WebFriendsScreen> {
+class _WebProfileScreenState extends State<WebProfileScreen> {
+  bool _isUploading = false;
+
   List<Friend> _friends = [];
   List<FriendRequest> _incoming = [];
   List<FriendRequest> _outgoing = [];
@@ -72,6 +82,28 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
     _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _changePicture() async {
+    final (List<int> bytes, String filename, String contentType) picked;
+    try {
+      final xFile = await widget.profileService.pickImage();
+      if (xFile == null) return;
+      picked = (await xFile.readAsBytes(), xFile.name, xFile.mimeType ?? 'image/jpeg');
+    } catch (e) {
+      _toast(e.toString(), isError: true);
+      return;
+    }
+
+    setState(() => _isUploading = true);
+    try {
+      await widget.profileService.uploadProfilePicture(widget.authState.token!, picked.$1, filename: picked.$2, contentType: picked.$3);
+      widget.onDataChanged();
+    } catch (e) {
+      _toast(e.toString(), isError: true);
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
   }
 
   // Quiet refresh for the timer above - unlike _load(), never toggles _isLoading, so a
@@ -283,11 +315,11 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(key: Key('webFriendsLoading'), child: CircularProgressIndicator());
+      return const Center(key: Key('webProfileLoading'), child: CircularProgressIndicator());
     }
     if (_errorMessage != null) {
       return Center(
-        key: const Key('webFriendsError'),
+        key: const Key('webProfileError'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -300,7 +332,7 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
     }
 
     return SingleChildScrollView(
-      key: const Key('webFriendsScreen'),
+      key: const Key('webProfileScreen'),
       // Top padding keeps content clear of the floating actions cluster (no top bar - see
       // 05_web_ui_updates.md item 1).
       padding: const EdgeInsets.fromLTRB(26, 74, 26, 240),
@@ -309,6 +341,8 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _profileCard(),
+            const SizedBox(height: 26),
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
@@ -360,6 +394,77 @@ class _WebFriendsScreenState extends State<WebFriendsScreen> {
               SizedBox(width: 420, child: Column(children: [for (final b in _blocked) _blockedRow(b)])),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _profileCard() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Tooltip(
+            message: 'Change profile picture',
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                key: const Key('webChangePictureButton'),
+                customBorder: const CircleBorder(),
+                onTap: _isUploading ? null : _changePicture,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AvatarWithFallback(
+                      imageUrl: widget.profilePictureUrl,
+                      initialsSource: widget.username,
+                      radius: 42,
+                      hasBorder: true,
+                      borderColor: CroColors.waypointBlue,
+                    ),
+                    if (_isUploading) const CircularProgressIndicator(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.username, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                const Text('Click your picture to change it', style: TextStyle(fontSize: 12.5, color: CroColors.fog)),
+                if (widget.isAdmin) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(color: CroColors.deliveryAmber.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Admin', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CroColors.amberInk)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: const Key('webSignOutButton'),
+              borderRadius: BorderRadius.circular(6),
+              onTap: widget.authState.logout,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text('Sign out', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.alertAway)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

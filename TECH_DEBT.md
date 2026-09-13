@@ -65,17 +65,30 @@ avatar pattern belong on every panel eventually?) rather than a mechanical fix. 
 a third panel needs a non-Row header shape, which would make the case for a shared
 variant clearer.
 
-## `WebFriendsScreen` and `WebShellData` fetch overlapping friends data independently
+## `WebProfileScreen` and `WebShellData` fetch overlapping friends data independently
 
-Both `app/lib/web/screens/web_friends_screen.dart` and `app/lib/web/state/web_shell_data.dart`
-call `friendsService.getFriends`/`getIncomingRequests` and now both poll on their own
+Both `app/lib/web/screens/web_profile_screen.dart` (formerly `web_friends_screen.dart`,
+merged into Profile by #174) and `app/lib/web/state/web_shell_data.dart` call
+`friendsService.getFriends`/`getIncomingRequests` and now both poll on their own
 `Timer.periodic(3s)` (added for live-update support - see the notifications/friend-requests
 live-feel pass). `WebShellData`'s copy exists only to drive the nav rail's incoming-invite
-badge count (`WebShellController.friendsBadgeCount`); `WebFriendsScreen`'s is the full list
-the Friends screen renders. A real fix would lift this to one shared source of truth in
-`WebShellData` and have `WebFriendsScreen` consume it instead of fetching its own copy, but
-that also touches the rail's badge wiring - out of scope for just making both screens live.
+badge count (`WebShellController.friendsBadgeCount`); `WebProfileScreen`'s is the full list
+it renders below the profile card. A real fix would lift this to one shared source of truth
+in `WebShellData` and have `WebProfileScreen` consume it instead of fetching its own copy,
+but that also touches the rail's badge wiring - out of scope for just merging the two screens.
 Revisit if a third consumer of friends/incoming-request data shows up.
+
+## `GET /events`/`EventService.ListAsync` are now unreachable from the frontend
+
+`app/lib/web/services/event_service.dart`'s `listEvents` (backed the old `WebYouScreen`'s
+"flights logged" stat tile) was deleted in #174 once that screen was merged into
+`WebProfileScreen` without a stats grid - it was its only caller anywhere in `/app`. The
+backend `GET /events` endpoint (`api/Program.cs`) and its `EventService`/`CosmosEventRepository`
+plumbing were deliberately left in place rather than deleted, same reasoning as the
+`/birds/compose` entry above: removing a backend endpoint is a bigger, separate change than a
+frontend screen merge, and it's not yet confirmed nothing else (an admin tool, a future
+mobile client) depends on it. Worth either deleting it outright or confirming it's genuinely
+orphaned before doing so.
 
 ## `SendBirdDialog`'s distance/ETA preview assumes `BirdTravelOptions.SpeedMultiplier` is 1.0
 

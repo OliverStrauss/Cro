@@ -7,9 +7,16 @@ import 'package:cro_app/models/friend_request.dart';
 import 'package:cro_app/models/user_search_result.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/services/friends_service.dart';
+import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/state/auth_state.dart';
 import 'package:cro_app/theme.dart';
-import 'package:cro_app/web/screens/web_friends_screen.dart';
+import 'package:cro_app/web/screens/web_profile_screen.dart';
+
+class _FakeProfileService implements ProfileService {
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used by WebProfileScreen');
+}
 
 class _FakeFriendsService implements FriendsService {
   List<Friend> friends = [];
@@ -71,7 +78,7 @@ class _FakeFriendsService implements FriendsService {
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not used by WebFriendsScreen');
+      throw UnimplementedError('${invocation.memberName} is not used by WebProfileScreen');
 }
 
 void main() {
@@ -84,23 +91,51 @@ void main() {
   });
 
   Widget build({
-    List<Waypoint> friendWaypoints = const [],
     bool isAdmin = false,
+    List<Waypoint> friendWaypoints = const [],
     VoidCallback? onDataChanged,
   }) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
-        body: WebFriendsScreen(
+        body: WebProfileScreen(
           authState: authState,
+          profileService: _FakeProfileService(),
           friendsService: friendsService,
-          friendWaypoints: friendWaypoints,
+          username: 'oliver_s',
+          profilePictureUrl: null,
           isAdmin: isAdmin,
+          friendWaypoints: friendWaypoints,
           onDataChanged: onDataChanged ?? () {},
         ),
       ),
     );
   }
+
+  testWidgets('shows the username on the profile card', (tester) async {
+    await tester.pumpWidget(build());
+    await tester.pump();
+    expect(find.text('oliver_s'), findsOneWidget);
+  });
+
+  testWidgets('shows an Admin badge only for admins', (tester) async {
+    await tester.pumpWidget(build());
+    await tester.pump();
+    expect(find.text('Admin'), findsNothing);
+
+    await tester.pumpWidget(build(isAdmin: true));
+    await tester.pump();
+    expect(find.text('Admin'), findsOneWidget);
+  });
+
+  testWidgets('tapping Sign out logs the user out', (tester) async {
+    await tester.pumpWidget(build());
+    await tester.pump();
+
+    expect(authState.isLoggedIn, isTrue);
+    await tester.tap(find.byKey(const Key('webSignOutButton')));
+    expect(authState.isLoggedIn, isFalse);
+  });
 
   testWidgets('shows an empty state when there are no friends', (tester) async {
     await tester.pumpWidget(build());
