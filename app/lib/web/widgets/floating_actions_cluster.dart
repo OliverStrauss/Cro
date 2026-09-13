@@ -146,16 +146,13 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
   // established convention (see your_birds_dock.dart's dock shadow).
   Widget _triggerTile({required Key key, required Color bg, required VoidCallback onTap, required Widget child}) {
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.16), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
+      decoration: BoxDecoration(borderRadius: CroBorders.radius, border: Border.all(color: CroColors.hairline)),
       child: Material(
         color: bg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: CroBorders.radius,
         child: InkWell(
           key: key,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: CroBorders.radius,
           onTap: onTap,
           child: SizedBox(width: 40, height: 40, child: child),
         ),
@@ -198,17 +195,10 @@ class _FloatingActionsClusterState extends State<FloatingActionsCluster> {
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
                           alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: CroColors.alertAway,
-                            borderRadius: BorderRadius.circular(9),
-                          ),
+                          decoration: BoxDecoration(color: CroColors.alertAway, borderRadius: CroBorders.radiusSmall),
                           child: Text(
                             widget.unreadCount > 99 ? '99+' : '${widget.unreadCount}',
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: CroColors.surface,
-                            ),
+                            style: CroTextStyles.label(size: 10.5, color: CroColors.surface),
                           ),
                         ),
                       ),
@@ -242,9 +232,9 @@ class _PopupSurface extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CroColors.ink.withValues(alpha: 0.06)),
-        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.32), blurRadius: 44, offset: const Offset(0, 20))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
+        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.22), blurRadius: 28, offset: const Offset(0, 12))],
       ),
       child: child,
     );
@@ -294,11 +284,8 @@ class _FeedLabelChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(5)),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color, height: 1.2),
-      ),
+      decoration: BoxDecoration(border: Border.all(color: color.withValues(alpha: 0.5)), borderRadius: CroBorders.radiusSmall),
+      child: Text(label.toUpperCase(), style: CroTextStyles.label(size: 10, color: color)),
     );
   }
 }
@@ -388,7 +375,7 @@ class _NotificationsDropdown extends StatelessWidget {
                           _FeedLabelChip(label: chip.$1, color: chip.$2),
                           const SizedBox(width: 6),
                         ],
-                        Text(_relativeTime(n.createdAt), style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
+                        Text(_relativeTime(n.createdAt), style: CroTextStyles.data(size: 11.5)),
                       ],
                     ),
                   ],
@@ -462,25 +449,17 @@ class _NotificationsDropdown extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             child: Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Notifications',
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
-                  ),
-                ),
+                Expanded(child: Text('NOTIFICATIONS', style: CroTextStyles.label(size: 13))),
                 if (notifications.isNotEmpty)
                   Material(
                     type: MaterialType.transparency,
                     child: InkWell(
                       key: const Key('webMarkAllReadButton'),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: CroBorders.radiusSmall,
                       onTap: onMarkAllRead,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: Text(
-                          'Mark all read',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
-                        ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text('MARK ALL READ', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
                       ),
                     ),
                   ),

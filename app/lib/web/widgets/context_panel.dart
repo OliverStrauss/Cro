@@ -86,8 +86,9 @@ class ContextPanel extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.16), blurRadius: 20, offset: const Offset(0, 8))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
+        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.14), blurRadius: 20, offset: const Offset(0, 8))],
       ),
       child: switch (mode) {
         PanelMode.nest when selectedNest != null => NestPanelContent(
