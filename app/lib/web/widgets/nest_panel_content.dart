@@ -11,6 +11,7 @@ import '../../utils/color_utils.dart';
 import '../../utils/jwt_utils.dart';
 import '../../widgets/received_bird_sheet.dart';
 import '../../widgets/waypoint_name_dialog.dart';
+import 'coordinate_readout.dart';
 import 'panel_header.dart';
 
 /// The nest detail panel body - own nests get delivered-mail + resident-bird sections
@@ -188,10 +189,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Row(
             children: [
-              Text(
-                '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
-                style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-              ),
+              CoordinateReadout(latitude: nest.latitude, longitude: nest.longitude),
               if (widget.isOwn) ...[
                 const SizedBox(width: 10),
                 Material(
@@ -200,11 +198,11 @@ class _NestPanelContentState extends State<NestPanelContent> {
                     key: const Key('webRenameNestButton'),
                     borderRadius: BorderRadius.circular(6),
                     onTap: _rename,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                       child: Text(
-                        'Rename',
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                        'RENAME',
+                        style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint),
                       ),
                     ),
                   ),
