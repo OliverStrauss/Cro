@@ -89,7 +89,7 @@ class _HubMessageCardState extends State<HubMessageCard> {
                       Text(
                         '${message.birdName} · from ${message.originNestName ?? 'somewhere'} · $_relativeTime',
                         key: Key('hubMessageMeta_${message.id}'),
-                        style: const TextStyle(fontSize: 12, color: CroColors.fog),
+                        style: CroTextStyles.data(size: 12),
                       ),
                     ],
                   ),

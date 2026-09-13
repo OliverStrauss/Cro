@@ -248,8 +248,6 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
     final visible = _visibleViews;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      backgroundColor: CroColors.surface,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Padding(
@@ -304,10 +302,8 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
               const SizedBox(height: 16),
               if (visible.isEmpty)
                 Text(
-                  _hubMode
-                      ? 'No hubs match.'
-                      : 'No other nests to send to yet.',
-                  style: const TextStyle(color: CroColors.fog),
+                  _hubMode ? 'No hubs match.' : 'No other nests to send to yet.',
+                  style: CroTextStyles.data(),
                 )
               else
                 DropdownMenu<String>(
@@ -333,10 +329,7 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                         ),
                         trailingIcon: Text(
                           '${v.miles.toStringAsFixed(1)} mi · ${_travelTimeLabel(v.hours)}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: CroColors.fog,
-                          ),
+                          style: CroTextStyles.data(size: 11),
                         ),
                       ),
                   ],
@@ -349,9 +342,9 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 title: const Text('Make this bird public'),
-                subtitle: const Text(
+                subtitle: Text(
                   "Friends can see it on the map and open what it's carrying",
-                  style: TextStyle(fontSize: 11.5, color: CroColors.fog),
+                  style: CroTextStyles.data(size: 11.5),
                 ),
                 value: _isPublic,
                 onChanged: (value) => setState(() => _isPublic = value),
