@@ -8,6 +8,7 @@ import '../widgets/auth_shell.dart';
 import '../widgets/auth_text_field.dart';
 import 'forgot_password_screen.dart';
 import 'sign_up_screen.dart';
+import 'verify_email_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final AuthState authState;
@@ -26,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  bool _emailNotVerified = false;
 
   @override
   void dispose() {
@@ -39,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _emailNotVerified = false;
     });
 
     try {
@@ -47,6 +50,11 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text,
       );
       widget.authState.login(token);
+    } on EmailNotVerifiedException catch (e) {
+      setState(() {
+        _errorMessage = e.message;
+        _emailNotVerified = true;
+      });
     } catch (e) {
       setState(() => _errorMessage = e.toString());
     } finally {
@@ -135,6 +143,31 @@ class _LoginScreenState extends State<LoginScreen> {
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),
               AuthErrorBanner(message: _errorMessage!),
+              if (_emailNotVerified) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    key: const Key('verifyEmailNowButton'),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                    onPressed: () async {
+                      final verified = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
+                      );
+                      if (verified == true && mounted) {
+                        setState(() {
+                          _errorMessage = null;
+                          _emailNotVerified = false;
+                        });
+                      }
+                    },
+                    child: const Text(
+                      'Verify your email now',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint),
+                    ),
+                  ),
+                ),
+              ],
             ],
             const SizedBox(height: 24),
             SizedBox(

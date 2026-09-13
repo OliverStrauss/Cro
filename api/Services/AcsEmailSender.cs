@@ -21,15 +21,15 @@ public class AcsEmailSender : IEmailSender
         _fromAddress = options.Value.FromAddress;
     }
 
-    public async Task SendPasswordResetCodeAsync(string toEmail, string code)
+    public Task SendPasswordResetCodeAsync(string toEmail, string code) =>
+        SendAsync(toEmail, "Reset your Cro password", $"Your password reset code is {code}. It expires in 15 minutes.");
+
+    public Task SendEmailVerificationCodeAsync(string toEmail, string code) =>
+        SendAsync(toEmail, "Verify your Cro email", $"Your email verification code is {code}. It expires in 24 hours.");
+
+    private async Task SendAsync(string toEmail, string subject, string plainTextBody)
     {
-        var message = new EmailMessage(
-            _fromAddress,
-            toEmail,
-            new EmailContent("Reset your Cro password")
-            {
-                PlainText = $"Your password reset code is {code}. It expires in 15 minutes."
-            });
+        var message = new EmailMessage(_fromAddress, toEmail, new EmailContent(subject) { PlainText = plainTextBody });
         await _client.SendAsync(Azure.WaitUntil.Completed, message);
     }
 }

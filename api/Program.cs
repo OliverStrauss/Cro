@@ -146,6 +146,8 @@ else
     builder.Services.AddScoped<IEmailSender, ConsoleEmailSender>();
 }
 
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+
 var jwtSection = builder.Configuration.GetSection("Jwt");
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -341,25 +343,35 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok()).WithName("HealthCheck");
 
-app.MapPost("/users", async (CreateUserRequest req, CosmosUserRepository repo) =>
+app.MapPost("/users", async (CreateUserRequest req, CosmosUserRepository repo, IEmailSender emailSender) =>
 {
-    // Users is partitioned by /id (a random Guid), not by username, so there's no
+    // Users is partitioned by /id (a random Guid), not by username/email, so there's no
     // Cosmos-level unique constraint to lean on - a retried sign-up (slow request, page
     // refresh mid-request) would otherwise create a second document with the same
     // username/email and a different id. Same check-then-create pattern DevDataSeeder/
     // Program.cs's dev-user seeding already uses.
     // ponytail: check-then-create isn't atomic, so two truly concurrent sign-ups with the
-    // same username could still both pass this check - a unique key policy on username
-    // would close that, add if simultaneous duplicate sign-ups turn out to happen in practice.
+    // same username/email could still both pass this check - a unique key policy would close
+    // that, add if simultaneous duplicate sign-ups turn out to happen in practice.
     if (await repo.GetByUsernameAsync(req.Username) is not null)
     {
         return Results.Conflict(new { message = "Username already taken" });
     }
+    if (await repo.GetByEmailAsync(req.Email) is not null)
+    {
+        return Results.Conflict(new { message = "Email already in use" });
+    }
 
     var hasher = new PasswordHasher<User>();
-    var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow, PasswordHash: "", Friends: []);
+    var verificationCode = Random.Shared.Next(100_000, 999_999).ToString();
+    var verificationCodeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(verificationCode)));
+    var user = new User(Guid.NewGuid().ToString(), req.Username, req.Email, DateTimeOffset.UtcNow, PasswordHash: "", Friends: [],
+        IsEmailVerified: false,
+        EmailVerificationCodeHash: verificationCodeHash,
+        EmailVerificationExpiresAt: DateTimeOffset.UtcNow.AddHours(24));
     var hashedUser = user with { PasswordHash = hasher.HashPassword(user, req.Password) };
     var created = await repo.CreateAsync(hashedUser);
+    await emailSender.SendEmailVerificationCodeAsync(created.Email, verificationCode);
     return Results.Created($"/users/{created.Id}", created.ToResponse());
 })
 .WithName("CreateUser");
@@ -428,7 +440,7 @@ app.MapGet("/users/search", async (string? q, ClaimsPrincipal principal, CosmosU
 .RequireAuthorization()
 .WithName("SearchUsers");
 
-app.MapPost("/login", async (LoginRequest req, CosmosUserRepository repo, IOptions<JwtOptions> jwtOpts) =>
+app.MapPost("/login", async (LoginRequest req, CosmosUserRepository repo, IOptions<JwtOptions> jwtOpts, IOptions<AuthOptions> authOpts) =>
 {
     var user = await repo.GetByUsernameAsync(req.Username);
     if (user is null || string.IsNullOrEmpty(user.PasswordHash))
@@ -443,10 +455,57 @@ app.MapPost("/login", async (LoginRequest req, CosmosUserRepository repo, IOptio
         return Results.Unauthorized();
     }
 
+    if (authOpts.Value.RequireEmailVerification && !user.IsEmailVerified)
+    {
+        return Results.Json(new { message = "Please verify your email before logging in." }, statusCode: StatusCodes.Status403Forbidden);
+    }
+
     var (token, expiresAt) = JwtTokenService.GenerateToken(user, jwtOpts.Value);
     return Results.Ok(new LoginResponse(token, expiresAt));
 })
 .WithName("Login");
+
+app.MapPost("/verify-email", async (VerifyEmailRequest req, CosmosUserRepository repo) =>
+{
+    var user = await repo.GetByEmailAsync(req.Email);
+    var codeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(req.Code)));
+    if (user?.EmailVerificationCodeHash is null
+        || user.EmailVerificationExpiresAt is null
+        || user.EmailVerificationExpiresAt < DateTimeOffset.UtcNow
+        || user.EmailVerificationCodeHash != codeHash)
+    {
+        return Results.BadRequest(new { message = "Invalid or expired code" });
+    }
+
+    await repo.UpdateAsync(user with
+    {
+        IsEmailVerified = true,
+        EmailVerificationCodeHash = null,
+        EmailVerificationExpiresAt = null
+    });
+    return Results.Ok();
+})
+.WithName("VerifyEmail");
+
+app.MapPost("/resend-verification-email", async (ResendVerificationEmailRequest req, CosmosUserRepository repo, IEmailSender emailSender) =>
+{
+    // Always 200 regardless of whether the email matches an unverified account - same
+    // enumeration-avoidance as /forgot-password.
+    var user = await repo.GetByEmailAsync(req.Email);
+    if (user is not null && !user.IsEmailVerified)
+    {
+        var code = Random.Shared.Next(100_000, 999_999).ToString();
+        var codeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+        await repo.UpdateAsync(user with
+        {
+            EmailVerificationCodeHash = codeHash,
+            EmailVerificationExpiresAt = DateTimeOffset.UtcNow.AddHours(24)
+        });
+        await emailSender.SendEmailVerificationCodeAsync(user.Email, code);
+    }
+    return Results.Ok();
+})
+.WithName("ResendVerificationEmail");
 
 app.MapPost("/forgot-password", async (ForgotPasswordRequest req, CosmosUserRepository repo, IEmailSender emailSender) =>
 {
@@ -1752,6 +1811,8 @@ record LoginRequest(string Username, string Password);
 record LoginResponse(string Token, DateTimeOffset ExpiresAt);
 record ForgotPasswordRequest(string Email);
 record ResetPasswordRequest(string Email, string Code, string NewPassword);
+record VerifyEmailRequest(string Email, string Code);
+record ResendVerificationEmailRequest(string Email);
 // IsPublic is only honored by CreateWaypoint - UpdateWaypoint reuses this same DTO but
 // ignores the field entirely, since a nest's kind is not editable after creation.
 record SetWaypointRequest(string Name, double Latitude, double Longitude, bool IsPublic = false);
