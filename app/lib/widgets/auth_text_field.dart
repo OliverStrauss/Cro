@@ -67,19 +67,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
                 onPressed: () => setState(() => _obscured = !_obscured),
               )
             : null,
-        filled: true,
-        fillColor: CroColors.background.withValues(alpha: 0.4),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: CroColors.waypointBlue, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Theme.of(context).colorScheme.error, width: 1.2),
-        ),
+        // Overrides ThemeData.inputDecorationTheme's fill only - the hairline border, radius,
+        // and label style still come from it.
+        fillColor: Colors.transparent,
+        errorBorder: OutlineInputBorder(borderRadius: CroBorders.radius, borderSide: BorderSide(color: Theme.of(context).colorScheme.error, width: 1.2)),
       ),
     );
   }

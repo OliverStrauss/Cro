@@ -347,7 +347,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text('YOUR FRIENDS', style: CroTextStyles.label(size: 13)),
+                Text('Your friends', style: CroTextStyles.label(size: 13)),
                 const SizedBox(width: 10),
                 Text('trail colors are assigned automatically', style: CroTextStyles.data(size: 11.5)),
               ],
@@ -362,7 +362,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                 children: [for (final friend in _friends) _friendCard(friend)],
               ),
             const SizedBox(height: 26),
-            Text('FIND PEOPLE', style: CroTextStyles.label(size: 13)),
+            Text('Find people', style: CroTextStyles.label(size: 13)),
             const SizedBox(height: 12),
             SizedBox(
               width: 420,
@@ -375,18 +375,18 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             if (_searchResults.isNotEmpty) _searchResultsList(),
             if (_incoming.isNotEmpty) ...[
               const SizedBox(height: 26),
-              Text('INVITES FOR YOU', style: CroTextStyles.label(size: 13)),
+              Text('Invites for you', style: CroTextStyles.label(size: 13)),
               const SizedBox(height: 12),
               Wrap(spacing: 12, runSpacing: 12, children: [for (final r in _incoming) _inviteCard(r)]),
             ],
             if (_outgoing.isNotEmpty) ...[
               const SizedBox(height: 26),
-              Text('WAITING ON THEM', style: CroTextStyles.label(size: 13)),
+              Text('Waiting on them', style: CroTextStyles.label(size: 13)),
               const SizedBox(height: 12),
               SizedBox(width: 420, child: Column(children: [for (final r in _outgoing) _outgoingRow(r)])),
             ],
             const SizedBox(height: 26),
-            Text('BLOCKED', style: CroTextStyles.label(size: 13)),
+            Text('Blocked', style: CroTextStyles.label(size: 13)),
             const SizedBox(height: 12),
             if (_blocked.isEmpty)
               Text('No blocked users', style: CroTextStyles.data(size: 12.5))
@@ -446,7 +446,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(border: Border.all(color: CroColors.deliveryAmber), borderRadius: CroBorders.radiusSmall),
-                    child: Text('ADMIN', style: CroTextStyles.stamp()),
+                    child: Text('Admin', style: CroTextStyles.stamp()),
                   ),
                 ],
               ],
@@ -460,7 +460,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               onTap: widget.authState.logout,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Text('SIGN OUT', style: CroTextStyles.label(size: 11, color: CroColors.alertAway)),
+                child: Text('Sign out', style: CroTextStyles.label(size: 11, color: CroColors.alertAway)),
               ),
             ),
           ),
@@ -549,7 +549,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
                       child: Text(
-                        isConfirmingRemove ? 'CONFIRM?' : 'REMOVE',
+                        isConfirmingRemove ? 'Confirm?' : 'Remove',
                         style: CroTextStyles.label(size: 10, color: isConfirmingRemove ? Theme.of(context).colorScheme.error : CroColors.fog),
                       ),
                     ),
@@ -600,7 +600,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                       onTap: () => _sendRequest(r.username),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: Text('SEND REQUEST', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+                        child: Text('Send request', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
                       ),
                     ),
                   ),
@@ -614,7 +614,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                         child: Text(
-                          _confirmBlockSearchId == r.userId ? 'CONFIRM?' : 'BLOCK',
+                          _confirmBlockSearchId == r.userId ? 'Confirm?' : 'Block',
                           style: CroTextStyles.label(size: 11, color: _confirmBlockSearchId == r.userId ? Theme.of(context).colorScheme.error : CroColors.fog),
                         ),
                       ),
@@ -656,15 +656,25 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               ElevatedButton(
                 key: Key('webAcceptInviteButton_${request.userId}'),
                 onPressed: () => _accept(request.userId),
-                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8), textStyle: CroTextStyles.label(size: 11, color: CroColors.surface)),
-                child: const Text('ACCEPT'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  textStyle: CroTextStyles.label(size: 11, color: CroColors.surface),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Accept'),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
                 key: Key('webDeclineInviteButton_${request.userId}'),
                 onPressed: () => _decline(request.userId),
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), textStyle: CroTextStyles.label(size: 11, color: CroColors.fog)),
-                child: const Text('DECLINE'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                  textStyle: CroTextStyles.label(size: 11, color: CroColors.fog),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Decline'),
               ),
             ],
           ),
@@ -689,7 +699,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
             ),
           ),
-          Text('WAITING', style: CroTextStyles.label(size: 10.5, color: CroColors.fog)),
+          Text('Waiting', style: CroTextStyles.label(size: 10.5, color: CroColors.fog)),
           const SizedBox(width: 10),
           Tooltip(
             message: 'Cancel request',
@@ -735,7 +745,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               onTap: () => _unblock(user.userId),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Text('UNBLOCK', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+                child: Text('Unblock', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
               ),
             ),
           ),

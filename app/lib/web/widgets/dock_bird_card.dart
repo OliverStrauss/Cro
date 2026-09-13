@@ -225,7 +225,7 @@ class DockBirdCard extends StatelessWidget {
                           context,
                         ).textTheme.titleSmall?.copyWith(fontSize: 13.5, fontWeight: FontWeight.w700),
                       ),
-                      Text(view.stateLabel.toUpperCase(), style: CroTextStyles.label(size: 10, color: view.stateColor)),
+                      Text(view.stateLabel, style: CroTextStyles.label(size: 10, color: view.stateColor)),
                     ],
                   ),
                 ),

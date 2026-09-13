@@ -178,7 +178,7 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                   onTap: () => Navigator.of(context).pop(),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: Text('CLOSE', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
+                    child: Text('Close', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
                   ),
                 ),
               ),

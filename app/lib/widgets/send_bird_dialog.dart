@@ -282,20 +282,28 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                 const SizedBox(height: 14),
                 SizedBox(
                   height: 36,
-                  child: ListView(
+                  // A plain ListView virtualizes past its cache extent, which only ever
+                  // mattered for scroll performance on a long list - HubCategory.all is a
+                  // short fixed set, so a scrollable Row builds every chip unconditionally
+                  // instead of leaving how far a chip sits from the left edge (which grew
+                  // once labelLarge moved to a wider tracked mono face) able to silently
+                  // un-render one.
+                  child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                    children: [
-                      for (final category in HubCategory.all)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            key: Key('sendBirdCategoryChip_$category'),
-                            label: Text(category),
-                            selected: _selectedCategory == category,
-                            onSelected: (_) => _toggleCategory(category),
+                    child: Row(
+                      children: [
+                        for (final category in HubCategory.all)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                              key: Key('sendBirdCategoryChip_$category'),
+                              label: Text(category),
+                              selected: _selectedCategory == category,
+                              onSelected: (_) => _toggleCategory(category),
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

@@ -285,7 +285,7 @@ class _FeedLabelChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(border: Border.all(color: color.withValues(alpha: 0.5)), borderRadius: CroBorders.radiusSmall),
-      child: Text(label.toUpperCase(), style: CroTextStyles.label(size: 10, color: color)),
+      child: Text(label, style: CroTextStyles.label(size: 10, color: color)),
     );
   }
 }
@@ -449,7 +449,7 @@ class _NotificationsDropdown extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             child: Row(
               children: [
-                Expanded(child: Text('NOTIFICATIONS', style: CroTextStyles.label(size: 13))),
+                Expanded(child: Text('Notifications', style: CroTextStyles.label(size: 13))),
                 if (notifications.isNotEmpty)
                   Material(
                     type: MaterialType.transparency,
@@ -459,7 +459,7 @@ class _NotificationsDropdown extends StatelessWidget {
                       onTap: onMarkAllRead,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: Text('MARK ALL READ', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+                        child: Text('Mark all read', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
                       ),
                     ),
                   ),

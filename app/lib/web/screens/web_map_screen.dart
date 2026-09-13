@@ -440,7 +440,7 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                         onTap: widget.onCancelAddNest,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                          child: Text('CANCEL', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
+                          child: Text('Cancel', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
                         ),
                       ),
                     ),
@@ -477,7 +477,7 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
                         onTap: widget.onCancelAddHub,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                          child: Text('CANCEL', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
+                          child: Text('Cancel', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
                         ),
                       ),
                     ),

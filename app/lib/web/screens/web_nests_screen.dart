@@ -127,7 +127,7 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
               children: [for (final nest in widget.ownNests) _ownNestCard(nest)],
             ),
           const SizedBox(height: 26),
-          Text("FRIENDS' NESTS", style: CroTextStyles.label(size: 12.5)),
+          Text("Friends' nests", style: CroTextStyles.label(size: 12.5)),
           const SizedBox(height: 14),
           if (widget.friendWaypoints.isEmpty)
             Text('No friend nests visible yet', style: CroTextStyles.data(size: 12.5))
@@ -199,7 +199,7 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(color: CroColors.alertAway, borderRadius: CroBorders.radiusSmall),
                       child: Text(
-                        '$waitingCount WAITING',
+                        '$waitingCount waiting',
                         style: CroTextStyles.label(size: 9.5, color: CroColors.surface),
                       ),
                     ),
@@ -220,7 +220,7 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
                       onTap: () => _rename(nest),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: Text('RENAME', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+                        child: Text('Rename', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
                       ),
                     ),
                   ),
@@ -234,7 +234,7 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                         child: Text(
-                          isConfirming ? 'CONFIRM?' : 'DELETE',
+                          isConfirming ? 'Confirm?' : 'Delete',
                           style: CroTextStyles.label(size: 11, color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog),
                         ),
                       ),

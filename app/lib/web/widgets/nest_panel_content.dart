@@ -201,7 +201,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                       child: Text(
-                        'RENAME',
+                        'Rename',
                         style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint),
                       ),
                     ),
@@ -231,7 +231,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
       children: [
         if (_deliveredBirds.isNotEmpty) ...[
-          Text('DELIVERED TO YOU', style: CroTextStyles.label(size: 12)),
+          Text('Delivered to you', style: CroTextStyles.label(size: 12)),
           const SizedBox(height: 9),
           for (final bird in _deliveredBirds) _deliveredRow(bird),
           const SizedBox(height: 16),
@@ -254,7 +254,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
 
   List<Widget> _birdsHereSection(List<Bird> birds, {required String title}) {
     return [
-      Text(title.toUpperCase(), style: CroTextStyles.label(size: 12)),
+      Text(title, style: CroTextStyles.label(size: 12)),
       const SizedBox(height: 9),
       if (birds.isEmpty)
         Text('This nest is empty', key: const Key('nestPanelEmpty'), style: CroTextStyles.data(size: 12.5))
@@ -304,7 +304,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
                     ],
                   ),
                 ),
-                Text('READ', style: CroTextStyles.stamp()),
+                Text('Read', style: CroTextStyles.stamp()),
               ],
             ),
           ),

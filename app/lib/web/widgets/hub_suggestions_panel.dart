@@ -193,7 +193,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
         if (_pictureSuggestions.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text('PHOTO SUGGESTIONS', style: CroTextStyles.label(size: 11.5, color: CroColors.fog)),
+            child: Text('Photo suggestions', style: CroTextStyles.label(size: 11.5, color: CroColors.fog)),
           ),
           const SizedBox(height: 6),
           for (final suggestion in _pictureSuggestions) ...[
@@ -244,7 +244,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
             key: Key('approveSuggestionButton_${suggestion.id}'),
             style: TextButton.styleFrom(foregroundColor: CroColors.surface, backgroundColor: CroColors.success),
             onPressed: () => _approve(suggestion),
-            child: const Text('APPROVE'),
+            child: const Text('Approve'),
           ),
           const SizedBox(width: 8),
           Material(
@@ -256,7 +256,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
-                  isConfirming ? 'CONFIRM?' : 'REJECT',
+                  isConfirming ? 'Confirm?' : 'Reject',
                   style: CroTextStyles.label(size: 11, color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog),
                 ),
               ),
@@ -312,7 +312,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
             key: Key('approvePictureSuggestionButton_${suggestion.id}'),
             style: TextButton.styleFrom(foregroundColor: CroColors.surface, backgroundColor: CroColors.success),
             onPressed: () => _approvePicture(suggestion),
-            child: const Text('APPROVE'),
+            child: const Text('Approve'),
           ),
           const SizedBox(width: 8),
           Material(
@@ -324,7 +324,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
-                  isConfirming ? 'CONFIRM?' : 'REJECT',
+                  isConfirming ? 'Confirm?' : 'Reject',
                   style: CroTextStyles.label(size: 11, color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog),
                 ),
               ),

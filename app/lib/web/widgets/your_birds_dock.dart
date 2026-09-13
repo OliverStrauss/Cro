@@ -106,11 +106,11 @@ class YourBirdsDock extends StatelessWidget {
                       child: const Icon(Icons.arrow_forward_rounded, size: 11, color: CroColors.surface),
                     ),
                     const SizedBox(width: 10),
-                    Text('YOUR BIRDS', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 12)),
+                    Text('Your birds', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 12)),
                     const SizedBox(width: 10),
                     Text(summary, style: CroTextStyles.data(size: 11.5)),
                     const SizedBox(width: 10),
-                    Text('SHOW', style: CroTextStyles.label(size: 11.5, color: CroColors.deepWaypoint)),
+                    Text('Show', style: CroTextStyles.label(size: 11.5, color: CroColors.deepWaypoint)),
                   ],
                 ),
                 ),
@@ -150,7 +150,7 @@ class YourBirdsDock extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('YOUR BIRDS', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13)),
+              Text('Your birds', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 13)),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(summary, overflow: TextOverflow.ellipsis, style: CroTextStyles.data(size: 12)),
@@ -166,7 +166,7 @@ class YourBirdsDock extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                     child: Text(
-                      expanded ? 'LESS DETAIL' : 'MORE DETAIL',
+                      expanded ? 'Less detail' : 'More detail',
                       style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint),
                     ),
                   ),
@@ -181,7 +181,7 @@ class YourBirdsDock extends StatelessWidget {
                   onTap: onHide,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: Text('HIDE', style: CroTextStyles.label(size: 11, color: CroColors.fog)),
+                    child: Text('Hide', style: CroTextStyles.label(size: 11, color: CroColors.fog)),
                   ),
                 ),
               ),
@@ -251,7 +251,7 @@ class _FilterChip extends StatelessWidget {
               borderRadius: CroBorders.radiusSmall,
               border: active ? Border.all(color: CroColors.waypointBlue) : null,
             ),
-            child: Text(_label.toUpperCase(), style: CroTextStyles.label(size: 11, color: active ? CroColors.deepWaypoint : CroColors.fog)),
+            child: Text(_label, style: CroTextStyles.label(size: 11, color: active ? CroColors.deepWaypoint : CroColors.fog)),
           ),
         ),
       ),

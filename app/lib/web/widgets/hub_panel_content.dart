@@ -222,7 +222,7 @@ class _HubPanelContentState extends State<HubPanelContent> {
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Text('THE BOARD', style: CroTextStyles.label(size: 12.5)),
+          child: Text('The board', style: CroTextStyles.label(size: 12.5)),
         ),
         const SizedBox(height: 8),
         Flexible(child: _body()),

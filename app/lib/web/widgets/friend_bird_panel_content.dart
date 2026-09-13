@@ -178,7 +178,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('WHAT IT CARRIES', style: CroTextStyles.label(size: 11.5)),
+                      Text('What it carries', style: CroTextStyles.label(size: 11.5)),
                       const SizedBox(height: 8),
                       BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
                     ],
@@ -186,7 +186,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
                 ),
                 const SizedBox(height: 18),
               ],
-              Text('REACTIONS', style: CroTextStyles.label(size: 12)),
+              Text('Reactions', style: CroTextStyles.label(size: 12)),
               const SizedBox(height: 9),
               Wrap(
                 key: const Key('webFriendBirdReactionRow'),
@@ -205,7 +205,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Center(
-                      child: Text('FOLLOW ON THE MAP', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
+                      child: Text('Follow on the map', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
                     ),
                   ),
                 ),
@@ -220,7 +220,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
   Widget _labelValueRow(String label, String value) {
     return Row(
       children: [
-        Text(label.toUpperCase(), style: CroTextStyles.label(size: 11, color: CroColors.fog)),
+        Text(label, style: CroTextStyles.label(size: 11, color: CroColors.fog)),
         const Spacer(),
         Flexible(
           child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: CroTextStyles.data(size: 12.5, color: CroColors.ink, weight: FontWeight.w600)),

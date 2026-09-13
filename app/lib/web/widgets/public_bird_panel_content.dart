@@ -83,7 +83,7 @@ class _PublicBirdPanelContentState extends State<PublicBirdPanelContent> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('WHAT IT CARRIES', style: CroTextStyles.label(size: 11.5)),
+                      Text('What it carries', style: CroTextStyles.label(size: 11.5)),
                       const SizedBox(height: 8),
                       BirdPayloadView(content: bird.content, imageUrl: bird.imageUrl, audioUrl: bird.audioUrl),
                     ],
@@ -102,7 +102,7 @@ class _PublicBirdPanelContentState extends State<PublicBirdPanelContent> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Center(
                       child: Text(
-                        (_sent ? 'Request sent' : 'Add ${bird.senderUsername} as a friend').toUpperCase(),
+                        _sent ? 'Request sent' : 'Add ${bird.senderUsername} as a friend',
                         style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint),
                       ),
                     ),

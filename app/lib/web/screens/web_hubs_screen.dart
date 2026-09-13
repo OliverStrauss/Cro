@@ -80,12 +80,12 @@ class WebHubsScreen extends StatelessWidget {
             const SizedBox(height: 26),
             Row(
               children: [
-                Text('SUGGESTED HUBS', style: CroTextStyles.label(size: 13)),
+                Text('Suggested hubs', style: CroTextStyles.label(size: 13)),
                 const SizedBox(width: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(border: Border.all(color: CroColors.deliveryAmber), borderRadius: CroBorders.radiusSmall),
-                  child: Text('ADMIN', style: CroTextStyles.stamp()),
+                  child: Text('Admin', style: CroTextStyles.stamp()),
                 ),
               ],
             ),

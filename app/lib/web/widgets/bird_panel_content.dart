@@ -344,7 +344,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                   key: const Key('birdPanelStateChip'),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(border: Border.all(color: view.stateColor), borderRadius: CroBorders.radiusSmall),
-                  child: Text(view.stateLabel.toUpperCase(), style: CroTextStyles.label(size: 10, color: view.stateColor)),
+                  child: Text(view.stateLabel, style: CroTextStyles.label(size: 10, color: view.stateColor)),
                 ),
           onClose: widget.onClose,
         ),
@@ -375,7 +375,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                             onTap: _renameBird,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                              child: Text('RENAME', style: CroTextStyles.label(size: 11, color: CroColors.fog)),
+                              child: Text('Rename', style: CroTextStyles.label(size: 11, color: CroColors.fog)),
                             ),
                           ),
                         ),
@@ -410,7 +410,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('WHAT IT CARRIES', style: CroTextStyles.label(size: 11.5)),
+                            Text('What it carries', style: CroTextStyles.label(size: 11.5)),
                             const SizedBox(height: 8),
                             BirdPayloadView(
                               content: bird.content,
@@ -425,7 +425,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                     ],
                     if (bird.isPublic) ...[
                       const SizedBox(height: 18),
-                      Text('REACTIONS', style: CroTextStyles.label(size: 12)),
+                      Text('Reactions', style: CroTextStyles.label(size: 12)),
                       const SizedBox(height: 9),
                       Wrap(
                         key: const Key('webBirdReactionRow'),
@@ -495,7 +495,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Center(child: Text(label.toUpperCase(), style: CroTextStyles.label(size: 12, color: fg))),
+          child: Center(child: Text(label, style: CroTextStyles.label(size: 12, color: fg))),
         ),
       ),
     );
@@ -504,7 +504,7 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
   Widget _labelValueRow(String label, String value) {
     return Row(
       children: [
-        Text(label.toUpperCase(), style: CroTextStyles.label(size: 11, color: CroColors.fog)),
+        Text(label, style: CroTextStyles.label(size: 11, color: CroColors.fog)),
         const Spacer(),
         Flexible(
           child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: CroTextStyles.data(size: 12.5, color: CroColors.ink, weight: FontWeight.w600)),
