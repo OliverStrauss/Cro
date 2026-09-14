@@ -15,19 +15,6 @@ class EventException implements Exception {
 }
 
 class EventService {
-  Future<List<AppEvent>> listEvents(String token, {int limit = 200}) async {
-    final response = await _send(
-      http.Request('GET', Uri.parse('$apiBaseUrl/events?limit=$limit')),
-      token,
-    );
-    if (response.statusCode != 200) {
-      throw EventException(_errorMessage(response, 'Could not load the journey log'));
-    }
-    return (jsonDecode(response.body) as List<dynamic>)
-        .map((e) => AppEvent.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
   Future<List<AppEvent>> listNotifications(String token, {int limit = 50}) async {
     final response = await _send(
       http.Request('GET', Uri.parse('$apiBaseUrl/notifications?limit=$limit')),

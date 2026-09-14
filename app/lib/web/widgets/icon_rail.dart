@@ -5,9 +5,10 @@ import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/cro_logo_mark.dart';
 import '../state/web_shell_controller.dart';
 
-/// The 76px icon rail: logo, Map/Nests/Hubs/Friends/You nav (no Birds item - the dock
-/// replaces it), avatar pinned at the bottom. Deliberately has no "Send a bird"/notification
-/// affordance of its own - those live in TopBar.
+/// The 76px icon rail: logo, Map/Nests/Hubs/Profile nav (no Birds item - the dock
+/// replaces it; Friends is merged into Profile, which carries its incoming-invite badge),
+/// avatar pinned at the bottom. Deliberately has no "Send a bird"/notification affordance of
+/// its own - those live in TopBar.
 class IconRail extends StatelessWidget {
   final WebNavItem selected;
   final ValueChanged<WebNavItem> onSelect;
@@ -61,19 +62,12 @@ class IconRail extends StatelessWidget {
             onTap: () => onSelect(WebNavItem.hubs),
           ),
           _RailItem(
-            key: const Key('webNavFriends'),
-            icon: Icons.people_alt_rounded,
-            label: 'Friends',
-            selected: selected == WebNavItem.friends,
-            badge: friendsBadge,
-            onTap: () => onSelect(WebNavItem.friends),
-          ),
-          _RailItem(
-            key: const Key('webNavYou'),
+            key: const Key('webNavProfile'),
             icon: Icons.person_rounded,
-            label: 'You',
-            selected: selected == WebNavItem.you,
-            onTap: () => onSelect(WebNavItem.you),
+            label: 'Profile',
+            selected: selected == WebNavItem.profile,
+            badge: friendsBadge,
+            onTap: () => onSelect(WebNavItem.profile),
           ),
           const Spacer(),
           Padding(

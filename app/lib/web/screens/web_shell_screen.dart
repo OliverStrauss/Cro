@@ -23,11 +23,10 @@ import '../widgets/context_panel.dart';
 import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
 import '../widgets/your_birds_dock.dart';
-import 'web_friends_screen.dart';
 import 'web_hubs_screen.dart';
 import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
-import 'web_you_screen.dart';
+import 'web_profile_screen.dart';
 
 /// Top-level widget for the app's single UI (rail + content + floating actions cluster +
 /// dock + right panel), used unconditionally on every platform, selected in main.dart.
@@ -224,7 +223,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       final bird = _data.birds.where((b) => b.id == notification.targetId).firstOrNull;
       if (bird != null) _selectBird(bird);
     } else {
-      _selectNav(WebNavItem.friends);
+      _selectNav(WebNavItem.profile);
     }
   }
 
@@ -346,7 +345,7 @@ class WebShellScreenState extends State<WebShellScreen> {
             friendsBadge: WebShellController.friendsBadgeCount(_data.incomingRequests),
             profilePictureUrl: _data.profilePictureUrl,
             initialsSource: _data.username,
-            onAvatarTap: () => _selectNav(WebNavItem.you),
+            onAvatarTap: () => _selectNav(WebNavItem.profile),
           ),
           Expanded(
             child: Stack(
@@ -365,7 +364,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                     onOpenNotification: _openNotification,
                     friends: _data.friends,
                     incomingRequests: _data.incomingRequests,
-                    onOpenFriendRequest: (_) => _selectNav(WebNavItem.friends),
+                    onOpenFriendRequest: (_) => _selectNav(WebNavItem.profile),
                   ),
                 ),
                 // Floats directly over the map instead of sitting in its own Row column, so
@@ -489,28 +488,16 @@ class WebShellScreenState extends State<WebShellScreen> {
           onDataChanged: _data.load,
           onStartAddHub: _startAddHub,
         );
-      case WebNavItem.friends:
-        return WebFriendsScreen(
-          authState: widget.authState,
-          friendsService: _data.friendsService,
-          friendWaypoints: _data.friendWaypoints,
-          isAdmin: _data.isAdmin,
-          onDataChanged: _data.load,
-        );
-      case WebNavItem.you:
-        return WebYouScreen(
+      case WebNavItem.profile:
+        return WebProfileScreen(
           authState: widget.authState,
           profileService: _data.profileService,
+          friendsService: _data.friendsService,
           username: _data.username,
           profilePictureUrl: _data.profilePictureUrl,
           isAdmin: _data.isAdmin,
-          birdCount: _data.birds.length,
-          nestCount: _data.ownNests.length,
-          friendCount: _data.friends.length,
-          events: _data.events,
+          friendWaypoints: _data.friendWaypoints,
           onDataChanged: _data.load,
-          onNavigateFriends: () => _selectNav(WebNavItem.friends),
-          onNavigateHubs: () => _selectNav(WebNavItem.hubs),
         );
     }
   }
