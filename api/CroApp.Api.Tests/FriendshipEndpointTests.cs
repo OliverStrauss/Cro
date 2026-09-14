@@ -399,6 +399,57 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     }
 
     [Fact]
+    public async Task FriendsBirds_IncludesFriendsBirdProfilePictureUrl()
+    {
+        var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
+        var usernameB = $"friend-user-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (_, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await SendRequestAsync(tokenA, usernameB);
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var homeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/waypoints", tokenB,
+            new { Name = "B's Home", Latitude = 10.0, Longitude = 20.0, IsPublic = false }));
+        var home = await homeResponse.Content.ReadFromJsonAsync<WaypointDto>();
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var away = await CreateHubAsync(adminToken, $"B's Away Hub {Guid.NewGuid():N}", 30.0, 40.0);
+
+        var composeRequest = new HttpRequestMessage(HttpMethod.Post, "/birds/compose")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", tokenB) },
+            Content = new MultipartFormDataContent
+            {
+                { new StringContent("Cro"), "type" },
+                { new StringContent("B's Bird"), "name" },
+                { new StringContent(home!.Id), "originNestId" },
+                { new StringContent(away.Id), "destinationId" },
+                { new StringContent("On my way"), "content" },
+            }
+        };
+        var composeResponse = await _client.SendAsync(composeRequest);
+        composeResponse.EnsureSuccessStatusCode();
+        var bird = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+
+        var pictureFile = new ByteArrayContent([1, 2, 3, 4]);
+        pictureFile.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        var uploadRequest = new HttpRequestMessage(HttpMethod.Put, $"/birds/{bird.Id}/picture")
+        {
+            Content = new MultipartFormDataContent { { pictureFile, "file", "bird.png" } },
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", tokenB) },
+        };
+        var uploadResponse = await _client.SendAsync(uploadRequest);
+        uploadResponse.EnsureSuccessStatusCode();
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends/birds", tokenA));
+        response.EnsureSuccessStatusCode();
+        var friendsBirds = await response.Content.ReadFromJsonAsync<List<FriendBirdDto>>();
+
+        var result = friendsBirds!.Single(b => b.Id == bird.Id);
+        Assert.NotNull(result.ProfilePictureUrl);
+    }
+
+    [Fact]
     public async Task FriendsBirds_ExposesContentOnlyForPublicBirds()
     {
         var usernameA = $"friend-user-a-{Guid.NewGuid():N}";
@@ -567,5 +618,5 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private record BirdDto(string Id, string? CurrentNestId, bool IsTraveling);
     private record FriendBirdDto(
         string Id, string UserId, string Username, string? Color, string? NestFromId, string? NestToId,
-        bool IsPublic, string? Content, bool HasViewed);
+        bool IsPublic, string? Content, bool HasViewed, string? ProfilePictureUrl);
 }

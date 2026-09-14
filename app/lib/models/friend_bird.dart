@@ -6,6 +6,7 @@ class FriendBird {
   final String username;
   final String? color;
   final String name;
+  final String? profilePictureUrl;
   final String type;
   final String? nestFromId;
   final String? nestToId;
@@ -28,6 +29,7 @@ class FriendBird {
     required this.username,
     this.color,
     required this.name,
+    this.profilePictureUrl,
     required this.type,
     this.nestFromId,
     this.nestToId,
@@ -46,6 +48,7 @@ class FriendBird {
         username: json['username'] as String,
         color: json['color'] as String?,
         name: json['name'] as String,
+        profilePictureUrl: json['profilePictureUrl'] as String?,
         type: json['type'] as String,
         nestFromId: json['nestFromId'] as String?,
         nestToId: json['nestToId'] as String?,

@@ -1765,6 +1765,7 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, CosmosUserReposit
             friend.Username,
             friend.Color,
             bird.Name,
+            bird.ProfilePictureUrl,
             bird.Type,
             bird.NestFromId,
             bird.NestToId,
