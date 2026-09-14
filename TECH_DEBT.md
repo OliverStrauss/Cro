@@ -3,6 +3,44 @@
 Accepted shortcuts, things flagged but out of scope at the time, and other known gaps
 worth revisiting. See `CLAUDE.md` for the working conventions this file supports.
 
+## ~~CI `deploy` job silently skipped on every push since #179, because `build` kept 503ing against its own Cosmos emulator~~ (resolved 2026-09-14)
+
+Discovered 2026-09-14 while investigating a "Could not pin this bird" report: the pin feature
+(#179, merged 2026-09-14 01:14 UTC) had never actually reached prod. `cro-api`'s last real
+deploy predated that merge by 4+ hours, even though `dotnet-ci.yml`'s `deploy` job (fixed for
+real on 2026-09-11, see the CD entry below) should have picked it up automatically. `gh run
+list` showed `build` failing on that push (and on every push since) with the overall run
+marked `failure` - not silently green, but nobody was watching for it, same blind spot the
+2026-09-11 CD entry below already flags.
+
+Root cause: `Program.cs`'s startup provisioning block (11 `CreateContainerIfNotExistsAsync`
+calls, 5 blob-container calls) had just gone from Development-only to running unconditionally
+in every environment (see the entry below). The integration test suite boots ~25 separate
+in-process hosts, one per `IClassFixture<WebApplicationFactory<Program>>` test class - so all
+~25 now independently ran the full provisioning block at startup, all racing each other
+against the one shared local Cosmos emulator container in CI. `build`'s own diagnostics showed
+the emulator pegged at 97-100% CPU right before every test failed identically with `Cosmos
+Exception: ServiceUnavailable (503)` - the emulator getting starved under GitHub Actions'
+resource limits, not a real app bug (the exact same 173 tests pass cleanly against the local
+ARM64 emulator with room to spare).
+
+Fixed by gating that provisioning block through a small `StartupProvisioning.RunOnceAsync`
+helper (`Program.cs`), keyed by environment name via a `ConcurrentDictionary<string, Task>` -
+all ~24 Development-environment test hosts now converge on one shared provisioning run instead
+of 24 redundant ones, while `ProdCorsTests` (which exists specifically to prove this block also
+runs under `Production`) still gets its own real run under its own key. Cuts ~25 concurrent
+provisioning runs down to 2. No test file changes needed - this lives entirely in `Program.cs`,
+since the operations being deduplicated were already idempotent by design.
+
+Once `cro-api` was manually redeployed (`az webapp deploy`, same as the historical `OneDeploy`
+entries in `az webapp log deployment list`) to unblock the pin feature immediately, a live
+`curl` against `POST /birds/{id}/pin` confirmed the fix: an empty-body `404` (route missing
+entirely) became a proper `{"error":"..."}` JSON response.
+
+Worth a follow-up: nothing pages/notifies on a `push`-triggered workflow failing on `main` -
+the exact same blind spot the 2026-09-11 CD entry below already called out and never actually
+closed.
+
 ## Radio Log redesign (`redesign/radio-log-visual-overhaul`) has no visual comp and no browser QA pass
 
 The whole-web-app visual overhaul (theme, typography, hairline card/button language - see
