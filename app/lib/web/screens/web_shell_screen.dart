@@ -165,30 +165,30 @@ class WebShellScreenState extends State<WebShellScreen> {
     });
   }
 
-  // A dock tap for a bird that's home behaves as before (opens its own bird panel, map
-  // stays put). Away-at-a-friend's-nest or at-a-hub instead opens THAT nest's/hub's own
-  // panel (reusing the exact selection path the map's own markers already use) so the map
+  // A tap for a bird that's home behaves as before (opens its own bird panel, map stays
+  // put). Away-at-a-friend's-nest or at-a-hub instead opens THAT nest's/hub's own panel
+  // (reusing the exact selection path the map's own markers already use) so the map
   // pans/zooms there too (see WebMapScreen's didUpdateWidget). A still-in-flight bird keeps
   // opening its own bird panel - there's no fixed nest/hub to show a panel for - but the map
   // still follows its live position, since selectedBirdId reaches WebMapScreen either way.
-  void _onDockBirdTap(DockBirdView view) {
-    final hostId = view.bird.currentNestId;
-    if (hostId != null) {
-      if (view.state == BirdDockState.hub) {
-        final hub = _hubById(hostId);
-        if (hub != null) {
-          _selectHub(hub);
-          return;
-        }
-      } else if (view.state == BirdDockState.away) {
-        final nest = _waypointById(hostId);
-        if (nest != null) {
-          _selectNest(nest);
-          return;
-        }
+  // Shared by the dock tap and an "arrived" notification tap, so both land on the same spot.
+  void _onDockBirdTap(DockBirdView view) => _openBirdOrHost(view.bird);
+
+  void _openBirdOrHost(Bird bird) {
+    final hostId = bird.currentNestId;
+    if (!bird.isTraveling && hostId != null) {
+      final hub = _hubById(hostId);
+      if (hub != null) {
+        _selectHub(hub);
+        return;
+      }
+      final nest = _waypointById(hostId);
+      if (nest != null && !_data.ownNests.any((n) => n.id == nest.id)) {
+        _selectNest(nest);
+        return;
       }
     }
-    _selectBird(view.bird);
+    _selectBird(bird);
   }
 
   Hub? _hubById(String id) {
@@ -270,7 +270,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       if (nest != null) _selectNest(nest);
     } else if (notification.targetType == EventTargetType.bird && notification.targetId != null) {
       final bird = _data.birds.where((b) => b.id == notification.targetId).firstOrNull;
-      if (bird != null) _selectBird(bird);
+      if (bird != null) _openBirdOrHost(bird);
     } else {
       _selectNav(WebNavItem.profile);
     }
