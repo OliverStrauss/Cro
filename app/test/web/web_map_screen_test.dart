@@ -25,12 +25,18 @@ void main() {
     color: '#1E88E5',
   );
 
-  FriendBird makeFriendBird({required String id, required bool isPublic, bool hasViewed = false}) => FriendBird(
+  FriendBird makeFriendBird({
+    required String id,
+    required bool isPublic,
+    bool hasViewed = false,
+    String? profilePictureUrl,
+  }) => FriendBird(
     id: id,
     userId: 'friend1',
     username: 'friendo',
     color: '#1E88E5',
     name: 'Fen',
+    profilePictureUrl: profilePictureUrl,
     type: 'Cro',
     nestFromId: 'fw1',
     nestToId: 'w1',
@@ -153,6 +159,25 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('webBirdMarkerGlow')), findsNothing);
+  });
+
+  testWidgets("a friend's bird marker shows its profile picture when set, or the heading arrow when not", (tester) async {
+    final noPicture = makeFriendBird(id: 'fb1', isPublic: true);
+    await tester.pumpWidget(buildMap(friendsBirds: [noPicture]));
+    await tester.pump();
+    await tester.pump();
+
+    var avatar = tester.widget<AvatarWithFallback>(find.byType(AvatarWithFallback));
+    expect(avatar.imageUrl, isNull);
+    expect(find.byIcon(Icons.arrow_drop_up), findsOneWidget);
+
+    final withPicture = makeFriendBird(id: 'fb1', isPublic: true, profilePictureUrl: 'https://example.com/fen.jpg');
+    await tester.pumpWidget(buildMap(friendsBirds: [withPicture]));
+    await tester.pump();
+    await tester.pump();
+
+    avatar = tester.widget<AvatarWithFallback>(find.byType(AvatarWithFallback));
+    expect(avatar.imageUrl, 'https://example.com/fen.jpg');
   });
 
   testWidgets('a public bird renders a marker with no polyline, and tapping calls onSelectPublicBird', (tester) async {

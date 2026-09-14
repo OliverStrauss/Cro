@@ -472,6 +472,8 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                             builder: (context, child) => Transform.translate(offset: Offset(0, -4 * _bobController.value), child: child),
                             child: _BirdMarkerDot(
                               key: Key('webBirdMarkerDot_${f.id}'),
+                              name: f.ownBird?.name ?? f.friendBird?.name ?? 'Bird',
+                              profilePictureUrl: f.ownBird?.profilePictureUrl ?? f.friendBird?.profilePictureUrl,
                               color: f.color,
                               heading: bearingDegrees(
                                 origin: f.origin,
@@ -510,6 +512,8 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                             builder: (context, child) => Transform.translate(offset: Offset(0, -4 * _bobController.value), child: child),
                             child: _BirdMarkerDot(
                               key: Key('webPublicBirdMarkerDot_${pb.id}'),
+                              name: pb.senderUsername,
+                              profilePictureUrl: pb.senderProfilePictureUrl,
                               color: CroColors.deliveryAmber,
                               heading: 0,
                               isPublic: true,
@@ -658,6 +662,8 @@ class _TrailsLegend extends StatelessWidget {
 }
 
 class _BirdMarkerDot extends StatelessWidget {
+  final String name;
+  final String? profilePictureUrl;
   final Color color;
   final double heading;
   // Only ever true for a friend's bird (see _MapFlight.isPublicFriendBird) - marks it as
@@ -671,6 +677,8 @@ class _BirdMarkerDot extends StatelessWidget {
 
   const _BirdMarkerDot({
     super.key,
+    required this.name,
+    this.profilePictureUrl,
     required this.color,
     required this.heading,
     this.isPublic = false,
@@ -697,19 +705,19 @@ class _BirdMarkerDot extends StatelessWidget {
               ),
             ),
           Container(
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              color: color,
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              boxShadow: const [BoxShadow(color: Color(0x4D2B2F33), blurRadius: 6, offset: Offset(0, 2))],
+              boxShadow: [BoxShadow(color: Color(0x4D2B2F33), blurRadius: 6, offset: Offset(0, 2))],
             ),
-          ),
-          AnimatedRotation(
-            turns: heading / 360,
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeInOut,
-            child: const Icon(Icons.arrow_drop_up, size: 16, color: CroColors.surface),
+            child: AvatarWithFallback(
+              imageUrl: profilePictureUrl,
+              initialsSource: name,
+              fallbackIcon: Icons.arrow_drop_up,
+              fallbackIconTurns: heading / 360,
+              fallbackBackgroundColor: color,
+              fallbackIconColor: CroColors.surface,
+              radius: 9,
+            ),
           ),
           if (isPublic)
             Positioned(

@@ -18,6 +18,10 @@ class AvatarWithFallback extends StatefulWidget {
   // keeps CircleAvatar's own default, matching every caller before this was added.
   final Color? fallbackBackgroundColor;
   final Color? fallbackIconColor;
+  // Rotation (in turns) applied to fallbackIcon only - e.g. a bird marker's heading arrow.
+  // Ignored once an image is showing, since a picture shouldn't spin. Defaults to 0 so
+  // every caller before this was added renders unchanged.
+  final double fallbackIconTurns;
 
   const AvatarWithFallback({
     super.key,
@@ -30,6 +34,7 @@ class AvatarWithFallback extends StatefulWidget {
     this.fallbackIcon,
     this.fallbackBackgroundColor,
     this.fallbackIconColor,
+    this.fallbackIconTurns = 0,
   });
 
   @override
@@ -74,7 +79,12 @@ class _AvatarWithFallbackState extends State<AvatarWithFallback> {
       child: showImage
           ? null
           : (widget.fallbackIcon != null
-                ? Icon(widget.fallbackIcon, size: widget.radius, color: widget.fallbackIconColor)
+                ? AnimatedRotation(
+                    turns: widget.fallbackIconTurns,
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeInOut,
+                    child: Icon(widget.fallbackIcon, size: widget.radius, color: widget.fallbackIconColor),
+                  )
                 : Text(_initials, style: TextStyle(fontSize: widget.radius * 0.6, color: widget.fallbackIconColor))),
     );
 
