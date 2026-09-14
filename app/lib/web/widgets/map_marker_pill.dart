@@ -42,9 +42,9 @@ class MapMarkerPill extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 200),
           padding: compact ? const EdgeInsets.fromLTRB(5, 5, 10, 5) : const EdgeInsets.fromLTRB(6, 6, 14, 6),
           decoration: BoxDecoration(
-            color: CroColors.surface.withValues(alpha: 0.93),
+            color: CroColors.surface.withValues(alpha: 0.96),
             borderRadius: BorderRadius.circular(borderRadius),
-            border: selected ? Border.all(color: selectionColor, width: 1.5) : null,
+            border: Border.all(color: selected ? selectionColor : CroColors.hairline, width: selected ? 1.5 : 1),
             boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.16), blurRadius: 12, offset: const Offset(0, 4))],
           ),
           child: Row(
@@ -61,13 +61,13 @@ class MapMarkerPill extends StatelessWidget {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: compact ? 11.5 : 13, fontWeight: FontWeight.w700),
+                      style: CroTextStyles.label(size: compact ? 11.5 : 13, color: CroColors.ink),
                     ),
                     Text(
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: compact ? 10 : 11, color: CroColors.fog),
+                      style: CroTextStyles.data(size: compact ? 10 : 11),
                     ),
                   ],
                 ),

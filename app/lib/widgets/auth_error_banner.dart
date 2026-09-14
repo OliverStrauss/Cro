@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme.dart';
+
 // Shared error display for the login/sign-up forms - a tinted banner instead of bare red text,
 // used identically by both screens.
 class AuthErrorBanner extends StatelessWidget {
@@ -12,7 +14,7 @@ class AuthErrorBanner extends StatelessWidget {
     final error = Theme.of(context).colorScheme.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: error.withValues(alpha: 0.08), borderRadius: CroBorders.radius, border: Border.all(color: error.withValues(alpha: 0.4))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

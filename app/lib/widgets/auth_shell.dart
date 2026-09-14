@@ -41,7 +41,7 @@ class AuthShell extends StatelessWidget {
                         children: [
                           const CroLogoMark(size: 28, color: CroColors.waypointBlue),
                           const SizedBox(width: 10),
-                          Text('Cro', style: GoogleFonts.quicksand(fontSize: 22, fontWeight: FontWeight.w700, color: CroColors.ink)),
+                          Text('Cro', style: GoogleFonts.ibmPlexMono(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: CroColors.ink)),
                         ],
                       ),
                       const SizedBox(height: 28),
@@ -83,14 +83,15 @@ class _FormCard extends StatelessWidget {
       padding: const EdgeInsets.all(36),
       decoration: BoxDecoration(
         color: CroColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
         boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.12), blurRadius: 28, offset: const Offset(0, 10))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(heading, style: GoogleFonts.quicksand(fontSize: 22, fontWeight: FontWeight.w700, color: CroColors.ink)),
+          Text(heading, style: GoogleFonts.ibmPlexMono(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 0.2, color: CroColors.ink)),
           const SizedBox(height: 6),
           Text(subheading, style: const TextStyle(fontSize: 13, color: CroColors.fog, height: 1.4)),
           const SizedBox(height: 28),
@@ -127,7 +128,7 @@ class _BrandingPane extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             'Cro',
-            style: GoogleFonts.quicksand(fontSize: 40, fontWeight: FontWeight.w700, color: Colors.white, height: 1),
+            style: GoogleFonts.ibmPlexMono(fontSize: 36, fontWeight: FontWeight.w700, letterSpacing: 2, color: Colors.white, height: 1),
           ),
           const SizedBox(height: 14),
           const Text(

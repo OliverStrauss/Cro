@@ -151,7 +151,7 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                         Text(
                           '${widget.type} · From $_senderLabel',
                           key: const Key('receivedBirdSender'),
-                          style: const TextStyle(fontSize: 13, color: CroColors.fog),
+                          style: CroTextStyles.data(size: 13),
                         ),
                       ],
                     ),
@@ -174,14 +174,11 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                 type: MaterialType.transparency,
                 child: InkWell(
                   key: const Key('receivedBirdCloseButton'),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: CroBorders.radiusSmall,
                   onTap: () => Navigator.of(context).pop(),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: Text(
-                      'Close',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
-                    ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Text('Close', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
                   ),
                 ),
               ),

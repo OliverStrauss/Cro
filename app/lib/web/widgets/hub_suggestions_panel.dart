@@ -176,10 +176,10 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
       );
     }
     if (_suggestions.isEmpty && _pictureSuggestions.isEmpty) {
-      return const Padding(
-        key: Key('noHubSuggestionsMessage'),
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: Text('No pending suggestions', style: TextStyle(fontSize: 12.5, color: CroColors.fog)),
+      return Padding(
+        key: const Key('noHubSuggestionsMessage'),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text('No pending suggestions', style: CroTextStyles.data(size: 12.5)),
       );
     }
 
@@ -191,12 +191,9 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
           const SizedBox(height: 10),
         ],
         if (_pictureSuggestions.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              'Photo suggestions',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.fog),
-            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text('Photo suggestions', style: CroTextStyles.label(size: 11.5, color: CroColors.fog)),
           ),
           const SizedBox(height: 6),
           for (final suggestion in _pictureSuggestions) ...[
@@ -216,8 +213,8 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
       ),
       child: Row(
         children: [
@@ -239,10 +236,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
               children: [
                 Text(suggestion.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(
-                  'Suggested by $username · ${suggestion.category ?? 'Landmark'}',
-                  style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-                ),
+                Text('Suggested by $username · ${suggestion.category ?? 'Landmark'}', style: CroTextStyles.data(size: 11.5)),
               ],
             ),
           ),
@@ -257,17 +251,13 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
             type: MaterialType.transparency,
             child: InkWell(
               key: Key('rejectSuggestionButton_${suggestion.id}'),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: CroBorders.radiusSmall,
               onTap: () => _handleReject(suggestion),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
                   isConfirming ? 'Confirm?' : 'Reject',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
-                  ),
+                  style: CroTextStyles.label(size: 11, color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog),
                 ),
               ),
             ),
@@ -286,8 +276,8 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
+        borderRadius: CroBorders.radius,
+        border: Border.all(color: CroColors.hairline),
       ),
       child: Row(
         children: [
@@ -314,7 +304,7 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
               children: [
                 Text(hubName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text('Suggested by $username', style: const TextStyle(fontSize: 11.5, color: CroColors.fog)),
+                Text('Suggested by $username', style: CroTextStyles.data(size: 11.5)),
               ],
             ),
           ),
@@ -329,17 +319,13 @@ class _HubSuggestionsPanelState extends State<HubSuggestionsPanel> {
             type: MaterialType.transparency,
             child: InkWell(
               key: Key('rejectPictureSuggestionButton_${suggestion.id}'),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: CroBorders.radiusSmall,
               onTap: () => _handleRejectPicture(suggestion),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
                   isConfirming ? 'Confirm?' : 'Reject',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
-                  ),
+                  style: CroTextStyles.label(size: 11, color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog),
                 ),
               ),
             ),

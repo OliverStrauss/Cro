@@ -11,6 +11,7 @@ import '../../utils/color_utils.dart';
 import '../../utils/jwt_utils.dart';
 import '../../widgets/received_bird_sheet.dart';
 import '../../widgets/waypoint_name_dialog.dart';
+import 'coordinate_readout.dart';
 import 'panel_header.dart';
 
 /// The nest detail panel body - own nests get delivered-mail + resident-bird sections
@@ -188,10 +189,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Row(
             children: [
-              Text(
-                '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
-                style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-              ),
+              CoordinateReadout(latitude: nest.latitude, longitude: nest.longitude),
               if (widget.isOwn) ...[
                 const SizedBox(width: 10),
                 Material(
@@ -200,11 +198,11 @@ class _NestPanelContentState extends State<NestPanelContent> {
                     key: const Key('webRenameNestButton'),
                     borderRadius: BorderRadius.circular(6),
                     onTap: _rename,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                       child: Text(
                         'Rename',
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint),
+                        style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint),
                       ),
                     ),
                   ),
@@ -233,7 +231,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
       children: [
         if (_deliveredBirds.isNotEmpty) ...[
-          const Text('Delivered to you', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+          Text('Delivered to you', style: CroTextStyles.label(size: 12)),
           const SizedBox(height: 9),
           for (final bird in _deliveredBirds) _deliveredRow(bird),
           const SizedBox(height: 16),
@@ -256,10 +254,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
 
   List<Widget> _birdsHereSection(List<Bird> birds, {required String title}) {
     return [
-      Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+      Text(title, style: CroTextStyles.label(size: 12)),
       const SizedBox(height: 9),
       if (birds.isEmpty)
-        const Text('This nest is empty', key: Key('nestPanelEmpty'), style: TextStyle(fontSize: 12.5, color: CroColors.fog))
+        Text('This nest is empty', key: const Key('nestPanelEmpty'), style: CroTextStyles.data(size: 12.5))
       else
         for (final bird in birds) _residentRow(bird),
     ];
@@ -270,16 +268,16 @@ class _NestPanelContentState extends State<NestPanelContent> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: CroColors.warmTint,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: CroBorders.radius,
         child: InkWell(
           key: Key('nestPanelDelivered_${bird.id}'),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: CroBorders.radius,
           onTap: () => _openReceivedBird(bird),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
             decoration: BoxDecoration(
-              border: Border.all(color: CroColors.deliveryAmber.withValues(alpha: 0.45)),
-              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: CroColors.deliveryAmber.withValues(alpha: 0.6)),
+              borderRadius: CroBorders.radius,
             ),
             child: Row(
               children: [
@@ -301,12 +299,12 @@ class _NestPanelContentState extends State<NestPanelContent> {
                         bird.updatedAt == null
                             ? (bird.isRead ? bird.type : 'New · ${bird.type}')
                             : '${bird.isRead ? bird.type : 'New · ${bird.type}'} · ${_relativeTime(bird.updatedAt!)}',
-                        style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                        style: CroTextStyles.data(size: 11.5),
                       ),
                     ],
                   ),
                 ),
-                const Text('Read', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: CroColors.amberInk)),
+                Text('Read', style: CroTextStyles.stamp()),
               ],
             ),
           ),
@@ -320,10 +318,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: CroColors.warmSurface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: CroBorders.radius,
         child: InkWell(
           key: Key('nestPanelResident_${bird.id}'),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: CroBorders.radius,
           onTap: () => widget.onSelectBird(bird),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
@@ -339,7 +337,7 @@ class _NestPanelContentState extends State<NestPanelContent> {
                       Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       Text(
                         bird.updatedAt == null ? bird.type : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
-                        style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
+                        style: CroTextStyles.data(size: 11.5),
                       ),
                     ],
                   ),

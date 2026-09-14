@@ -63,20 +63,24 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Bundled Quicksand/Inter weights for croTheme's textTheme (theme.dart) - declared as
+  # Bundled IBM Plex Sans/Mono weights for croTheme's textTheme (theme.dart) - declared as
   # plain assets, not under a `fonts:` family block, matching google_fonts' documented
   # "load from assets" convention: it finds these via a rootBundle.load lookup keyed by
-  # filename (Quicksand-Bold.ttf, Inter-Medium.ttf, etc.) before ever touching the
-  # network, so GoogleFonts.quicksand()/inter() resolve entirely offline. Downloaded
+  # filename (IBMPlexMono-Bold.ttf, IBMPlexSans-Medium.ttf, etc.) before ever touching the
+  # network, so GoogleFonts.ibmPlexSans()/ibmPlexMono() resolve entirely offline. Downloaded
   # byte-for-byte from the same fonts.gstatic.com URLs the google_fonts package itself
   # would otherwise fetch at runtime - not fetched at build time, so this works with no
-  # network access at all, in tests and in the shipped app alike.
+  # network access at all, in tests and in the shipped app alike. Exactly the weights
+  # actually requested: Sans only ever renders at Material 3's default text-theme weights
+  # (400/500 - see Typography.englishLike2021), Mono only at the explicit weights
+  # theme.dart/CroTextStyles request (500/600/700) - replaced the previous Quicksand/Inter
+  # set when the web UI redesign (see .impeccable/surfaces/app-lib-web.md) moved off them.
   assets:
-    - assets/fonts/Quicksand-SemiBold.ttf
-    - assets/fonts/Quicksand-Bold.ttf
-    - assets/fonts/Inter-Regular.ttf
-    - assets/fonts/Inter-Medium.ttf
-    - assets/fonts/Inter-SemiBold.ttf
+    - assets/fonts/IBMPlexSans-Regular.ttf
+    - assets/fonts/IBMPlexSans-Medium.ttf
+    - assets/fonts/IBMPlexMono-Medium.ttf
+    - assets/fonts/IBMPlexMono-SemiBold.ttf
+    - assets/fonts/IBMPlexMono-Bold.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

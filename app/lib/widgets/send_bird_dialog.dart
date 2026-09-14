@@ -248,8 +248,6 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
     final visible = _visibleViews;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      backgroundColor: CroColors.surface,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Padding(
@@ -284,30 +282,36 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                 const SizedBox(height: 14),
                 SizedBox(
                   height: 36,
-                  child: ListView(
+                  // A plain ListView virtualizes past its cache extent, which only ever
+                  // mattered for scroll performance on a long list - HubCategory.all is a
+                  // short fixed set, so a scrollable Row builds every chip unconditionally
+                  // instead of leaving how far a chip sits from the left edge (which grew
+                  // once labelLarge moved to a wider tracked mono face) able to silently
+                  // un-render one.
+                  child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                    children: [
-                      for (final category in HubCategory.all)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            key: Key('sendBirdCategoryChip_$category'),
-                            label: Text(category),
-                            selected: _selectedCategory == category,
-                            onSelected: (_) => _toggleCategory(category),
+                    child: Row(
+                      children: [
+                        for (final category in HubCategory.all)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                              key: Key('sendBirdCategoryChip_$category'),
+                              label: Text(category),
+                              selected: _selectedCategory == category,
+                              onSelected: (_) => _toggleCategory(category),
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
               const SizedBox(height: 16),
               if (visible.isEmpty)
                 Text(
-                  _hubMode
-                      ? 'No hubs match.'
-                      : 'No other nests to send to yet.',
-                  style: const TextStyle(color: CroColors.fog),
+                  _hubMode ? 'No hubs match.' : 'No other nests to send to yet.',
+                  style: CroTextStyles.data(),
                 )
               else
                 DropdownMenu<String>(
@@ -333,10 +337,7 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                         ),
                         trailingIcon: Text(
                           '${v.miles.toStringAsFixed(1)} mi · ${_travelTimeLabel(v.hours)}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: CroColors.fog,
-                          ),
+                          style: CroTextStyles.data(size: 11),
                         ),
                       ),
                   ],
@@ -349,9 +350,9 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 title: const Text('Make this bird public'),
-                subtitle: const Text(
+                subtitle: Text(
                   "Friends can see it on the map and open what it's carrying",
-                  style: TextStyle(fontSize: 11.5, color: CroColors.fog),
+                  style: CroTextStyles.data(size: 11.5),
                 ),
                 value: _isPublic,
                 onChanged: (value) => setState(() => _isPublic = value),

@@ -126,10 +126,7 @@ class _RailItem extends StatelessWidget {
                   children: [
                     Icon(icon, size: 18, color: fg),
                     const SizedBox(height: 3),
-                    Text(
-                      label,
-                      style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w600, color: fg),
-                    ),
+                    Text(label, style: CroTextStyles.label(size: 8.5, color: fg)),
                   ],
                 ),
                 if (badge > 0)
@@ -142,16 +139,12 @@ class _RailItem extends StatelessWidget {
                       constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
                       decoration: BoxDecoration(
                         color: CroColors.alertAway,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: CroBorders.radiusSmall,
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         badge > 99 ? '99+' : '$badge',
-                        style: const TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
+                        style: CroTextStyles.label(size: 9.5, color: Colors.white),
                       ),
                     ),
                   ),

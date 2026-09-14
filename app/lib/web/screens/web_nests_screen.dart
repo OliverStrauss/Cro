@@ -7,6 +7,7 @@ import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../widgets/waypoint_name_dialog.dart';
+import '../widgets/coordinate_readout.dart';
 
 /// The Nests screen: own nests in a 2-up grid (rename, two-step delete, "n waiting" badge),
 /// friends' nests in a 3-up compact grid. "+ Add a nest" hands off to the Map screen's
@@ -110,10 +111,10 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
           ),
           const SizedBox(height: 16),
           if (widget.ownNests.isEmpty)
-            const Padding(
-              key: Key('noOwnNestsMessage'),
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('No nests yet - add one to get started', style: TextStyle(fontSize: 13.5, color: CroColors.fog)),
+            Padding(
+              key: const Key('noOwnNestsMessage'),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('No nests yet - add one to get started', style: CroTextStyles.data(size: 13.5)),
             )
           else
             GridView.count(
@@ -126,10 +127,10 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
               children: [for (final nest in widget.ownNests) _ownNestCard(nest)],
             ),
           const SizedBox(height: 26),
-          const Text("Friends' nests", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          Text("Friends' nests", style: CroTextStyles.label(size: 12.5)),
           const SizedBox(height: 14),
           if (widget.friendWaypoints.isEmpty)
-            const Text('No friend nests visible yet', style: TextStyle(fontSize: 12.5, color: CroColors.fog))
+            Text('No friend nests visible yet', style: CroTextStyles.data(size: 12.5))
           else
             GridView.count(
               crossAxisCount: 3,
@@ -151,21 +152,19 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
     final waitingCount = residents.where((b) => !b.isRead).length;
     final birdLine = residents.isEmpty ? 'No birds resting here' : '${residents.length} of your birds here';
 
+    final selected = nest.id == widget.selectedNestId;
     return Material(
       color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: CroBorders.radius,
       child: InkWell(
         key: Key('webNestCard_${nest.id}'),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: CroBorders.radius,
         onTap: () => widget.onSelectNest(nest),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: nest.id == widget.selectedNestId ? CroColors.waypointBlue.withValues(alpha: 0.6) : CroColors.ink.withValues(alpha: 0.06),
-            ),
-            boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+            borderRadius: CroBorders.radius,
+            border: Border.all(color: selected ? CroColors.waypointBlue : CroColors.hairline, width: selected ? 1.5 : 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,58 +189,53 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
                       children: [
                         Text(nest.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 2),
-                        Text(
-                          '(${nest.latitude.toStringAsFixed(4)}, ${nest.longitude.toStringAsFixed(4)})',
-                          style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-                        ),
+                        CoordinateReadout(latitude: nest.latitude, longitude: nest.longitude),
                       ],
                     ),
                   ),
                   if (waitingCount > 0)
                     Container(
                       key: Key('webNestWaitingBadge_${nest.id}'),
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                      decoration: BoxDecoration(color: CroColors.alertAway, borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: CroColors.alertAway, borderRadius: CroBorders.radiusSmall),
                       child: Text(
                         '$waitingCount waiting',
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CroColors.surface),
+                        style: CroTextStyles.label(size: 9.5, color: CroColors.surface),
                       ),
                     ),
                 ],
               ),
               const SizedBox(height: 10),
+              const Divider(),
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  Text(birdLine, style: const TextStyle(fontSize: 12.5)),
+                  Text(birdLine, style: CroTextStyles.data(size: 12.5)),
                   const Spacer(),
                   Material(
                     type: MaterialType.transparency,
                     child: InkWell(
                       key: Key('webRenameNestButton_${nest.id}'),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: CroBorders.radiusSmall,
                       onTap: () => _rename(nest),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: Text('Rename', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text('Rename', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 10),
                   Material(
                     type: MaterialType.transparency,
                     child: InkWell(
                       key: Key('webDeleteNestButton_${nest.id}'),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: CroBorders.radiusSmall,
                       onTap: () => _handleDelete(nest),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                         child: Text(
                           isConfirming ? 'Confirm?' : 'Delete',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog,
-                          ),
+                          style: CroTextStyles.label(size: 11, color: isConfirming ? Theme.of(context).colorScheme.error : CroColors.fog),
                         ),
                       ),
                     ),
@@ -259,17 +253,14 @@ class _WebNestsScreenState extends State<WebNestsScreen> {
     final color = hexToColor(nest.color ?? '#6B7280');
     return Material(
       color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: CroBorders.radius,
       child: InkWell(
         key: Key('webFriendNestCard_${nest.id}'),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: CroBorders.radius,
         onTap: () => widget.onSelectNest(nest),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: const [BoxShadow(color: Color(0x0F2B2F33), blurRadius: 3, offset: Offset(0, 1))],
-          ),
+          decoration: BoxDecoration(borderRadius: CroBorders.radius, border: Border.all(color: CroColors.hairline)),
           child: Row(
             children: [
               CircleAvatar(

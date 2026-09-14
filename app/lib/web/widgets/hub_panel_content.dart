@@ -13,6 +13,7 @@ import '../../theme.dart';
 import '../../utils/jwt_utils.dart';
 import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/hub_message_card.dart';
+import 'coordinate_readout.dart';
 
 /// The hub detail panel body - header plus the hub's message board embedded directly,
 /// rather than a full-screen push (see 01_web_shell_and_dock.md and the PR notes): every
@@ -216,15 +217,12 @@ class _HubPanelContentState extends State<HubPanelContent> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Text(
-            '(${hub.latitude.toStringAsFixed(4)}, ${hub.longitude.toStringAsFixed(4)})',
-            style: const TextStyle(fontSize: 11.5, color: CroColors.fog),
-          ),
+          child: CoordinateReadout(latitude: hub.latitude, longitude: hub.longitude, centered: true),
         ),
         const SizedBox(height: 12),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 22),
-          child: Text('The board', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Text('The board', style: CroTextStyles.label(size: 12.5)),
         ),
         const SizedBox(height: 8),
         Flexible(child: _body()),

@@ -3,6 +3,28 @@
 Accepted shortcuts, things flagged but out of scope at the time, and other known gaps
 worth revisiting. See `CLAUDE.md` for the working conventions this file supports.
 
+## Radio Log redesign (`redesign/radio-log-visual-overhaul`) has no visual comp and no browser QA pass
+
+The whole-web-app visual overhaul (theme, typography, hairline card/button language - see
+root `DESIGN.md`) was built code-led with no comp: this environment has no image-generation
+tool available, so there was no north-star mockup to build toward or diff the finished build
+against. Verification was `flutter analyze` (clean) and `flutter test` (all 118 tests pass,
+after fixing font-asset bundling, a chip-list virtualization regression, and a 0.2px button
+overflow the new fonts caused) - not a rendered screenshot or an in-browser pass, since this
+repo's own convention (see CLAUDE.md's feedback memory) is that widget tests + analyze suffice
+and heavy Playwright/CDP browser verification isn't worth standing up for Flutter web. That
+means real layout at other viewport widths, hover/focus states, and fine spacing were never
+visually inspected by anyone - worth an actual `flutter run` pass (map screen especially, the
+most complex single surface touched) before merging, and worth treating `DESIGN.md` as the
+source of truth for anything that looks off rather than reverting piecemeal.
+
+A few lower-traffic corners were deliberately left in their prior visual language rather than
+retouched: `bird_payload_view.dart`'s message/audio/image content (correctly stays prose, not
+data-voice, so untouched), the small in-map radius values on Hub vs. nest markers (11px vs.
+fully rounded - a pre-existing distinction, preserved), and `cro_logo_mark.dart`'s drawn
+squircle mark (already a real authored asset, not a generic tell). None of these needed
+fixing; noting them so a future pass doesn't assume they were missed.
+
 ## `POST /birds/compose` / `BirdService.ComposeAndSendAsync` are now test-only, unreachable from the UI
 
 Users no longer spawn birds themselves - every user is auto-provisioned a fixed 5-bird starter

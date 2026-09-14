@@ -61,10 +61,10 @@ class WebHubsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           if (hubs.isEmpty)
-            const Padding(
-              key: Key('noHubsMessage'),
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('No hubs nearby yet', style: TextStyle(fontSize: 13.5, color: CroColors.fog)),
+            Padding(
+              key: const Key('noHubsMessage'),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('No hubs nearby yet', style: CroTextStyles.data(size: 13.5)),
             )
           else
             GridView.count(
@@ -80,18 +80,12 @@ class WebHubsScreen extends StatelessWidget {
             const SizedBox(height: 26),
             Row(
               children: [
-                const Text('Suggested hubs', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                Text('Suggested hubs', style: CroTextStyles.label(size: 13)),
                 const SizedBox(width: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: CroColors.deliveryAmber.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'Admin',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: CroColors.amberInk),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(border: Border.all(color: CroColors.deliveryAmber), borderRadius: CroBorders.radiusSmall),
+                  child: Text('Admin', style: CroTextStyles.stamp()),
                 ),
               ],
             ),
@@ -120,17 +114,16 @@ class _HubCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: CroBorders.radius,
       child: InkWell(
         key: Key('webHubCard_${hub.id}'),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: CroBorders.radius,
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: selected ? CroColors.deliveryAmber.withValues(alpha: 0.6) : CroColors.ink.withValues(alpha: 0.06)),
-            boxShadow: const [BoxShadow(color: Color(0x122B2F33), blurRadius: 3, offset: Offset(0, 1))],
+            borderRadius: CroBorders.radius,
+            border: Border.all(color: selected ? CroColors.deliveryAmber : CroColors.hairline, width: selected ? 1.5 : 1),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -151,7 +144,7 @@ class _HubCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 1),
-              const Text('View board →', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: CroColors.deepWaypoint)),
+              Text('VIEW BOARD →', style: CroTextStyles.label(size: 10, color: CroColors.deepWaypoint)),
             ],
           ),
         ),
