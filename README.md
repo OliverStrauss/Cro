@@ -5,6 +5,8 @@ a map in real time, taking physical days to arrive, instead of being delivered i
 
 Built after a summer Internship using a similar tech stack learned while working there. Heavy use and learning of claude and proper Ci/CD practices used in my personal projects for the first time.
 
+WE ARE LIVE! Come and visit the beta: https://ambitious-pond-09668b810.6.azurestaticapps.net/
+
 ## Repository layout
 
 This is a monorepo with two halves:
