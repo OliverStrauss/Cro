@@ -181,6 +181,7 @@ AppEvent _event(
   bool isRead = true,
   String? sourceUserId,
   String? targetType,
+  String? targetId,
 }) => AppEvent(
   id: id,
   kind: kind,
@@ -190,6 +191,7 @@ AppEvent _event(
   createdAt: DateTime(2026, 1, 1),
   sourceUserId: sourceUserId,
   targetType: targetType,
+  targetId: targetId,
 );
 
 void main() {
@@ -575,6 +577,87 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('webProfileScreen')), findsOneWidget);
+  });
+
+  testWidgets("tapping a bird-arrival notification for a bird now away at a friend's nest opens that nest's panel, not the bird panel", (
+    tester,
+  ) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    friendsService.friendWaypointsToReturn = [
+      Waypoint(
+        id: 'f1',
+        userId: 'u2',
+        name: "Mia's Cabin",
+        latitude: 43,
+        longitude: -92,
+        username: 'mia',
+        color: '#E53935',
+      ),
+    ];
+    birdService.birdsToReturn = [
+      Bird(id: 'b1', userId: 'u1', name: 'Percy', currentNestId: 'f1', isTraveling: false, type: 'Cro'),
+    ];
+    eventService.notificationsToReturn = [
+      _event(
+        'n4',
+        EventKind.birdArrived,
+        'Percy arrived at Mia\'s Cabin',
+        isNotification: true,
+        isRead: false,
+        targetType: EventTargetType.bird,
+        targetId: 'b1',
+      ),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('webNotification_n4')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NestPanelContent), findsOneWidget);
+    expect(find.byType(BirdPanelContent), findsNothing);
+    expect(find.text("Mia's Cabin"), findsWidgets);
+  });
+
+  testWidgets('tapping a bird-arrival notification for a bird now at a hub opens that hub\'s panel, not the bird panel', (
+    tester,
+  ) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    hubService.hubsToReturn = [
+      Hub(id: 'h1', name: 'Lighthouse', latitude: 44, longitude: -91, status: 'Approved', createdByUserId: 'admin'),
+    ];
+    birdService.birdsToReturn = [
+      Bird(id: 'b1', userId: 'u1', name: 'Fen', currentNestId: 'h1', isTraveling: false, type: 'Cro'),
+    ];
+    eventService.notificationsToReturn = [
+      _event(
+        'n5',
+        EventKind.birdArrived,
+        'Fen arrived at Lighthouse',
+        isNotification: true,
+        isRead: false,
+        targetType: EventTargetType.bird,
+        targetId: 'b1',
+      ),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNotificationBell')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('webNotification_n5')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HubPanelContent), findsOneWidget);
+    expect(find.byType(BirdPanelContent), findsNothing);
   });
 
   testWidgets('tapping a home bird in the dock opens the bird panel', (tester) async {
