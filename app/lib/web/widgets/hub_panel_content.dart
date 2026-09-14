@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/bird.dart';
 import '../../models/friend.dart';
 import '../../models/friend_request.dart';
 import '../../models/hub.dart';
@@ -15,27 +16,40 @@ import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/hub_message_card.dart';
 import 'coordinate_readout.dart';
 
-/// The hub detail panel body - header plus the hub's message board embedded directly,
-/// rather than a full-screen push (see 01_web_shell_and_dock.md and the PR notes): every
-/// other selection (nest, bird) already swaps the same right-hand panel, so a one-off push
-/// for Hubs would break that "one screen, panel swaps" pattern. Adapted from the phone
-/// app's HubBoardScreen (same load/exclusion-set logic), minus its Scaffold/AppBar chrome.
+/// The hub detail panel body - header, then (when non-empty) a "Your birds here" section for
+/// any of the caller's own birds currently parked at this hub - reuses the exact same
+/// resident-row pattern as NestPanelContent._otherBody's "Your birds here" (a bird's
+/// currentNestId holds a Hub's id too while parked there, see DockBirdView.resolve's
+/// BirdDockState.hub) - then the hub's message board embedded directly, rather than a
+/// full-screen push (see 01_web_shell_and_dock.md and the PR notes): every other selection
+/// (nest, bird) already swaps the same right-hand panel, so a one-off push for Hubs would
+/// break that "one screen, panel swaps" pattern. Adapted from the phone app's HubBoardScreen
+/// (same load/exclusion-set logic), minus its Scaffold/AppBar chrome.
 class HubPanelContent extends StatefulWidget {
   final Hub hub;
+  // The caller's full own-bird list (already loaded shell-wide) - used to find which of the
+  // caller's own birds are currently parked at this hub, same purpose as NestPanelContent's
+  // ownBirds.
+  final List<Bird> ownBirds;
   final AuthState authState;
   final VoidCallback onClose;
   final HubService hubService;
   final FriendsService friendsService;
   final ProfileService profileService;
+  // Opens a resident bird's own detail panel - same as NestPanelContent.onSelectBird - instead
+  // of this panel offering its own send flow.
+  final ValueChanged<Bird> onSelectBird;
 
   const HubPanelContent({
     super.key,
     required this.hub,
+    required this.ownBirds,
     required this.authState,
     required this.onClose,
     required this.hubService,
     required this.friendsService,
     required this.profileService,
+    required this.onSelectBird,
   });
 
   @override
@@ -48,6 +62,11 @@ class _HubPanelContentState extends State<HubPanelContent> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isUploadingPicture = false;
+
+  // Mirrors NestPanelContent._myBirdsHere: the caller's own birds currently resting (not
+  // traveling) at this hub.
+  List<Bird> get _myBirdsHere =>
+      widget.ownBirds.where((b) => b.currentNestId == widget.hub.id && !b.isTraveling).toList();
 
   @override
   void initState() {
@@ -140,6 +159,15 @@ class _HubPanelContentState extends State<HubPanelContent> {
     );
   }
 
+  // Same relative-time convention as NestPanelContent/hub_message_card.dart.
+  String _relativeTime(DateTime time) {
+    final elapsed = DateTime.now().difference(time);
+    if (elapsed.inMinutes < 1) return 'just now';
+    if (elapsed.inHours < 1) return '${elapsed.inMinutes}m ago';
+    if (elapsed.inDays < 1) return '${elapsed.inHours}h ago';
+    return '${elapsed.inDays}d ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     final hub = widget.hub;
@@ -219,6 +247,20 @@ class _HubPanelContentState extends State<HubPanelContent> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: CoordinateReadout(latitude: hub.latitude, longitude: hub.longitude, centered: true),
         ),
+        if (_myBirdsHere.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your birds here', style: CroTextStyles.label(size: 12)),
+                const SizedBox(height: 9),
+                for (final bird in _myBirdsHere) _residentRow(bird),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -272,6 +314,47 @@ class _HubPanelContentState extends State<HubPanelContent> {
             friendsService: widget.friendsService,
           );
         },
+      ),
+    );
+  }
+
+  // Reuses NestPanelContent._residentRow's exact look - tapping opens the bird's own detail
+  // panel (with its "Send onward"/"Call it home" actions), same as a resident at a friend's
+  // nest.
+  Widget _residentRow(Bird bird) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: CroColors.warmSurface,
+        borderRadius: CroBorders.radius,
+        child: InkWell(
+          key: Key('hubPanelResident_${bird.id}'),
+          borderRadius: CroBorders.radius,
+          onTap: () => widget.onSelectBird(bird),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            child: Row(
+              children: [
+                Container(width: 28, height: 28, decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle)),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text(
+                        bird.updatedAt == null ? bird.type : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
+                        style: CroTextStyles.data(size: 11.5),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, size: 18, color: CroColors.fog),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
