@@ -271,6 +271,29 @@ void main() {
     expect(find.byKey(Key('webNestUnreadBadge_${ownNest.id}')), findsNothing);
   });
 
+  testWidgets("a friend's nest marker shows a bird icon only when one of your birds is landed there", (tester) async {
+    Bird makeOwnBird({required bool isTraveling, String? currentNestId}) => Bird(
+      id: 'b1',
+      userId: 'u1',
+      name: 'Fen',
+      currentNestId: currentNestId,
+      isTraveling: isTraveling,
+      type: 'Cro',
+    );
+
+    await tester.pumpWidget(buildMap(birds: [makeOwnBird(isTraveling: false, currentNestId: friendNest.id)]));
+    await tester.pump();
+    expect(find.byKey(const Key('mapMarkerPillYourBirdIcon')), findsOneWidget);
+
+    await tester.pumpWidget(buildMap(birds: [makeOwnBird(isTraveling: false, currentNestId: ownNest.id)]));
+    await tester.pump();
+    expect(find.byKey(const Key('mapMarkerPillYourBirdIcon')), findsNothing);
+
+    await tester.pumpWidget(buildMap(birds: [makeOwnBird(isTraveling: true, currentNestId: friendNest.id)]));
+    await tester.pump();
+    expect(find.byKey(const Key('mapMarkerPillYourBirdIcon')), findsNothing);
+  });
+
   testWidgets('a Hub marker shows its category icon with no photo, or the approved photo when set', (tester) async {
     await tester.pumpWidget(buildMap(hubs: [hub]));
     await tester.pump();

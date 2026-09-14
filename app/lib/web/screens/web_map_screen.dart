@@ -415,6 +415,7 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                       selected: widget.selectedNestId == fw.id,
                       selectionColor: hexToColor(fw.color ?? '#6B7280'),
                       onTap: () => widget.onSelectNest(fw),
+                      hasYourBirds: widget.birds.any((b) => !b.isTraveling && b.currentNestId == fw.id),
                       avatar: CircleAvatar(
                         radius: 15,
                         backgroundColor: hexToColor(fw.color ?? '#6B7280'),
