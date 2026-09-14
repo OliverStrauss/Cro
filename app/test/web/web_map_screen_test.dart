@@ -42,9 +42,11 @@ void main() {
   );
 
   Widget buildMap({
+    List<Bird> birds = const [],
     List<FriendBird> friendsBirds = const [],
     List<PublicBird> publicBirds = const [],
     List<Friend> friends = const [],
+    String? selectedNestId,
     String? selectedBirdId,
     ValueChanged<FriendBird>? onSelectFriendBird,
     ValueChanged<PublicBird>? onSelectPublicBird,
@@ -56,21 +58,23 @@ void main() {
     Map<String, List<Bird>> nestResidentsByNestId = const {},
     String? selectedHubId,
     ValueChanged<Hub>? onSelectHub,
+    MapController? mapController,
   }) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
         body: WebMapScreen(
+          mapController: mapController,
           ownNests: [ownNest],
           friendWaypoints: [friendNest],
-          birds: const [],
+          birds: birds,
           friendsBirds: friendsBirds,
           publicBirds: publicBirds,
           hubs: hubs,
           friends: friends,
           hubUnreadCounts: hubUnreadCounts,
           nestResidentsByNestId: nestResidentsByNestId,
-          selectedNestId: null,
+          selectedNestId: selectedNestId,
           selectedHubId: selectedHubId,
           selectedBirdId: selectedBirdId,
           bottomInset: 132,
@@ -307,5 +311,78 @@ void main() {
     await tester.pumpWidget(buildMap(hubs: [hub], selectedHubId: 'h1'));
     await tester.pump();
     expect(find.byKey(const Key('webHubMarkerGlow')), findsOneWidget);
+  });
+
+  group('camera follows a new selection', () {
+    testWidgets('selecting a hub pans+zooms the camera onto it', (tester) async {
+      final controller = MapController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(buildMap(hubs: [hub], mapController: controller));
+      await tester.pump();
+
+      await tester.pumpWidget(buildMap(hubs: [hub], mapController: controller, selectedHubId: 'h1'));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(controller.camera.center.latitude, closeTo(hub.latitude, 0.001));
+      expect(controller.camera.center.longitude, closeTo(hub.longitude, 0.001));
+      expect(controller.camera.zoom, 14);
+    });
+
+    testWidgets('selecting a friend\'s nest pans+zooms the camera onto it', (tester) async {
+      final controller = MapController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(buildMap(mapController: controller));
+      await tester.pump();
+
+      await tester.pumpWidget(buildMap(mapController: controller, selectedNestId: friendNest.id));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(controller.camera.center.latitude, closeTo(friendNest.latitude, 0.001));
+      expect(controller.camera.center.longitude, closeTo(friendNest.longitude, 0.001));
+      expect(controller.camera.zoom, 14);
+    });
+
+    testWidgets('selecting an in-flight own bird pans+zooms the camera onto its live position', (tester) async {
+      final controller = MapController();
+      addTearDown(controller.dispose);
+      final bird = Bird(
+        id: 'b1',
+        userId: 'u1',
+        name: 'Otto',
+        isTraveling: true,
+        nestFromId: ownNest.id,
+        nestToId: friendNest.id,
+        type: 'Cro',
+        departedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 5)),
+      );
+      await tester.pumpWidget(buildMap(mapController: controller, birds: [bird]));
+      await tester.pump();
+
+      await tester.pumpWidget(buildMap(mapController: controller, birds: [bird], selectedBirdId: 'b1'));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      // Halfway (by time) between ownNest and friendNest - roughly midway in both
+      // coordinates, well clear of either endpoint, which is enough to prove the camera
+      // moved to the bird's live position rather than staying at its initial center.
+      expect(controller.camera.center.latitude, greaterThan(ownNest.latitude));
+      expect(controller.camera.center.latitude, lessThan(friendNest.latitude));
+      expect(controller.camera.zoom, 14);
+    });
+
+    testWidgets('selecting a home bird does not move the camera', (tester) async {
+      final controller = MapController();
+      addTearDown(controller.dispose);
+      final bird = Bird(id: 'b1', userId: 'u1', name: 'Otto', currentNestId: ownNest.id, isTraveling: false, type: 'Cro');
+      await tester.pumpWidget(buildMap(mapController: controller, birds: [bird]));
+      await tester.pump();
+      final before = controller.camera.center;
+
+      await tester.pumpWidget(buildMap(mapController: controller, birds: [bird], selectedBirdId: 'b1'));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(controller.camera.center.latitude, closeTo(before.latitude, 1e-9));
+      expect(controller.camera.center.longitude, closeTo(before.longitude, 1e-9));
+    });
   });
 }
