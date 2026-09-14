@@ -9,6 +9,7 @@ import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
 import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
+import '../../services/pin_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
@@ -45,6 +46,7 @@ class ContextPanel extends StatelessWidget {
   final HubService hubService;
   final ProfileService profileService;
   final BirdReactionService reactionService;
+  final PinService pinService;
   final VoidCallback onDataChanged;
   final VoidCallback onFollowOnMap;
   final ValueChanged<Bird> onSelectBird;
@@ -70,6 +72,7 @@ class ContextPanel extends StatelessWidget {
     required this.hubService,
     required this.profileService,
     required this.reactionService,
+    required this.pinService,
     required this.onDataChanged,
     required this.onFollowOnMap,
     required this.onSelectBird,
@@ -101,6 +104,7 @@ class ContextPanel extends StatelessWidget {
           waypointService: waypointService,
           birdService: birdService,
           profileService: profileService,
+          pinService: pinService,
           onChanged: onDataChanged,
           onSelectBird: onSelectBird,
         ),

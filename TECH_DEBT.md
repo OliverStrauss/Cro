@@ -55,6 +55,27 @@ relies on the endpoint for setup/teardown. Revisit alongside that entry - both a
 test-only/no-UI-caller surface area with the same "delete or formally repurpose as
 admin-only" choice ahead of them.
 
+## Pinning a bird (`ReceivedBirdSheet`'s pin icon) doesn't know it's already pinned across sessions
+
+`PinnedBird.Id` is deterministic per delivery (`{birdId}:{receiverId}:{deliveredAtTicks}`), so
+re-pinning the same still-resident delivery is an idempotent upsert server-side - no duplicate
+rows. But the web sheet itself (`ReceivedBirdSheet`) has no way to know on open whether an
+earlier visit already pinned this exact delivery (that would need a
+`GET /birds/{id}/pin-status`-shaped call, or threading `GET /pins/mine` results down into
+`NestPanelContent`/`ReceivedBirdSheet`, neither of which exists yet) - so the pin icon always
+starts unpinned each time the sheet is reopened, even if it's already saved. Tapping it again
+in that state is harmless (same idempotent upsert), but the icon lies about the true state
+until the user has tapped it once in the current sheet instance. Worth fixing if this becomes
+confusing in practice - the fix is straightforward (pass the caller's already-loaded
+`GET /pins/mine` list down and match on `birdId` + the bird's own `updatedAt`).
+
+## `GET /pins/public` is a full cross-partition scan, same tradeoff `GET /birds/public` already accepts
+
+See the `ponytail:` comment on `CosmosPinnedBirdRepository.ListPublicAsync` - fine at this
+project's scale, same shortcut `BirdService.ListPublicInTransitAsync` already takes. Upgrade
+path if the `Pins` container ever gets large: a composite index on `(isPublic, createdAt)` so
+the newest-first ordering can run server-side instead of in memory.
+
 ## Backend integration tests appear to write into the shared local dev Cosmos database
 
 While investigating the above, `HubMessages`/`Users`/etc. in the local Cosmos emulator (the one

@@ -14,6 +14,7 @@ const string UsersContainerName = "Users";
 const string WaypointsContainerName = "Waypoints";
 const string BirdsContainerName = "Birds";
 const string HubMessagesContainerName = "HubMessages";
+const string PinsContainerName = "Pins";
 
 // Same well-known, publicly-documented emulator key as CLAUDE.md's setup instructions -
 // identical on every local install, never meaningful outside a local emulator. Overridable
@@ -42,4 +43,4 @@ var cosmosClientOptions = new CosmosClientOptions
 using var client = new CosmosClient(connectionString, cosmosClientOptions);
 var database = client.GetDatabase(DatabaseName);
 
-await DevDataSeeder.SeedFixedDevUsersAsync(database, UsersContainerName, WaypointsContainerName, BirdsContainerName, HubMessagesContainerName);
+await DevDataSeeder.SeedFixedDevUsersAsync(database, UsersContainerName, WaypointsContainerName, BirdsContainerName, HubMessagesContainerName, PinsContainerName);

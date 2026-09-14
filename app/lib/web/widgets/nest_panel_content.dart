@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/bird.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_service.dart';
+import '../../services/pin_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
@@ -34,6 +35,7 @@ class NestPanelContent extends StatefulWidget {
   final WaypointService waypointService;
   final BirdService birdService;
   final ProfileService profileService;
+  final PinService pinService;
   // Called after a successful rename so the shell can refresh its own nest/bird lists (nav
   // badges, dock, map markers) to match.
   final VoidCallback onChanged;
@@ -51,6 +53,7 @@ class NestPanelContent extends StatefulWidget {
     required this.waypointService,
     required this.birdService,
     required this.profileService,
+    required this.pinService,
     required this.onChanged,
     required this.onSelectBird,
   });
@@ -154,9 +157,11 @@ class _NestPanelContentState extends State<NestPanelContent> {
       audioUrl: bird.audioUrl,
       imageUrl: bird.imageUrl,
       isRead: bird.isRead,
+      isPublic: bird.isPublic,
       token: widget.authState.token!,
       profileService: widget.profileService,
       birdService: widget.birdService,
+      pinService: widget.pinService,
     );
     if (!mounted) return;
     await _loadResidents();

@@ -124,6 +124,8 @@ builder.Services.AddScoped<CosmosBirdReactionRepository>();
 builder.Services.AddScoped<BirdReactionService>();
 builder.Services.AddScoped<CosmosEventRepository>();
 builder.Services.AddScoped<EventService>();
+builder.Services.AddScoped<CosmosPinnedBirdRepository>();
+builder.Services.AddScoped<PinService>();
 builder.Services.AddScoped<FriendService>();
 builder.Services.AddScoped<PictureUploadService>();
 builder.Services.AddScoped<ProfilePictureService>();
@@ -234,13 +236,19 @@ if (app.Environment.IsDevelopment())
     // TTL, unlike HubMessages' 7-day board reset - this history is the app's one deliberately
     // permanent record, so nothing here ever auto-expires.
     await database.Database.CreateContainerIfNotExistsAsync(opts.EventsContainerName, "/userId");
+    // /receiverId, not the sender's userId - the dominant query is "list everything I've
+    // pinned" (GET /pins/mine), same single-partition-per-viewer reasoning as HubReadStates/
+    // BirdReadStates above. GET /pins/public is the one cross-partition scan against this
+    // container, same shape as GET /birds/public against Birds. No TTL - a pin is meant to
+    // outlive the bird that carried it, same "deliberately permanent" choice as Events.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.PinsContainerName, "/receiverId");
 
     if (opts.SeedFixedDevUsersOnStartup)
     {
         // Always-on-launch reset to the same fixed dev dataset Tools/SeedDevUsers seeds
         // manually - wipes Users and reseeds Admin/Test1/Test2/Oliver/Annie (all friends,
         // one Roost nest each, a few Cro's already in flight) every time the API starts.
-        await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.HubMessagesContainerName);
+        await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.HubMessagesContainerName, opts.PinsContainerName);
     }
     else
     {
@@ -1285,6 +1293,82 @@ app.MapDelete("/birds/{id}/reactions/{emoji}", async (string id, string emoji, C
 })
 .RequireAuthorization()
 .WithName("RemoveBirdReaction");
+
+// Saves a durable snapshot of a bird currently delivered to the caller's own nest - see
+// PinnedBird.cs. Public/private visibility is decided entirely by the bird's own IsPublic at
+// pin time, not by the caller.
+app.MapPost("/birds/{id}/pin", async (string id, ClaimsPrincipal principal, PinService pinService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await pinService.PinAsync(userId, id));
+    }
+    catch (ServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("PinBird");
+
+// Everything the caller has ever pinned themselves - the "saved messages" list, private and
+// public pins both (only the receiver can see their own private ones anyway).
+app.MapGet("/pins/mine", async (ClaimsPrincipal principal, PinService pinService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(await pinService.ListMineAsync(userId));
+})
+.RequireAuthorization()
+.WithName("GetMyPins");
+
+// World-visible feed: every pin anyone made of a bird that was public when it arrived - not
+// scoped to friends, same "anyone can see it" shape as GET /birds/public.
+app.MapGet("/pins/public", async (ClaimsPrincipal principal, PinService pinService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(await pinService.ListPublicAsync());
+})
+.RequireAuthorization()
+.WithName("GetPublicPins");
+
+// The receiver unpinning their own saved message, or the original sender taking down a
+// public pin of their own bird - see PinService.UnpinAsync for exactly who is allowed which.
+app.MapDelete("/pins/{id}", async (string id, ClaimsPrincipal principal, PinService pinService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        await pinService.UnpinAsync(userId, id);
+        return Results.NoContent();
+    }
+    catch (ServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("UnpinBird");
 
 app.MapPost("/friends/requests", async (SendFriendRequestRequest req, ClaimsPrincipal principal, FriendService friendService) =>
 {

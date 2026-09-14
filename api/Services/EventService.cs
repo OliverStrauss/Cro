@@ -70,6 +70,20 @@ public class EventService(
             quotedNote: arrivedBird.Content);
     }, nameof(RecordHubPostAsync), arrivedBird.Id);
 
+    public Task RecordBirdPinnedAsync(PinnedBird pin, string pinnerUsername) => RecordBestEffortAsync(async () =>
+    {
+        await CreateAsync(
+            pin.SenderId,
+            EventKind.BirdPinned,
+            pin.IsPublic
+                ? $"{pinnerUsername} pinned your {pin.BirdName} for everyone to see"
+                : $"{pinnerUsername} pinned your {pin.BirdName}",
+            isNotification: true,
+            targetType: EventTargetType.Pin,
+            targetId: pin.Id,
+            sourceUserId: pin.ReceiverId);
+    }, nameof(RecordBirdPinnedAsync), pin.Id);
+
     public Task RecordBirdJoinedFlockAsync(Bird newBird) => RecordBestEffortAsync(async () =>
     {
         await CreateAsync(

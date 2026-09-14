@@ -14,6 +14,7 @@ public class CosmosDbOptions
     public string HubReadStatesContainerName { get; set; } = string.Empty;
     public string BirdReadStatesContainerName { get; set; } = string.Empty;
     public string EventsContainerName { get; set; } = string.Empty;
+    public string PinsContainerName { get; set; } = string.Empty;
     public bool UseEmulator { get; set; }
     // Dev-only, off by default (only appsettings.Development.json turns it on - the test
     // project's own in-memory config never sets this key, so WebApplicationFactory-driven

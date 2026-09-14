@@ -15,6 +15,7 @@ import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
 import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
+import '../../services/pin_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
@@ -39,13 +40,15 @@ class WebShellData extends ChangeNotifier {
     ProfileService? profileService,
     EventService? eventService,
     BirdReactionService? reactionService,
+    PinService? pinService,
   }) : waypointService = waypointService ?? WaypointService(),
        friendsService = friendsService ?? FriendsService(),
        birdService = birdService ?? BirdService(),
        hubService = hubService ?? HubService(),
        profileService = profileService ?? ProfileService(),
        eventService = eventService ?? EventService(),
-       reactionService = reactionService ?? BirdReactionService();
+       reactionService = reactionService ?? BirdReactionService(),
+       pinService = pinService ?? PinService();
 
   final AuthState authState;
   final WaypointService waypointService;
@@ -55,6 +58,7 @@ class WebShellData extends ChangeNotifier {
   final ProfileService profileService;
   final EventService eventService;
   final BirdReactionService reactionService;
+  final PinService pinService;
 
   List<Waypoint> ownNests = [];
   List<Waypoint> friendWaypoints = [];

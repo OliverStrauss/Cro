@@ -241,15 +241,15 @@ class _PopupSurface extends StatelessWidget {
   }
 }
 
-// Only 3 event kinds are ever surfaced as notifications (see api/Services/EventService.cs) -
-// a bird landing at your nest, a bird you sent landing elsewhere, and a friend request being
-// accepted. This is the fallback glyph/tint for when there's no sender color to use instead
-// (see _senderTint).
+// This is the fallback glyph/tint for when there's no sender color to use instead (see
+// _senderTint) - see api/Services/EventService.cs for every kind that's ever surfaced as a
+// notification.
 (IconData, Color) _notificationGlyph(String kind) => switch (kind) {
   EventKind.birdArrivedAtYourNest => (Icons.flutter_dash, CroColors.waypointBlue),
   EventKind.birdArrived => (Icons.flutter_dash, CroColors.deepWaypoint),
   EventKind.friendRequestAccepted => (Icons.person, CroColors.deliveryAmber),
   EventKind.friendRequestReceived => (Icons.person_add, CroColors.deliveryAmber),
+  EventKind.birdPinned => (Icons.push_pin, CroColors.deliveryAmber),
   _ => (Icons.notifications, CroColors.fog),
 };
 

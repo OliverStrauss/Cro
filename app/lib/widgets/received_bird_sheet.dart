@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/bird_service.dart';
+import '../services/pin_service.dart';
 import '../services/profile_service.dart';
 import '../theme.dart';
 import 'bird_payload_view.dart';
@@ -9,7 +10,10 @@ import 'bird_payload_view.dart';
 // own nest - same chrome as BirdDetailsSheet, but for reading an arrived message instead of
 // tracking one still in flight: no ETA/progress, just who sent it and the payload itself
 // (text, image, and/or a voice clip, whichever the bird's type carries). Marks the bird read
-// on open - same as opening a text thread marks it read elsewhere.
+// on open - same as opening a text thread marks it read elsewhere. isPublic decides what
+// pinning this message does server-side (POST /birds/{id}/pin): a public bird gets pinned
+// for everyone to see, a private one only for the receiver themselves - the pin icon here
+// just triggers it, it never lets the receiver choose.
 class ReceivedBirdSheet extends StatefulWidget {
   final String birdId;
   final String name;
@@ -19,9 +23,11 @@ class ReceivedBirdSheet extends StatefulWidget {
   final String? audioUrl;
   final String? imageUrl;
   final bool isRead;
+  final bool isPublic;
   final String token;
   final ProfileService profileService;
   final BirdService birdService;
+  final PinService pinService;
 
   const ReceivedBirdSheet({
     super.key,
@@ -33,9 +39,11 @@ class ReceivedBirdSheet extends StatefulWidget {
     this.audioUrl,
     this.imageUrl,
     required this.isRead,
+    required this.isPublic,
     required this.token,
     required this.profileService,
     required this.birdService,
+    required this.pinService,
   });
 
   static Future<void> show(
@@ -48,9 +56,11 @@ class ReceivedBirdSheet extends StatefulWidget {
     String? audioUrl,
     String? imageUrl,
     required bool isRead,
+    required bool isPublic,
     required String token,
     required ProfileService profileService,
     required BirdService birdService,
+    required PinService pinService,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -65,9 +75,11 @@ class ReceivedBirdSheet extends StatefulWidget {
         audioUrl: audioUrl,
         imageUrl: imageUrl,
         isRead: isRead,
+        isPublic: isPublic,
         token: token,
         profileService: profileService,
         birdService: birdService,
+        pinService: pinService,
       ),
     );
   }
@@ -78,6 +90,12 @@ class ReceivedBirdSheet extends StatefulWidget {
 
 class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
   String _senderLabel = '…';
+  // Session-local only - this sheet doesn't know on open whether an earlier visit already
+  // pinned this same delivery (see PinnedBird.BuildId's dedup key), so it always starts
+  // unpinned; re-pinning the same delivery is idempotent server-side anyway.
+  bool _isPinned = false;
+  String? _pinId;
+  bool _isTogglingPin = false;
 
   @override
   void initState() {
@@ -107,6 +125,40 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
       if (!mounted) return;
       setState(() => _senderLabel = 'someone');
     }
+  }
+
+  Future<void> _togglePin() async {
+    setState(() => _isTogglingPin = true);
+    try {
+      if (_isPinned) {
+        await widget.pinService.unpinBird(widget.token, _pinId!);
+        if (!mounted) return;
+        setState(() {
+          _isPinned = false;
+          _pinId = null;
+        });
+        _toast('Unpinned');
+      } else {
+        final pin = await widget.pinService.pinBird(widget.token, widget.birdId);
+        if (!mounted) return;
+        setState(() {
+          _isPinned = true;
+          _pinId = pin.id;
+        });
+        _toast(widget.isPublic ? 'Pinned for everyone to see' : 'Pinned to your saved messages');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _toast(e.toString(), isError: true);
+    } finally {
+      if (mounted) setState(() => _isTogglingPin = false);
+    }
+  }
+
+  void _toast(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: isError ? Theme.of(context).colorScheme.error : null),
+    );
   }
 
   @override
@@ -154,6 +206,19 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                           style: CroTextStyles.data(size: 13),
                         ),
                       ],
+                    ),
+                  ),
+                  Tooltip(
+                    message: _isPinned
+                        ? 'Unpin'
+                        : (widget.isPublic ? 'Pin publicly' : 'Pin for yourself'),
+                    child: IconButton(
+                      key: const Key('receivedBirdPinButton'),
+                      icon: Icon(
+                        _isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                        color: _isPinned ? Theme.of(context).colorScheme.primary : CroColors.fog,
+                      ),
+                      onPressed: _isTogglingPin ? null : _togglePin,
                     ),
                   ),
                 ],
