@@ -25,6 +25,7 @@ import '../widgets/context_panel.dart';
 import '../widgets/dock_bird_card.dart';
 import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
+import '../widgets/nest_locator_button.dart';
 import '../widgets/search_trigger.dart';
 import '../widgets/your_birds_dock.dart';
 import 'web_hubs_screen.dart';
@@ -104,6 +105,9 @@ class WebShellScreenState extends State<WebShellScreen> {
   bool _dockHidden = false;
   bool _addingNest = false;
   bool _addingHub = false;
+  // Bumped to force WebMapScreen to re-center on the currently selected target, even when
+  // that target's id hasn't changed - see WebMapScreen.focusRequest.
+  int _focusRequest = 0;
 
   final _dockKey = GlobalKey();
   double _dockHeight = 132;
@@ -174,6 +178,19 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedPublicBird = null;
       _selectedSearchLocation = null;
     });
+  }
+
+  // Forces WebMapScreen to re-center on whatever's currently selected - shared by the nest
+  // locator button and the Follow on map buttons (bird/friend-bird panels), both of which
+  // need to recenter even when the selection itself hasn't changed (see
+  // WebMapScreen.focusRequest for why a plain re-selection wouldn't move the camera).
+  void _refocusMap() => setState(() => _focusRequest++);
+
+  void _locateOwnNest() {
+    final nest = _data.ownNests.firstOrNull;
+    if (nest == null) return;
+    _selectNest(nest);
+    _refocusMap();
   }
 
   // A Place (geocoded) search result has no backing app entity and no panel content to
@@ -450,6 +467,10 @@ class WebShellScreenState extends State<WebShellScreen> {
                         onSelectNest: _selectSearchNest,
                       ),
                       const SizedBox(width: 10),
+                      if (_data.ownNests.isNotEmpty) ...[
+                        NestLocatorButton(onTap: _locateOwnNest),
+                        const SizedBox(width: 10),
+                      ],
                       FloatingActionsCluster(
                         // FriendRequestReceived events are excluded here - incomingRequests already
                         // renders that exact pending request as its own dropdown row, so showing
@@ -500,7 +521,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                         reactionService: _data.reactionService,
                         pinService: _data.pinService,
                         onDataChanged: _data.load,
-                        onFollowOnMap: () => _selectNav(WebNavItem.map),
+                        onFollowOnMap: _refocusMap,
                         onSelectBird: _selectBird,
                       ),
                     ),
@@ -550,6 +571,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           selectedHubId: _selectedHub?.id,
           searchLocation: _selectedSearchLocation,
           selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id ?? _selectedPublicBird?.id,
+          focusRequest: _focusRequest,
           bottomInset: _dockHeight,
           onSelectNest: _selectNest,
           onSelectHub: _selectHub,
