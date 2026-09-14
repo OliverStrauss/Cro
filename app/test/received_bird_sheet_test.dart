@@ -29,7 +29,11 @@ class _FakeProfileService implements ProfileService {
 
 class _FakePinService implements PinService {
   String? lastPinnedBirdId;
-  String? lastUnpinnedId;
+  // Set to simulate opening a message pinned on an earlier visit.
+  PinnedBird? existingPin;
+
+  @override
+  Future<PinnedBird?> getPinStatus(String token, String birdId) async => existingPin;
 
   @override
   Future<PinnedBird> pinBird(String token, String birdId) async {
@@ -46,11 +50,6 @@ class _FakePinService implements PinService {
       isPublic: false,
       createdAt: DateTime.now(),
     );
-  }
-
-  @override
-  Future<void> unpinBird(String token, String pinId) async {
-    lastUnpinnedId = pinId;
   }
 
   @override
@@ -108,22 +107,37 @@ void main() {
     expect(find.text('Pinned to your saved messages'), findsOneWidget);
   });
 
-  testWidgets('tapping the pin icon again unpins it', (tester) async {
+  testWidgets('the pin button is disabled once pinned - no unpin option from this sheet', (tester) async {
     final pinService = _FakePinService();
     await pump(tester, isPublic: false, pinService: pinService);
 
     await tester.tap(find.byKey(const Key('receivedBirdPinButton')));
     await tester.pumpAndSettle();
     expect(pinService.lastPinnedBirdId, 'b1');
-    // Lets the first SnackBar's own timer finish so the second one (queued behind it by
-    // ScaffoldMessenger) actually shows within this pumpAndSettle instead of staying queued.
-    await tester.pump(const Duration(seconds: 5));
 
-    await tester.tap(find.byKey(const Key('receivedBirdPinButton')));
-    await tester.pumpAndSettle();
+    final button = tester.widget<IconButton>(find.byKey(const Key('receivedBirdPinButton')));
+    expect(button.onPressed, isNull);
+  });
 
-    expect(pinService.lastUnpinnedId, 'pin1');
-    expect(find.byIcon(Icons.push_pin_outlined), findsOneWidget);
-    expect(find.text('Unpinned'), findsOneWidget);
+  testWidgets('opening a message pinned on an earlier visit shows it as already pinned', (tester) async {
+    final pinService = _FakePinService()
+      ..existingPin = PinnedBird(
+        id: 'pin1',
+        receiverId: 'me',
+        senderId: 'sender1',
+        senderUsername: 'Sender',
+        birdId: 'b1',
+        birdName: 'Otto',
+        type: 'Cro',
+        content: 'hi',
+        isPublic: false,
+        createdAt: DateTime.now(),
+      );
+    await pump(tester, isPublic: false, pinService: pinService);
+
+    expect(find.byIcon(Icons.push_pin), findsOneWidget);
+    final button = tester.widget<IconButton>(find.byKey(const Key('receivedBirdPinButton')));
+    expect(button.onPressed, isNull);
+    expect(pinService.lastPinnedBirdId, isNull);
   });
 }

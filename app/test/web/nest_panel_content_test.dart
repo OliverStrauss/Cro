@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cro_app/models/bird.dart';
+import 'package:cro_app/models/pinned_bird.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/services/bird_service.dart';
+import 'package:cro_app/services/friends_service.dart';
 import 'package:cro_app/services/pin_service.dart';
 import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
@@ -39,6 +41,17 @@ class _FakeProfileService implements ProfileService {
 }
 
 class _FakePinService implements PinService {
+  List<PinnedBird> publicPinsToReturn = [];
+
+  @override
+  Future<List<PinnedBird>> listPublicPins(String token) async => publicPinsToReturn;
+
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used here');
+}
+
+class _FakeFriendsService implements FriendsService {
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName} is not used here');
@@ -55,7 +68,9 @@ void main() {
     List<Bird> ownBirds = const [],
     _FakeBirdService? birdService,
     _FakeWaypointService? waypointService,
+    _FakePinService? pinService,
     ValueChanged<Bird>? onSelectBird,
+    VoidCallback? onViewPinned,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -68,9 +83,11 @@ void main() {
           waypointService: waypointService ?? _FakeWaypointService(),
           birdService: birdService ?? _FakeBirdService(),
           profileService: _FakeProfileService(),
-          pinService: _FakePinService(),
+          pinService: pinService ?? _FakePinService(),
+          friendsService: _FakeFriendsService(),
           onChanged: () {},
           onSelectBird: onSelectBird ?? (_) {},
+          onViewPinned: onViewPinned ?? () {},
         ),
       ),
     );
@@ -108,6 +125,51 @@ void main() {
     expect(find.text('Birds here'), findsOneWidget);
     expect(find.byKey(const Key('nestPanelEmpty')), findsOneWidget);
     expect(find.byKey(const Key('webRenameNestButton')), findsOneWidget);
+  });
+
+  testWidgets('an own nest has a button that jumps to the Pinned screen', (tester) async {
+    final nest = Waypoint(id: 'n1', userId: 'u1', name: 'Backyard', latitude: 1, longitude: 2);
+    var tapped = false;
+    await tester.pumpWidget(build(nest, isOwn: true, onViewPinned: () => tapped = true));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webViewPinnedNestButton')));
+    expect(tapped, isTrue);
+  });
+
+  testWidgets('a friend nest shows that user\'s public pins, filtered from the world feed', (tester) async {
+    final theirPin = PinnedBird(
+      id: 'pin1',
+      receiverId: 'u2',
+      senderId: 'u3',
+      senderUsername: 'Someone',
+      birdId: 'b9',
+      birdName: 'Otto',
+      type: 'Cro',
+      content: 'hi',
+      isPublic: true,
+      createdAt: DateTime.now(),
+    );
+    final someoneElsesPin = PinnedBird(
+      id: 'pin2',
+      receiverId: 'u4',
+      senderId: 'u3',
+      senderUsername: 'Someone',
+      birdId: 'b8',
+      birdName: 'Percy',
+      type: 'Cro',
+      content: 'hi',
+      isPublic: true,
+      createdAt: DateTime.now(),
+    );
+    final pinService = _FakePinService()..publicPinsToReturn = [theirPin, someoneElsesPin];
+
+    await tester.pumpWidget(build(friendNest, isOwn: false, pinService: pinService));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Public pins'), findsOneWidget);
+    expect(find.byKey(const ValueKey('nestPanelPublicPin_pin1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('nestPanelPublicPin_pin2')), findsNothing);
   });
 
   testWidgets('a friend nest with one of the caller\'s own birds there lists it, reusing the resident row',

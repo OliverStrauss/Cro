@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../models/bird.dart';
+import '../../models/pinned_bird.dart';
 import '../../models/waypoint.dart';
 import '../../services/bird_service.dart';
+import '../../services/friends_service.dart';
 import '../../services/pin_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
@@ -14,6 +16,7 @@ import '../../widgets/received_bird_sheet.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import 'coordinate_readout.dart';
 import 'panel_header.dart';
+import 'pinned_message_card.dart';
 
 /// The nest detail panel body - own nests get delivered-mail + resident-bird sections
 /// (rename, tap a resident to open its bird detail panel). A friend's nest reuses that same
@@ -36,12 +39,16 @@ class NestPanelContent extends StatefulWidget {
   final BirdService birdService;
   final ProfileService profileService;
   final PinService pinService;
+  final FriendsService friendsService;
   // Called after a successful rename so the shell can refresh its own nest/bird lists (nav
   // badges, dock, map markers) to match.
   final VoidCallback onChanged;
   // Opens a resident bird's own detail panel - the same one YourBirdsDock opens for a dock
   // tap - instead of this panel offering its own send flow.
   final ValueChanged<Bird> onSelectBird;
+  // Own nest only - jumps to the Pinned screen (see WebPinnedScreen), same "jump to the tab
+  // that actually shows it" pattern as ContextPanel's onFollowOnMap.
+  final VoidCallback onViewPinned;
 
   const NestPanelContent({
     super.key,
@@ -54,8 +61,10 @@ class NestPanelContent extends StatefulWidget {
     required this.birdService,
     required this.profileService,
     required this.pinService,
+    required this.friendsService,
     required this.onChanged,
     required this.onSelectBird,
+    required this.onViewPinned,
   });
 
   @override
@@ -67,6 +76,11 @@ class _NestPanelContentState extends State<NestPanelContent> {
   List<Bird> _residents = [];
   bool _isLoadingResidents = true;
   String? _currentUserId;
+  // Only loaded for a friend's nest - this user's own public pins, filtered client-side from
+  // the same world feed WebPinnedScreen's Public tab shows (no per-user endpoint exists, and
+  // the whole feed is small enough that a second cross-partition scan isn't worth adding).
+  List<PinnedBird> _publicPins = [];
+  bool _isLoadingPublicPins = true;
 
   List<Bird> get _ownIdleBirds => _residents.where((b) => b.userId == _currentUserId).toList();
   List<Bird> get _deliveredBirds => _residents.where((b) => b.userId != _currentUserId).toList();
@@ -95,6 +109,8 @@ class _NestPanelContentState extends State<NestPanelContent> {
     if (widget.isOwn) {
       _currentUserId = jwtSubject(widget.authState.token!);
       _loadResidents();
+    } else {
+      _loadPublicPins();
     }
   }
 
@@ -105,7 +121,27 @@ class _NestPanelContentState extends State<NestPanelContent> {
       _name = widget.nest.name;
       _residents = [];
       _isLoadingResidents = widget.isOwn;
-      if (widget.isOwn) _loadResidents();
+      _publicPins = [];
+      _isLoadingPublicPins = !widget.isOwn;
+      if (widget.isOwn) {
+        _loadResidents();
+      } else {
+        _loadPublicPins();
+      }
+    }
+  }
+
+  Future<void> _loadPublicPins() async {
+    setState(() => _isLoadingPublicPins = true);
+    try {
+      final allPublicPins = await widget.pinService.listPublicPins(widget.authState.token!);
+      if (!mounted) return;
+      setState(() {
+        _publicPins = allPublicPins.where((p) => p.receiverId == widget.nest.userId).toList();
+        _isLoadingPublicPins = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingPublicPins = false);
     }
   }
 
@@ -197,21 +233,9 @@ class _NestPanelContentState extends State<NestPanelContent> {
               CoordinateReadout(latitude: nest.latitude, longitude: nest.longitude),
               if (widget.isOwn) ...[
                 const SizedBox(width: 10),
-                Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    key: const Key('webRenameNestButton'),
-                    borderRadius: BorderRadius.circular(6),
-                    onTap: _rename,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                      child: Text(
-                        'Rename',
-                        style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint),
-                      ),
-                    ),
-                  ),
-                ),
+                _headerLink('webRenameNestButton', 'Rename', _rename),
+                const SizedBox(width: 10),
+                _headerLink('webViewPinnedNestButton', 'View pinned', widget.onViewPinned),
               ],
             ],
           ),
@@ -219,11 +243,26 @@ class _NestPanelContentState extends State<NestPanelContent> {
         if (widget.isOwn) ...[
           const SizedBox(height: 16),
           Flexible(child: _ownBody()),
-        ] else if (_myBirdsHere.isNotEmpty) ...[
+        ] else ...[
           const SizedBox(height: 16),
-          Flexible(child: _friendBirdsBody()),
+          Flexible(child: _otherBody()),
         ],
       ],
+    );
+  }
+
+  Widget _headerLink(String key, String label, VoidCallback onTap) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        key: Key(key),
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Text(label, style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+        ),
+      ),
     );
   }
 
@@ -246,15 +285,60 @@ class _NestPanelContentState extends State<NestPanelContent> {
     );
   }
 
-  // Only reached when _myBirdsHere is non-empty (see build()) - e.g. Oliver viewing Annie's
-  // nest, where a bird he already sent her is currently resting. Reuses the exact same row
-  // as an own nest's "Birds here" - tapping it opens that bird's own detail panel.
-  Widget _friendBirdsBody() {
+  // A friend's (or any other user's) nest: "Your birds here" only when non-empty - e.g.
+  // Oliver viewing Annie's nest, where a bird he already sent her is currently resting.
+  // Reuses the exact same row as an own nest's "Birds here" - tapping it opens that bird's
+  // own detail panel. Below that, this user's public pins - styled as a board list (same
+  // PinnedMessageCard/"the board" pattern HubPanelContent and WebPinnedScreen's Public tab
+  // already use), read-only here: taking a pin down is only ever offered from the Pinned
+  // screen itself.
+  Widget _otherBody() {
     return ListView(
       shrinkWrap: true,
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
-      children: _birdsHereSection(_myBirdsHere, title: 'Your birds here'),
+      children: [
+        if (_myBirdsHere.isNotEmpty) ...[
+          ..._birdsHereSection(_myBirdsHere, title: 'Your birds here'),
+          const SizedBox(height: 16),
+        ],
+        Text('Public pins', style: CroTextStyles.label(size: 12)),
+        const SizedBox(height: 9),
+        Column(key: const Key('nestPanelPublicPinsList'), children: _publicPinsSection()),
+      ],
     );
+  }
+
+  List<Widget> _publicPinsSection() {
+    if (_isLoadingPublicPins) {
+      return [
+        const Center(
+          key: Key('nestPanelPublicPinsLoading'),
+          child: Padding(padding: EdgeInsets.symmetric(vertical: 16), child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+    if (_publicPins.isEmpty) {
+      return [
+        Text(
+          'No public pins yet',
+          key: const Key('nestPanelPublicPinsEmpty'),
+          style: CroTextStyles.data(size: 12.5),
+        ),
+      ];
+    }
+    return [
+      for (final pin in _publicPins)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: PinnedMessageCard(
+            key: ValueKey('nestPanelPublicPin_${pin.id}'),
+            pin: pin,
+            showAddFriend: false,
+            token: widget.authState.token!,
+            friendsService: widget.friendsService,
+          ),
+        ),
+    ];
   }
 
   List<Widget> _birdsHereSection(List<Bird> birds, {required String title}) {

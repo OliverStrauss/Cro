@@ -30,6 +30,18 @@ class PinService {
     }
   }
 
+  // Whether the bird's current delivery is already pinned by the caller - null when it isn't
+  // (or the bird has no current delivery), so the caller can show real pinned state on open
+  // instead of always starting from "unpinned".
+  Future<PinnedBird?> getPinStatus(String token, String birdId) async {
+    final response = await _send(http.Request('GET', Uri.parse('$apiBaseUrl/birds/$birdId/pin')), token);
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw PinException(_errorMessage(response, 'Could not check pin status'));
+    }
+    return PinnedBird.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   Future<List<PinnedBird>> listMyPins(String token) async {
     final response = await _send(http.Request('GET', Uri.parse('$apiBaseUrl/pins/mine')), token);
     if (response.statusCode != 200) {

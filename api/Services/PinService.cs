@@ -60,6 +60,20 @@ public class PinService(
 
     public Task<List<PinnedBird>> ListPublicAsync() => pinRepository.ListPublicAsync();
 
+    // Whether THIS specific delivery (not just this bird - see PinnedBird.BuildId, a reused
+    // bird gets a fresh id every delivery) is already pinned by the caller - same deterministic
+    // id PinAsync would upsert to, so this is a pure lookup with no write. Lets the client show
+    // real pinned state on open instead of always starting from "unpinned" (a bird that isn't
+    // currently resident has no "current delivery" to ask about, hence the same 404 PinAsync uses).
+    public async Task<PinnedBird?> GetForCurrentDeliveryAsync(string userId, string birdId)
+    {
+        var bird = await birdRepository.GetByIdAsync(birdId)
+            ?? throw new ServiceException(404, "Bird not found.");
+
+        var id = PinnedBird.BuildId(bird.Id, userId, bird.UpdatedAt);
+        return await pinRepository.GetByIdAsync(id);
+    }
+
     // One verb for both "the receiver unpins their own saved message" and "the sender takes
     // down a public pin of their own bird" - a private pin can only ever be removed by the
     // receiver who made it, since nobody else can even see it.
