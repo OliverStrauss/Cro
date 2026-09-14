@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -201,6 +202,19 @@ var app = builder.Build();
 // idempotent no-ops against something that already exists, so running this unconditionally
 // costs nothing once converged and means a brand-new container reaches prod automatically on
 // the next deploy instead of needing a manual, easy-to-forget infra step.
+//
+// Gated through StartupProvisioning so it actually runs once per environment per process,
+// not once per WebApplicationFactory instance - the integration test suite boots ~25 separate
+// in-process hosts (one per test class), all pointed at the same shared local Cosmos
+// emulator/Azurite. Before this gate, all 25 independently ran this whole block (11
+// CreateContainerIfNotExistsAsync calls apiece) at startup, racing each other; that thundering
+// herd was enough to CPU-starve the emulator container in CI and turn "idempotent no-op" into
+// a pile-up of 503 ServiceUnavailable responses, failing `build` (and therefore skipping
+// `deploy`) on every push since #179. Keyed by environment name rather than a single global
+// flag so ProdCorsTests - which exists specifically to prove this block also runs under
+// Production, not just Development - still gets its own real run instead of silently
+// inheriting a Development host's work.
+await StartupProvisioning.RunOnceAsync(app.Environment.EnvironmentName, async () =>
 {
     using var scope = app.Services.CreateScope();
     var client = scope.ServiceProvider.GetRequiredService<CosmosClient>();
@@ -349,7 +363,7 @@ var app = builder.Build();
         }
     ];
     await blobClient.SetPropertiesAsync(serviceProperties);
-}
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -1976,5 +1990,17 @@ record SetHubRequest(string Name, double Latitude, double Longitude, string Cate
 record RenameBirdRequest(string Name);
 record SendFriendRequestRequest(string Username);
 record SetFriendColorRequest(string Color);
+
+// See the doc comment above its call site in the startup provisioning block: makes an
+// idempotent async setup step run once per environment name per process instead of once per
+// caller, so ~25 integration-test hosts sharing one local emulator don't all redo the same
+// container-creation work concurrently. A GetOrAdd race can rarely invoke provision() twice
+// for the same key - harmless here since every provisioning call is itself idempotent.
+internal static class StartupProvisioning
+{
+    private static readonly ConcurrentDictionary<string, Task> Runs = new();
+
+    public static Task RunOnceAsync(string key, Func<Task> provision) => Runs.GetOrAdd(key, _ => provision());
+}
 
 public partial class Program { }
