@@ -22,6 +22,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # No packages.lock.json in /api (RestorePackagesWithLockFile isn't set), so
+      # setup-dotnet's own `cache: true` has nothing to hash and errors out - caching
+      # ~/.nuget/packages directly, keyed on the csproj files, works without that.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('api/**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+      # Pulling this ~1GB image is most of the wait before tests can start - kick it off
+      # now, in the background, so it overlaps with Azurite startup and dotnet restore/build
+      # instead of happening serially right before the test step needs it.
+      - name: Prefetch Cosmos emulator image
+        run: nohup docker pull mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest > /tmp/cosmos-pull.log 2>&1 &
       # Azurite (Blob Storage emulator) needs a custom startup flag that a declarative
       # `services:` block can't pass through (it always runs the image's default command,
       # no args) - run it as a plain docker step instead, same as local dev.
@@ -43,12 +56,13 @@ jobs:
       # The Cosmos emulator is managed manually (not via a declarative `services:` block)
       # so it can be torn down and recreated on failure: the official image occasionally
       # crashes outright under GitHub Actions' resource constraints (a fatal error inside
-      # its Windows-compat layer, unrelated to anything in this repo or this test suite -
-      # reproducible against unrelated tests on main before this retry logic existed).
-      # A crashed `services:` container can't be restarted mid-job, so this instead starts
-      # a fresh container and retries the whole test run up to 3 times. A genuine test
-      # failure (not an emulator crash) still fails every attempt and correctly fails the
-      # job - this only masks transient infra flakiness, not real bugs.
+      # its Windows-compat layer/sqlpal.dll, "Reason: 0x6, Last Chance" - a known issue with
+      # this image caused by Docker's default 64MB --shm-size being too small for its storage
+      # engine; --shm-size=1g below is the actual fix, not just the retry loop masking it).
+      # A crashed `services:` container can't be restarted mid-job, so this also starts a
+      # fresh container and retries the whole test run up to 3 times as defense in depth. A
+      # genuine test failure (not an emulator crash) still fails every attempt and correctly
+      # fails the job - this only masks transient infra flakiness, not real bugs.
       - name: Run tests against the Cosmos emulator, retrying on emulator crashes
         run: |
           # GitHub-hosted runners are x64, so the standard emulator image works here even
@@ -58,6 +72,7 @@ jobs:
             echo "=== Attempt $attempt/$max_attempts: starting Cosmos emulator ==="
             docker rm -f cosmosdb-emulator >/dev/null 2>&1 || true
             docker run -d --name cosmosdb-emulator \
+              --shm-size=1g \
               -p 8081:8081 -p 10251-10254:10251-10254 \
               -e AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10 \
               -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false \

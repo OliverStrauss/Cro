@@ -22,6 +22,14 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
+      # flutter-action's own cache is just the SDK download; pub packages are a separate
+      # cache keyed on pubspec.lock so `flutter pub get` can skip re-fetching them too.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('app/pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pub-
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
