@@ -93,6 +93,7 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
   String _senderLabel = '…';
   bool _isPinned = false;
   bool _isTogglingPin = false;
+  bool _isShooing = false;
 
   @override
   void initState() {
@@ -154,6 +155,22 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
       _toast(e.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _isTogglingPin = false);
+    }
+  }
+
+  // Sends this bird back to its owner's home nest - it's no longer resident here once this
+  // succeeds, so this sheet has nothing left to show and closes itself, same as a completed
+  // send elsewhere in the app.
+  Future<void> _shoo() async {
+    setState(() => _isShooing = true);
+    try {
+      await widget.birdService.shooBird(widget.token, widget.birdId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      _toast(e.toString(), isError: true);
+      setState(() => _isShooing = false);
     }
   }
 
@@ -225,6 +242,14 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                           : CroColors.fog,
                     ),
                     onPressed: _isPinned || _isTogglingPin ? null : _pin,
+                  ),
+                ),
+                Tooltip(
+                  message: 'Shoo it home',
+                  child: IconButton(
+                    key: const Key('receivedBirdShooButton'),
+                    icon: const Icon(Icons.back_hand_outlined, color: CroColors.fog),
+                    onPressed: _isShooing ? null : _shoo,
                   ),
                 ),
               ],

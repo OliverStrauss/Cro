@@ -1351,6 +1351,28 @@ app.MapPost("/birds/{id}/pin", async (string id, ClaimsPrincipal principal, PinS
 .RequireAuthorization()
 .WithName("PinBird");
 
+// Sends a delivered (someone else's) bird back to its owner's home nest and notifies them -
+// same ownership gate as POST /birds/{id}/pin (must be resident at a nest the caller owns).
+app.MapPost("/birds/{id}/shoo", async (string id, ClaimsPrincipal principal, BirdService birdService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        return Results.Ok(await birdService.ShooAsync(userId, id));
+    }
+    catch (ServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("ShooBird");
+
 // Whether the bird's current delivery is already pinned by the caller - lets the client show
 // real "already pinned" state (filled icon, no unpin here) instead of always starting fresh.
 // 404 both when the bird doesn't exist and when this delivery was never pinned - same

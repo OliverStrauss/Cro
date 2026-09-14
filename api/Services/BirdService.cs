@@ -400,6 +400,62 @@ public class BirdService(
         return saved;
     }
 
+    // Sends someone ELSE's bird - currently resident, delivered, at the caller's own nest -
+    // back to its owner's home. "Home" is that owner's private nest, same idiom DeleteAsync
+    // uses to mean "home" (there's only ever one nest per user today, per
+    // WaypointService.CreateAsync's cap, but this still resolves it the same explicit way
+    // rather than assuming ListByUserIdAsync returns exactly one). Reuses SendAsync's
+    // travel-time math verbatim; unlike a real send, the bird's payload (Content/media/
+    // IsPublic) is left untouched - shooing isn't the caller composing a new message, just
+    // bouncing the existing one back.
+    public async Task<Bird> ShooAsync(string shooerId, string birdId)
+    {
+        var bird = await birdRepository.GetByIdAsync(birdId)
+            ?? throw new ServiceException(404, "Bird not found.");
+        bird = await ResolveArrivalIfDueAsync(bird);
+
+        if (bird.UserId == shooerId)
+        {
+            throw new ServiceException(400, "You can't shoo your own bird.");
+        }
+
+        // Same ownership check as PinService.PinAsync/MarkReadAsync: must currently be sitting,
+        // arrived, at a nest the caller owns.
+        var currentNest = await waypointRepository.GetAsync(shooerId, bird.CurrentNestId ?? string.Empty);
+        if (bird.CurrentNestId is null || currentNest is null)
+        {
+            throw new ServiceException(404, "Bird not found.");
+        }
+
+        var home = (await waypointRepository.ListByUserIdAsync(bird.UserId)).FirstOrDefault(w => !w.IsPublic)
+            ?? throw new ServiceException(404, "This bird has no home nest to return to.");
+
+        var distanceKm = GeoDistance.HaversineKm(currentNest.Latitude, currentNest.Longitude, home.Latitude, home.Longitude);
+        var effectiveSpeedKmh = BirdTypeCatalog.BaseSpeedKmh(bird.Type) * birdTravelOptions.Value.SpeedMultiplier;
+        var hours = effectiveSpeedKmh > 0 ? distanceKm / effectiveSpeedKmh : 0;
+
+        var now = DateTimeOffset.UtcNow;
+        var updated = bird with
+        {
+            CurrentNestId = null,
+            IsTraveling = true,
+            NestFromId = currentNest.Id,
+            NestToId = home.Id,
+            Speed = effectiveSpeedKmh,
+            DepartedAt = now,
+            EstimatedArrivalAt = now.AddHours(hours),
+            IsRead = true, // not delivered yet - nothing to read
+            UpdatedAt = now,
+            NestFromName = currentNest.Name,
+            NestToName = home.Name,
+        };
+        var saved = await birdRepository.UpdateAsync(updated);
+
+        var shooer = await userRepository.GetByIdAsync(shooerId);
+        await eventService.RecordBirdShooedAsync(saved, shooerId, shooer?.Username ?? "Someone");
+        return saved;
+    }
+
     public async Task<Bird> RenameAsync(string userId, string birdId, string name)
     {
         if (string.IsNullOrWhiteSpace(name))

@@ -198,6 +198,25 @@ class BirdService {
     }
   }
 
+  // Sends a bird someone else delivered to the caller's own nest back to its owner's home -
+  // same "delivered, resident at a nest I own" gate the server enforces for pinning.
+  Future<Bird> shooBird(String token, String birdId) async {
+    final http.Response response;
+    try {
+      response = await api.post(
+        Uri.parse('$apiBaseUrl/birds/$birdId/shoo'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {
+      throw BirdException('Could not reach the server');
+    }
+
+    if (response.statusCode != 200) {
+      throw BirdException(_errorMessage(response, 'Could not shoo this bird home'));
+    }
+    return Bird.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   Future<http.Response> _get(String path, String token, String errorFallback) async {
     final http.Response response;
     try {
