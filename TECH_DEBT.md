@@ -295,6 +295,16 @@ compounding issues, both now fixed:
   custom domain to the `cro-email-svc` Email Service, verify via DNS TXT/CNAME records) once
   Cro has a real domain for other reasons.
 
+## `web_shell_screen_test.dart`'s "tapping a home bird in the dock opens the bird panel" fails on `main`
+
+Discovered 2026-09-14 while adding `web_pinned_screen_test.dart` for #205 and running the
+full `flutter test` suite as a baseline - confirmed pre-existing (still fails against
+unmodified `main`, unrelated to that change): `find.byType(BirdPanelContent)` finds 0 widgets
+after the tap, expected exactly 1. Likely regressed by #204's dock-tap zoom behavior (`Zoom
+map when a bird at its own nest is tapped in the dock`), which probably changed what a dock
+tap opens/selects for a bird at its own nest without updating this test. Needs investigation
+and a fix in its own right - out of scope here.
+
 ## `GET /search`'s places section depends on Nominatim's free public instance
 
 `NominatimGeocodingService` calls `nominatim.openstreetmap.org` directly - no API key, no

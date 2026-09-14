@@ -96,6 +96,13 @@ class _WebPinnedScreenState extends State<WebPinnedScreen> {
     });
   }
 
+  // Pinned cards embed BirdPayloadView's fixed-height image at full card width. Unlike
+  // WebHubsScreen/WebMapScreen's docked 392px-wide context panel (where that image already
+  // reads at a normal scale), this screen is a full main-content view, so without a cap the
+  // card - and its image - stretches edge-to-edge on a wide desktop window. Capped the same
+  // way WebProfileScreen caps its own full-width content (maxWidth: 720), for uniformity.
+  static const double _maxContentWidth = 720;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -104,15 +111,29 @@ class _WebPinnedScreenState extends State<WebPinnedScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(26, 74, 26, 0),
-          child: Row(
-            children: [
-              Expanded(child: _segmentButton('Yours', selected: !_showPublic, onTap: () => setState(() => _showPublic = false))),
-              const SizedBox(width: 10),
-              Expanded(child: _segmentButton('Public world feed', selected: _showPublic, onTap: () => setState(() => _showPublic = true))),
-            ],
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+              child: Row(
+                children: [
+                  Expanded(child: _segmentButton('Yours', selected: !_showPublic, onTap: () => setState(() => _showPublic = false))),
+                  const SizedBox(width: 10),
+                  Expanded(child: _segmentButton('Public world feed', selected: _showPublic, onTap: () => setState(() => _showPublic = true))),
+                ],
+              ),
+            ),
           ),
         ),
-        Expanded(child: _body()),
+        Expanded(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+              child: _body(),
+            ),
+          ),
+        ),
       ],
     );
   }
