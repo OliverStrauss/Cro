@@ -3,7 +3,7 @@
 Accepted shortcuts, things flagged but out of scope at the time, and other known gaps
 worth revisiting. See `CLAUDE.md` for the working conventions this file supports.
 
-## ~~CI `deploy` job silently skipped on every push since #179, because `build` kept 503ing against its own Cosmos emulator~~ (resolved 2026-09-14)
+## CI `deploy` job silently skipped on every push since #179, because `build` kept 503ing against its own Cosmos emulator (reopened 2026-09-14)
 
 Discovered 2026-09-14 while investigating a "Could not pin this bird" report: the pin feature
 (#179, merged 2026-09-14 01:14 UTC) had never actually reached prod. `cro-api`'s last real
@@ -40,6 +40,26 @@ entirely) became a proper `{"error":"..."}` JSON response.
 Worth a follow-up: nothing pages/notifies on a `push`-triggered workflow failing on `main` -
 the exact same blind spot the 2026-09-11 CD entry below already called out and never actually
 closed.
+
+**Reopened 2026-09-14, discovered while investigating a "shoo never works" report:** the dedup
+above cut concurrency but didn't fix the underlying 503 - `gh run list` shows `build` still
+failing identically (`Failed: 179, Passed: 0` in ~7s) on every push since, including the very
+run that merged the dedup fix itself (#193). The one-off `az webapp deploy` mentioned above only
+ever shipped the pin feature; every PR merged after it (#190, #192, #193, #199, #201, and #206's
+"shoo" feature) has been sitting on `main`, never deployed, for over a day - confirmed live via
+`curl POST /birds/{id}/shoo`, which came back an empty-body `404` (route missing) identical to a
+made-up path.
+
+Actual mechanism: `RunOnceAsync`'s `ConcurrentDictionary.GetOrAdd` caches whatever `Task` the
+first caller produces. Before the dedup, one transient 503 only failed the one host that hit it;
+after it, the *first* host to trigger provisioning caches a faulted `Task`, and all ~24 other
+hosts sharing that key immediately rethrow the same exception - turning an occasional blip into
+a guaranteed 100% failure. Fixed by wrapping the provisioning delegate in `RunWithRetryAsync`
+(`Program.cs`, `StartupProvisioning`) - up to 3 attempts with backoff, retrying only on
+`ServiceUnavailable` (503) from either the Cosmos or Blob SDK, safe because every provisioned
+resource is idempotent by design (already true of the original dedup fix). Verified locally:
+186/186 tests pass against the ARM64 emulator. Not yet verified against GitHub Actions' actual
+resource-constrained runner - watch the next `main` push's `build` job.
 
 ## Radio Log redesign (`redesign/radio-log-visual-overhaul`) has no visual comp and no browser QA pass
 
