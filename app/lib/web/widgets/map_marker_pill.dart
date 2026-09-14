@@ -17,6 +17,9 @@ class MapMarkerPill extends StatelessWidget {
   final double borderRadius;
   final bool compact;
   final VoidCallback onTap;
+  // Small bird glyph next to the name - only meaningful on another user's nest/hub, to flag
+  // "one of your birds is here" without needing to open the panel.
+  final bool hasYourBirds;
 
   const MapMarkerPill({
     super.key,
@@ -28,6 +31,7 @@ class MapMarkerPill extends StatelessWidget {
     required this.onTap,
     this.borderRadius = 30,
     this.compact = false,
+    this.hasYourBirds = false,
   });
 
   @override
@@ -57,11 +61,22 @@ class MapMarkerPill extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: CroTextStyles.label(size: compact ? 11.5 : 13, color: CroColors.ink),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: CroTextStyles.label(size: compact ? 11.5 : 13, color: CroColors.ink),
+                          ),
+                        ),
+                        if (hasYourBirds) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.flutter_dash, key: const Key('mapMarkerPillYourBirdIcon'), size: 12, color: CroColors.deliveryAmber),
+                        ],
+                      ],
                     ),
                     Text(
                       subtitle,
