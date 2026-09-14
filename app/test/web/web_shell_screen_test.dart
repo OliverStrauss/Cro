@@ -26,6 +26,9 @@ import 'package:cro_app/utils/color_utils.dart';
 import 'package:cro_app/web/models/event.dart';
 import 'package:cro_app/web/screens/web_shell_screen.dart';
 import 'package:cro_app/web/services/event_service.dart';
+import 'package:cro_app/web/widgets/bird_panel_content.dart';
+import 'package:cro_app/web/widgets/hub_panel_content.dart';
+import 'package:cro_app/web/widgets/nest_panel_content.dart';
 
 class _FakeWaypointService implements WaypointService {
   List<Waypoint> waypointsToReturn = [];
@@ -572,6 +575,75 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('webProfileScreen')), findsOneWidget);
+  });
+
+  testWidgets('tapping a home bird in the dock opens the bird panel', (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    birdService.birdsToReturn = [
+      Bird(id: 'b1', userId: 'u1', name: 'Otto', currentNestId: 'n1', isTraveling: false, type: 'Cro'),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('dockCard_b1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BirdPanelContent), findsOneWidget);
+    expect(find.byType(NestPanelContent), findsNothing);
+  });
+
+  testWidgets('tapping a bird away at a friend\'s nest opens that nest\'s panel, not the bird panel', (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    friendsService.friendWaypointsToReturn = [
+      Waypoint(
+        id: 'f1',
+        userId: 'u2',
+        name: "Mia's Cabin",
+        latitude: 43,
+        longitude: -92,
+        username: 'mia',
+        color: '#E53935',
+      ),
+    ];
+    birdService.birdsToReturn = [
+      Bird(id: 'b1', userId: 'u1', name: 'Percy', currentNestId: 'f1', isTraveling: false, type: 'Cro'),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('dockCard_b1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NestPanelContent), findsOneWidget);
+    expect(find.byType(BirdPanelContent), findsNothing);
+    expect(find.text("Mia's Cabin"), findsWidgets);
+  });
+
+  testWidgets('tapping a bird at a hub opens that hub\'s panel, not the bird panel', (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    hubService.hubsToReturn = [
+      Hub(id: 'h1', name: 'Lighthouse', latitude: 44, longitude: -91, status: 'Approved', createdByUserId: 'admin'),
+    ];
+    birdService.birdsToReturn = [
+      Bird(id: 'b1', userId: 'u1', name: 'Fen', currentNestId: 'h1', isTraveling: false, type: 'Cro'),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('dockCard_b1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HubPanelContent), findsOneWidget);
+    expect(find.byType(BirdPanelContent), findsNothing);
   });
 }
 

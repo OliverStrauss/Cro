@@ -44,7 +44,10 @@ class YourBirdsDock extends StatelessWidget {
   final bool hidden;
   final VoidCallback onHide;
   final VoidCallback onShow;
-  final ValueChanged<Bird> onBirdTap;
+  // Passes the resolved view (not just the raw Bird) so the caller can tell home from
+  // away/hub/flight without re-deriving DockBirdView.resolve itself - see WebShellScreen's
+  // dock-tap handler, which routes an away/hub bird to the nest/hub panel instead.
+  final ValueChanged<DockBirdView> onBirdTap;
 
   const YourBirdsDock({
     super.key,
@@ -200,7 +203,7 @@ class YourBirdsDock extends StatelessWidget {
                       width: 180,
                       child: DockBirdCard(
                         view: v,
-                        onTap: () => onBirdTap(v.bird),
+                        onTap: () => onBirdTap(v),
                         trailing: expanded
                             ? Text(
                                 '${v.bird.type} · ${BirdType.description(v.bird.type)}',

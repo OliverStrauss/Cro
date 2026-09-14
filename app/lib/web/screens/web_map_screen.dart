@@ -76,9 +76,14 @@ class WebMapScreen extends StatefulWidget {
   final bool addingHub;
   final ValueChanged<LatLng>? onPlaceHub;
   final VoidCallback? onCancelAddHub;
+  // Injectable so a test can read camera.center/zoom after a selection change - same
+  // nullable-and-defaulted-if-absent convention FlutterMap's own widget uses for the same
+  // reason. Null in real usage; WebMapScreen creates and owns its own otherwise.
+  final MapController? mapController;
 
   const WebMapScreen({
     super.key,
+    this.mapController,
     required this.ownNests,
     required this.friendWaypoints,
     required this.birds,
@@ -110,13 +115,20 @@ class WebMapScreen extends StatefulWidget {
   State<WebMapScreen> createState() => _WebMapScreenState();
 }
 
-class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderStateMixin {
+class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMixin {
   late final AnimationController _bobController;
+  late final MapController _mapController;
+  AnimationController? _cameraAnimationController;
+
+  // Close enough to read the target's own neighborhood, not just "somewhere on the map" -
+  // same fixed level a single-own-nest initial view already zooms to (see initialZoom below).
+  static const _focusZoom = 14.0;
 
   @override
   void initState() {
     super.initState();
     _bobController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+    _mapController = widget.mapController ?? MapController();
   }
 
   @override
@@ -129,6 +141,72 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
   void didUpdateWidget(covariant WebMapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     _syncBob();
+    _syncCameraFocus(oldWidget);
+  }
+
+  // Animates the camera onto whatever nest/hub/in-flight bird was newly selected - a freshly
+  // *changed* selection is the only trigger (not every rebuild), so re-tapping the same
+  // marker or an unrelated data poll never yanks the view out from under the user. Priority
+  // (hub, then nest, then bird) only matters when more than one id changes in the same
+  // update, which never happens in practice - each selection path clears the others.
+  void _syncCameraFocus(WebMapScreen oldWidget) {
+    LatLng? target;
+    if (widget.selectedHubId != null && widget.selectedHubId != oldWidget.selectedHubId) {
+      target = _hubLatLng(widget.selectedHubId!);
+    } else if (widget.selectedNestId != null && widget.selectedNestId != oldWidget.selectedNestId) {
+      target = _nestLatLng(widget.selectedNestId!);
+    } else if (widget.selectedBirdId != null && widget.selectedBirdId != oldWidget.selectedBirdId) {
+      // Null for a home bird (nothing to follow) or a friend/public bird (their tap path
+      // never routes through here) - _animateCameraTo is simply skipped in that case.
+      target = _ownBirdLatLng(widget.selectedBirdId!);
+    }
+    if (target != null) _animateCameraTo(target);
+  }
+
+  LatLng? _hubLatLng(String id) {
+    for (final h in widget.hubs) {
+      if (h.id == id) return LatLng(h.latitude, h.longitude);
+    }
+    return null;
+  }
+
+  LatLng? _nestLatLng(String id) {
+    for (final n in [...widget.ownNests, ...widget.friendWaypoints]) {
+      if (n.id == id) return LatLng(n.latitude, n.longitude);
+    }
+    return null;
+  }
+
+  // Live interpolated position of a still-traveling own bird - null for a home/away/hub
+  // bird (nothing to animate to; the panel switch alone is enough) or an unresolvable one.
+  LatLng? _ownBirdLatLng(String birdId) {
+    for (final bird in widget.birds) {
+      if (bird.id != birdId) continue;
+      if (!bird.isTraveling || bird.departedAt == null || bird.estimatedArrivalAt == null) return null;
+      final origin = _nestsById[bird.nestFromId];
+      final destination = _nestsById[bird.nestToId];
+      if (origin == null || destination == null) return null;
+      return interpolatedBirdPosition(
+        origin: origin,
+        destination: destination,
+        departedAt: bird.departedAt!,
+        estimatedArrivalAt: bird.estimatedArrivalAt!,
+        now: DateTime.now(),
+      );
+    }
+    return null;
+  }
+
+  void _animateCameraTo(LatLng target) {
+    _cameraAnimationController?.dispose();
+    final camera = _mapController.camera;
+    final latTween = LatLngTween(begin: camera.center, end: target);
+    final zoomTween = Tween<double>(begin: camera.zoom, end: _focusZoom);
+    final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    final curved = CurvedAnimation(parent: controller, curve: Curves.easeInOut);
+    controller.addListener(() => _mapController.move(latTween.evaluate(curved), zoomTween.evaluate(curved)));
+    _cameraAnimationController = controller;
+    controller.forward();
   }
 
   // Respects "reduce motion" (MediaQuery.disableAnimations) - the bob loop is decorative, not
@@ -147,18 +225,24 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _bobController.dispose();
+    _cameraAnimationController?.dispose();
+    if (widget.mapController == null) _mapController.dispose();
     super.dispose();
   }
 
   int _ownNestUnreadCount(Waypoint nest) =>
       (widget.nestResidentsByNestId[nest.id] ?? const []).where((b) => !b.isRead).length;
 
+  // Shared by _resolveFlights (drawing) and _ownBirdLatLng (camera focus) so a Hub's
+  // Waypoint projection is only ever built in one place.
+  Map<String, Waypoint> get _nestsById => {
+    for (final n in [...widget.ownNests, ...widget.friendWaypoints]) n.id: n,
+    for (final h in widget.hubs)
+      h.id: Waypoint(id: h.id, userId: h.createdByUserId, name: h.name, latitude: h.latitude, longitude: h.longitude),
+  };
+
   List<_MapFlight> _resolveFlights() {
-    final nestsById = <String, Waypoint>{
-      for (final n in [...widget.ownNests, ...widget.friendWaypoints]) n.id: n,
-      for (final h in widget.hubs)
-        h.id: Waypoint(id: h.id, userId: h.createdByUserId, name: h.name, latitude: h.latitude, longitude: h.longitude),
-    };
+    final nestsById = _nestsById;
 
     final result = <_MapFlight>[];
     for (final bird in widget.birds) {
@@ -199,13 +283,27 @@ class _WebMapScreenState extends State<WebMapScreen> with SingleTickerProviderSt
     final flights = _resolveFlights();
     final now = DateTime.now();
     final hasOwnNests = widget.ownNests.isNotEmpty;
+    // A selection made from elsewhere (e.g. the dock, or "Follow on map" on the Nests/Hubs
+    // screen) can mount a brand-new WebMapScreen instead of updating an existing one - that's
+    // an initState, not a didUpdateWidget, so _syncCameraFocus never runs for it. Starting the
+    // camera there directly covers that case; _syncCameraFocus's animation still covers a
+    // selection made while already on this screen.
+    final initialFocus = widget.selectedHubId != null
+        ? _hubLatLng(widget.selectedHubId!)
+        : widget.selectedNestId != null
+            ? _nestLatLng(widget.selectedNestId!)
+            : widget.selectedBirdId != null
+                ? _ownBirdLatLng(widget.selectedBirdId!)
+                : null;
 
     return Stack(
       children: [
         FlutterMap(
+          mapController: _mapController,
           options: MapOptions(
-            initialCenter: hasOwnNests ? LatLng(widget.ownNests.first.latitude, widget.ownNests.first.longitude) : _amesCenter,
-            initialZoom: hasOwnNests ? 13 : 12,
+            initialCenter: initialFocus ??
+                (hasOwnNests ? LatLng(widget.ownNests.first.latitude, widget.ownNests.first.longitude) : _amesCenter),
+            initialZoom: initialFocus != null ? _focusZoom : (hasOwnNests ? 13 : 12),
             minZoom: 3,
             cameraConstraint: const CameraConstraint.containLatitude(),
             interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),

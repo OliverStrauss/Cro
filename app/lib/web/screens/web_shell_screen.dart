@@ -20,6 +20,7 @@ import '../services/event_service.dart';
 import '../state/web_shell_controller.dart';
 import '../state/web_shell_data.dart';
 import '../widgets/context_panel.dart';
+import '../widgets/dock_bird_card.dart';
 import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
 import '../widgets/your_birds_dock.dart';
@@ -157,6 +158,49 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedFriendBird = null;
       _selectedPublicBird = null;
     });
+  }
+
+  // A dock tap for a bird that's home behaves as before (opens its own bird panel, map
+  // stays put). Away-at-a-friend's-nest or at-a-hub instead opens THAT nest's/hub's own
+  // panel (reusing the exact selection path the map's own markers already use) so the map
+  // pans/zooms there too (see WebMapScreen's didUpdateWidget). A still-in-flight bird keeps
+  // opening its own bird panel - there's no fixed nest/hub to show a panel for - but the map
+  // still follows its live position, since selectedBirdId reaches WebMapScreen either way.
+  void _onDockBirdTap(DockBirdView view) {
+    final hostId = view.bird.currentNestId;
+    if (hostId != null) {
+      if (view.state == BirdDockState.hub) {
+        final hub = _hubById(hostId);
+        if (hub != null) {
+          _selectHub(hub);
+          return;
+        }
+      } else if (view.state == BirdDockState.away) {
+        final nest = _waypointById(hostId);
+        if (nest != null) {
+          _selectNest(nest);
+          return;
+        }
+      }
+    }
+    _selectBird(view.bird);
+  }
+
+  Hub? _hubById(String id) {
+    for (final h in _data.hubs) {
+      if (h.id == id) return h;
+    }
+    return null;
+  }
+
+  Waypoint? _waypointById(String id) {
+    for (final n in _data.ownNests) {
+      if (n.id == id) return n;
+    }
+    for (final n in _data.friendWaypoints) {
+      if (n.id == id) return n;
+    }
+    return null;
   }
 
   void _selectFriendBird(FriendBird bird) {
@@ -423,7 +467,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                     hidden: _dockHidden,
                     onHide: () => setState(() => _dockHidden = true),
                     onShow: () => setState(() => _dockHidden = false),
-                    onBirdTap: _selectBird,
+                    onBirdTap: _onDockBirdTap,
                   ),
                 ),
               ],

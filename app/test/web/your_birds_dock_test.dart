@@ -29,7 +29,7 @@ void main() {
     bool hidden = false,
     VoidCallback? onHide,
     VoidCallback? onShow,
-    ValueChanged<Bird>? onBirdTap,
+    ValueChanged<DockBirdView>? onBirdTap,
   }) {
     return MaterialApp(
       theme: croTheme,
@@ -106,14 +106,15 @@ void main() {
     expect(find.byKey(const Key('dockCard_away1')), findsNothing);
   });
 
-  testWidgets('tapping a card invokes onBirdTap with that bird', (tester) async {
-    Bird? tapped;
+  testWidgets('tapping a card invokes onBirdTap with the resolved view for that bird', (tester) async {
+    DockBirdView? tapped;
     final bird = Bird(id: 'b1', userId: 'u1', name: 'Otto', currentNestId: 'n1', isTraveling: false, type: 'Cro');
-    await tester.pumpWidget(buildDock(birds: [bird], onBirdTap: (b) => tapped = b));
+    await tester.pumpWidget(buildDock(birds: [bird], onBirdTap: (v) => tapped = v));
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('dockCard_b1')));
-    expect(tapped?.id, 'b1');
+    expect(tapped?.bird.id, 'b1');
+    expect(tapped?.state, BirdDockState.home);
   });
 
   testWidgets('expanded mode adds the type/description line without crashing', (tester) async {
