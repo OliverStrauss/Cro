@@ -732,7 +732,7 @@ void main() {
     expect(find.byType(BirdPanelContent), findsNothing);
   });
 
-  testWidgets('tapping a home bird in the dock opens the bird panel', (tester) async {
+  testWidgets('tapping a home bird in the dock opens its own nest panel and zooms there', (tester) async {
     setDesktopSize(tester);
     waypointService.waypointsToReturn = [
       Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
@@ -746,8 +746,9 @@ void main() {
     await tester.tap(find.byKey(const Key('dockCard_b1')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(BirdPanelContent), findsOneWidget);
-    expect(find.byType(NestPanelContent), findsNothing);
+    expect(find.byType(NestPanelContent), findsOneWidget);
+    expect(find.byType(BirdPanelContent), findsNothing);
+    expect(find.text('Home Roost'), findsWidgets);
   });
 
   testWidgets('tapping a bird away at a friend\'s nest opens that nest\'s panel, not the bird panel', (tester) async {
