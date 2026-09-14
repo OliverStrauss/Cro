@@ -6,7 +6,7 @@ import '../services/profile_service.dart';
 import '../theme.dart';
 import 'bird_payload_view.dart';
 
-// Bottom sheet shown when tapping a bird someone else sent that's landed at the caller's
+// Centered dialog shown when tapping a bird someone else sent that's landed at the caller's
 // own nest - same chrome as BirdDetailsSheet, but for reading an arrived message instead of
 // tracking one still in flight: no ETA/progress, just who sent it and the payload itself
 // (text, image, and/or a voice clip, whichever the bird's type carries). Marks the bird read
@@ -62,24 +62,25 @@ class ReceivedBirdSheet extends StatefulWidget {
     required BirdService birdService,
     required PinService pinService,
   }) {
-    return showModalBottomSheet<void>(
+    return showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ReceivedBirdSheet(
-        birdId: birdId,
-        name: name,
-        type: type,
-        senderId: senderId,
-        content: content,
-        audioUrl: audioUrl,
-        imageUrl: imageUrl,
-        isRead: isRead,
-        isPublic: isPublic,
-        token: token,
-        profileService: profileService,
-        birdService: birdService,
-        pinService: pinService,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ReceivedBirdSheet(
+          birdId: birdId,
+          name: name,
+          type: type,
+          senderId: senderId,
+          content: content,
+          audioUrl: audioUrl,
+          imageUrl: imageUrl,
+          isRead: isRead,
+          isPublic: isPublic,
+          token: token,
+          profileService: profileService,
+          birdService: birdService,
+          pinService: pinService,
+        ),
       ),
     );
   }
@@ -139,13 +140,20 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
         });
         _toast('Unpinned');
       } else {
-        final pin = await widget.pinService.pinBird(widget.token, widget.birdId);
+        final pin = await widget.pinService.pinBird(
+          widget.token,
+          widget.birdId,
+        );
         if (!mounted) return;
         setState(() {
           _isPinned = true;
           _pinId = pin.id;
         });
-        _toast(widget.isPublic ? 'Pinned for everyone to see' : 'Pinned to your saved messages');
+        _toast(
+          widget.isPublic
+              ? 'Pinned for everyone to see'
+              : 'Pinned to your saved messages',
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -157,7 +165,10 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
 
   void _toast(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: isError ? Theme.of(context).colorScheme.error : null),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
     );
   }
 
@@ -165,90 +176,99 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
   Widget build(BuildContext context) {
     return Container(
       key: const Key('receivedBirdSheet'),
+      constraints: const BoxConstraints(maxWidth: 420),
       decoration: const BoxDecoration(
         color: CroColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.all(Radius.circular(24)),
         // rgba(43,47,51,0.18) per the sheet-shadow token.
-        boxShadow: [BoxShadow(color: Color(0x2E2B2F33), blurRadius: 30, offset: Offset(0, -10))],
-      ),
-      padding: const EdgeInsets.fromLTRB(22, 10, 22, 26),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  // rgba(43,47,51,0.15) drag-handle token.
-                  color: const Color(0x262B2F33),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.name,
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: CroColors.ink),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${widget.type} · From $_senderLabel',
-                          key: const Key('receivedBirdSender'),
-                          style: CroTextStyles.data(size: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Tooltip(
-                    message: _isPinned
-                        ? 'Unpin'
-                        : (widget.isPublic ? 'Pin publicly' : 'Pin for yourself'),
-                    child: IconButton(
-                      key: const Key('receivedBirdPinButton'),
-                      icon: Icon(
-                        _isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                        color: _isPinned ? Theme.of(context).colorScheme.primary : CroColors.fog,
-                      ),
-                      onPressed: _isTogglingPin ? null : _togglePin,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: BirdPayloadView(
-                  content: widget.content,
-                  audioUrl: widget.audioUrl,
-                  imageUrl: widget.imageUrl,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  key: const Key('receivedBirdCloseButton'),
-                  borderRadius: CroBorders.radiusSmall,
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: Text('Close', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
-                  ),
-                ),
-              ),
-            ],
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x2E2B2F33),
+            blurRadius: 30,
+            offset: Offset(0, 10),
           ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 26),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.name,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: CroColors.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${widget.type} · From $_senderLabel',
+                        key: const Key('receivedBirdSender'),
+                        style: CroTextStyles.data(size: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                Tooltip(
+                  message: _isPinned
+                      ? 'Unpin'
+                      : (widget.isPublic ? 'Pin publicly' : 'Pin for yourself'),
+                  child: IconButton(
+                    key: const Key('receivedBirdPinButton'),
+                    icon: Icon(
+                      _isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                      color: _isPinned
+                          ? Theme.of(context).colorScheme.primary
+                          : CroColors.fog,
+                    ),
+                    onPressed: _isTogglingPin ? null : _togglePin,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: BirdPayloadView(
+                content: widget.content,
+                audioUrl: widget.audioUrl,
+                imageUrl: widget.imageUrl,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                key: const Key('receivedBirdCloseButton'),
+                borderRadius: CroBorders.radiusSmall,
+                onTap: () => Navigator.of(context).pop(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    'Close',
+                    style: CroTextStyles.label(
+                      size: 12,
+                      color: CroColors.deepWaypoint,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
