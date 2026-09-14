@@ -32,8 +32,9 @@ class ContextPanel extends StatelessWidget {
   final Bird? selectedBird;
   final FriendBird? selectedFriendBird;
   final PublicBird? selectedPublicBird;
-  // The caller's own full bird list - only used by NestPanelContent, to find which of the
-  // caller's own birds are currently resting at a friend's nest (see its own doc comment).
+  // The caller's own full bird list - used by NestPanelContent and HubPanelContent to find
+  // which of the caller's own birds are currently resting at a friend's nest or a hub (see
+  // their own doc comments).
   final List<Bird> ownBirds;
   final List<Waypoint> ownNests;
   final List<Waypoint> friendWaypoints;
@@ -115,11 +116,13 @@ class ContextPanel extends StatelessWidget {
         PanelMode.hub when selectedHub != null => HubPanelContent(
           key: ValueKey('hub_${selectedHub!.id}'),
           hub: selectedHub!,
+          ownBirds: ownBirds,
           authState: authState,
           onClose: onClose,
           hubService: hubService,
           friendsService: friendsService,
           profileService: profileService,
+          onSelectBird: onSelectBird,
         ),
         PanelMode.bird when selectedBird != null => BirdPanelContent(
           key: ValueKey('bird_${selectedBird!.id}'),

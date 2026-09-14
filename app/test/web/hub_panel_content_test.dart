@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/friend.dart';
 import 'package:cro_app/models/friend_request.dart';
 import 'package:cro_app/models/hub.dart';
@@ -83,17 +84,19 @@ void main() {
     profileService = _FakeProfileService();
   });
 
-  Widget build(Hub hub) {
+  Widget build(Hub hub, {List<Bird> ownBirds = const [], ValueChanged<Bird>? onSelectBird}) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
         body: HubPanelContent(
           hub: hub,
+          ownBirds: ownBirds,
           authState: authState,
           onClose: () {},
           hubService: hubService,
           friendsService: friendsService,
           profileService: profileService,
+          onSelectBird: onSelectBird ?? (_) {},
         ),
       ),
     );
@@ -160,5 +163,43 @@ void main() {
 
     expect(find.text('Could not suggest a photo'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('a hub with none of the caller\'s birds there hides the "Your birds here" section', (tester) async {
+    await tester.pumpWidget(build(hub));
+    await tester.pump();
+
+    expect(find.text('Your birds here'), findsNothing);
+  });
+
+  testWidgets('a hub with one of the caller\'s own birds there lists it, reusing the resident row', (tester) async {
+    // Like a bird already dropped off at this hub - it's landed (not traveling), so it shows
+    // up in the caller's own full bird list with currentNestId pointing at the hub's id.
+    final myBirdHere = Bird(id: 'b1', userId: 'u1', name: 'Otto', currentNestId: 'h1', isTraveling: false, type: 'Cro');
+    // Still flying toward this hub, or resting somewhere else, shouldn't show.
+    final stillFlying = Bird(id: 'b2', userId: 'u1', name: 'Percy', isTraveling: true, nestFromId: 'n1', nestToId: 'h1', type: 'Sparrow');
+    final elsewhere = Bird(id: 'b3', userId: 'u1', name: 'Fen', currentNestId: 'n1', isTraveling: false, type: 'Cro');
+
+    await tester.pumpWidget(build(hub, ownBirds: [myBirdHere, stillFlying, elsewhere]));
+    await tester.pump();
+
+    expect(find.text('Your birds here'), findsOneWidget);
+    expect(find.byKey(const Key('hubPanelResident_b1')), findsOneWidget);
+    expect(find.text('Otto'), findsOneWidget);
+    expect(find.byKey(const Key('hubPanelResident_b2')), findsNothing);
+    expect(find.byKey(const Key('hubPanelResident_b3')), findsNothing);
+  });
+
+  testWidgets('tapping a resident bird opens its own detail panel instead of a send flow', (tester) async {
+    final myBirdHere = Bird(id: 'b1', userId: 'u1', name: 'Otto', currentNestId: 'h1', isTraveling: false, type: 'Cro');
+    Bird? selected;
+
+    await tester.pumpWidget(build(hub, ownBirds: [myBirdHere], onSelectBird: (bird) => selected = bird));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('hubPanelResident_b1')));
+    await tester.pump();
+
+    expect(selected?.id, 'b1');
   });
 }
