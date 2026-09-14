@@ -184,9 +184,15 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Provision the Users container on startup for local/emulator convenience only.
-// Production container creation is a deliberate one-time step, not something the API does on every boot.
-if (app.Environment.IsDevelopment())
+// Provision every Cosmos container and Blob container on every boot, in every environment -
+// not just Development. This used to be Development-only, on the theory that prod
+// provisioning was "a deliberate one-time step" run by hand via `az`; in practice that step
+// kept getting forgotten (see TECH_DEBT.md's now-resolved blob-CORS and Pins-container
+// entries - both were "works locally, 500s in prod" because nobody ran the matching `az`
+// command against cro-prod). CreateContainerIfNotExistsAsync/CreateIfNotExistsAsync are both
+// idempotent no-ops against something that already exists, so running this unconditionally
+// costs nothing once converged and means a brand-new container reaches prod automatically on
+// the next deploy instead of needing a manual, easy-to-forget infra step.
 {
     using var scope = app.Services.CreateScope();
     var client = scope.ServiceProvider.GetRequiredService<CosmosClient>();
@@ -243,53 +249,59 @@ if (app.Environment.IsDevelopment())
     // outlive the bird that carried it, same "deliberately permanent" choice as Events.
     await database.Database.CreateContainerIfNotExistsAsync(opts.PinsContainerName, "/receiverId");
 
-    if (opts.SeedFixedDevUsersOnStartup)
+    // Dev-only data seeding stays gated to Development - unlike the container creation above,
+    // this is destructive (wipes/reseeds Users) and must never run against a real deployment.
+    if (app.Environment.IsDevelopment())
     {
-        // Always-on-launch reset to the same fixed dev dataset Tools/SeedDevUsers seeds
-        // manually - wipes Users and reseeds Admin/Test1/Test2/Oliver/Annie (all friends,
-        // one Roost nest each, a few Cro's already in flight) every time the API starts.
-        await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.HubMessagesContainerName, opts.PinsContainerName);
-    }
-    else
-    {
-        // Dev-only seed users: "Oliver 1" (regular) and "Admin 1" (IsAdmin) so there's always a
-        // known admin account locally to place Hubs through the app's own "Add Hub" flow,
-        // without a standalone admin-promotion endpoint. Idempotent (checked by username first)
-        // so re-running the API against an already-seeded database doesn't error or duplicate.
-        // Same well-known-dev-credential category as the Cosmos/Azurite connection strings in
-        // CLAUDE.md - never meaningful outside a local emulator.
-        var userRepoForSeed = scope.ServiceProvider.GetRequiredService<CosmosUserRepository>();
-        var seedHasher = new PasswordHasher<User>();
-        async Task SeedDevUserAsync(string username, bool isAdmin)
+        if (opts.SeedFixedDevUsersOnStartup)
         {
-            if (await userRepoForSeed.GetByUsernameAsync(username) is not null)
-            {
-                return;
-            }
-            var seedUser = new User(
-                Guid.NewGuid().ToString(),
-                username,
-                $"{username.Replace(" ", "").ToLowerInvariant()}@example.com",
-                DateTimeOffset.UtcNow,
-                PasswordHash: "",
-                Friends: [],
-                IsAdmin: isAdmin);
-            seedUser = seedUser with { PasswordHash = seedHasher.HashPassword(seedUser, "correct-horse-battery-staple") };
-            await userRepoForSeed.CreateAsync(seedUser);
+            // Always-on-launch reset to the same fixed dev dataset Tools/SeedDevUsers seeds
+            // manually - wipes Users and reseeds Admin/Test1/Test2/Oliver/Annie (all friends,
+            // one Roost nest each, a few Cro's already in flight) every time the API starts.
+            await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.HubMessagesContainerName, opts.PinsContainerName);
         }
-        await SeedDevUserAsync("Oliver 1", isAdmin: false);
-        await SeedDevUserAsync("Admin 1", isAdmin: true);
+        else
+        {
+            // Dev-only seed users: "Oliver 1" (regular) and "Admin 1" (IsAdmin) so there's always a
+            // known admin account locally to place Hubs through the app's own "Add Hub" flow,
+            // without a standalone admin-promotion endpoint. Idempotent (checked by username first)
+            // so re-running the API against an already-seeded database doesn't error or duplicate.
+            // Same well-known-dev-credential category as the Cosmos/Azurite connection strings in
+            // CLAUDE.md - never meaningful outside a local emulator.
+            var userRepoForSeed = scope.ServiceProvider.GetRequiredService<CosmosUserRepository>();
+            var seedHasher = new PasswordHasher<User>();
+            async Task SeedDevUserAsync(string username, bool isAdmin)
+            {
+                if (await userRepoForSeed.GetByUsernameAsync(username) is not null)
+                {
+                    return;
+                }
+                var seedUser = new User(
+                    Guid.NewGuid().ToString(),
+                    username,
+                    $"{username.Replace(" ", "").ToLowerInvariant()}@example.com",
+                    DateTimeOffset.UtcNow,
+                    PasswordHash: "",
+                    Friends: [],
+                    IsAdmin: isAdmin);
+                seedUser = seedUser with { PasswordHash = seedHasher.HashPassword(seedUser, "correct-horse-battery-staple") };
+                await userRepoForSeed.CreateAsync(seedUser);
+            }
+            await SeedDevUserAsync("Oliver 1", isAdmin: false);
+            await SeedDevUserAsync("Admin 1", isAdmin: true);
+        }
     }
 
     var blobClient = scope.ServiceProvider.GetRequiredService<BlobServiceClient>();
     var blobOpts = scope.ServiceProvider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
     // PublicAccessType.Blob (public read for blobs, no container listing) keeps uploaded
-    // pictures fetchable via a plain URL without SAS tokens - fine for local/dev, but a
-    // real deployment needs real access control here before this container goes live.
+    // pictures fetchable via a plain URL without SAS tokens. Deliberately the same policy in
+    // every environment now - this is exactly what was already applied by hand against
+    // croappstorage/cro-prod (see TECH_DEBT.md), just no longer a step someone has to remember.
     await blobClient.GetBlobContainerClient(blobOpts.ProfilePicturesContainerName)
         .CreateIfNotExistsAsync(PublicAccessType.Blob);
-    // Same public-read, dev-only tradeoff as profile-pictures above - a nest's picture is
-    // shown to any friend who can already see that nest via /friends/waypoints.
+    // Same public-read tradeoff as profile-pictures above - a nest's picture is shown to
+    // any friend who can already see that nest via /friends/waypoints.
     await blobClient.GetBlobContainerClient(blobOpts.NestPicturesContainerName)
         .CreateIfNotExistsAsync(PublicAccessType.Blob);
     // Same tradeoff again - a Hub's picture, shared by both pending suggestions (previewed
@@ -308,9 +320,9 @@ if (app.Environment.IsDevelopment())
     // (DevCorsPolicy above only covers requests hitting this API, not the browser's
     // direct fetch to Azurite/Blob Storage for profile picture images) - the browser's
     // CORS-mode fetch for NetworkImage needs Access-Control-Allow-Origin on the blob
-    // response itself. Development-only, same pattern as DevCorsPolicy and the emulator
-    // TLS bypass - production needs its own real Azure Storage account CORS config,
-    // not yet relevant since there's no prod deployment.
+    // response itself. Applied in every environment now, same as the container creation
+    // above - this is the exact rule that was already applied by hand against the real
+    // croappstorage account (see TECH_DEBT.md).
     //
     // SetPropertiesAsync replaces the whole properties document, not just the fields you
     // set - sending a fresh BlobServiceProperties with everything else null/default gets

@@ -56,32 +56,24 @@ public class CorsTests : IClassFixture<WebApplicationFactory<Program>>
 
 public class ProdCorsTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    private const string DefaultEmulatorConnectionString =
-        "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-
     private const string AllowedOrigin = "https://cro-app.example.com";
 
     private readonly HttpClient _client;
 
     public ProdCorsTests(WebApplicationFactory<Program> factory)
     {
-        var connectionString = Environment.GetEnvironmentVariable("CosmosDb__ConnectionString")
-            ?? DefaultEmulatorConnectionString;
-
         var configuredFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Production");
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["CosmosDb:ConnectionString"] = connectionString,
-                    ["CosmosDb:DatabaseName"] = "CroApp",
-                    ["Jwt:SigningKey"] = UsersEndpointTests.TestJwtSigningKey,
-                    ["Jwt:Issuer"] = "CroApp.Api.Tests",
-                    ["Jwt:Audience"] = "CroApp.Api.Tests",
-                    ["Cors:AllowedOrigin"] = AllowedOrigin
-                });
+                // Program.cs's container-provisioning startup block now runs in every
+                // environment (see TECH_DEBT.md), not just Development, so this fixture needs
+                // the full CosmosDb/BlobStorage key set - same as every other fixture uses via
+                // TestConfig.Build() - not just the Cors/Jwt keys this test itself exercises.
+                var testConfig = TestConfig.Build();
+                testConfig["Cors:AllowedOrigin"] = AllowedOrigin;
+                config.AddInMemoryCollection(testConfig);
             });
         });
 
