@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/pinned_bird.dart';
 import 'package:cro_app/models/user_profile.dart';
 import 'package:cro_app/services/bird_service.dart';
@@ -12,6 +13,17 @@ import 'package:cro_app/widgets/received_bird_sheet.dart';
 // by ReceivedBirdSheet itself (see its _markRead), so falling through to noSuchMethod's
 // throw is harmless here and simpler than faking a full Bird return value.
 class _FakeBirdService implements BirdService {
+  String? lastShooedBirdId;
+  // Set to make shooBird throw instead, to exercise the error-toast path.
+  Object? shooError;
+
+  @override
+  Future<Bird> shooBird(String token, String birdId) async {
+    if (shooError != null) throw shooError!;
+    lastShooedBirdId = birdId;
+    return Bird(id: birdId, userId: 'sender1', name: 'Otto', isTraveling: true, type: 'Cro');
+  }
+
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName} is not used here');
@@ -58,7 +70,12 @@ class _FakePinService implements PinService {
 }
 
 void main() {
-  Future<void> pump(WidgetTester tester, {required bool isPublic, PinService? pinService}) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    required bool isPublic,
+    PinService? pinService,
+    BirdService? birdService,
+  }) async {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -74,7 +91,7 @@ void main() {
               isPublic: isPublic,
               token: 'tok',
               profileService: _FakeProfileService(),
-              birdService: _FakeBirdService(),
+              birdService: birdService ?? _FakeBirdService(),
               pinService: pinService ?? _FakePinService(),
             ),
             child: const Text('open'),
@@ -139,5 +156,27 @@ void main() {
     final button = tester.widget<IconButton>(find.byKey(const Key('receivedBirdPinButton')));
     expect(button.onPressed, isNull);
     expect(pinService.lastPinnedBirdId, isNull);
+  });
+
+  testWidgets('shooing a delivered bird sends it home and closes the sheet', (tester) async {
+    final birdService = _FakeBirdService();
+    await pump(tester, isPublic: false, birdService: birdService);
+
+    await tester.tap(find.byKey(const Key('receivedBirdShooButton')));
+    await tester.pumpAndSettle();
+
+    expect(birdService.lastShooedBirdId, 'b1');
+    expect(find.byKey(const Key('receivedBirdSheet')), findsNothing);
+  });
+
+  testWidgets('a failed shoo shows the error and leaves the sheet open', (tester) async {
+    final birdService = _FakeBirdService()..shooError = Exception('This bird has no home nest to return to.');
+    await pump(tester, isPublic: false, birdService: birdService);
+
+    await tester.tap(find.byKey(const Key('receivedBirdShooButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('no home nest'), findsOneWidget);
+    expect(find.byKey(const Key('receivedBirdSheet')), findsOneWidget);
   });
 }

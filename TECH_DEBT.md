@@ -308,3 +308,19 @@ outage there degrades to an empty Places section rather than failing the whole s
 enough to risk that rate cap, this needs either a self-hosted Nominatim instance or a move to
 a paid geocoder (Mapbox was the runner-up when this was scoped, for its generous free tier and
 much better address/POI coverage than Nominatim's OSM-derived data).
+
+## `CLAUDE.md` describes a 5-waypoints-per-user model that `WaypointService` doesn't implement
+
+Discovered 2026-09-14 while building the "shoo a bird home" feature (#204): `CLAUDE.md`'s
+"Stale Waypoints container" gotcha says "a user can have up to 5 waypoints now (the owning
+user's id is the partition key instead of the waypoint's own id)" - but
+`WaypointService.CreateAsync` still hard-caps every user at exactly one nest (`if (existing.Count
+> 0) throw new ServiceException(409, ...)`), and nothing else in `/api` reads or enforces a
+5-waypoint limit anywhere. The partition-key-is-`/userId` part of that note is still accurate
+(and is genuinely why `ShooAsync`'s "home nest" lookup here could safely assume `FirstOrDefault`
+over `ListByUserIdAsync` finds at most one match), but the "up to 5" cap itself was either never
+implemented or was reverted without the doc being updated. Left as-is rather than fixed silently
+here since it's unclear which one is the intended design - either `WaypointService` needs a real
+multi-nest cap (and every "the user's one nest" assumption sprinkled across `BirdService`/
+`PinService`/`DeleteAsync` needs revisiting), or `CLAUDE.md` just needs its stale "up to 5"
+phrase corrected to "one."

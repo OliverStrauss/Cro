@@ -44,6 +44,7 @@ public static class EventKind
     public const string FriendRequestAccepted = "FriendRequestAccepted";
     public const string FriendRequestReceived = "FriendRequestReceived";
     public const string BirdPinned = "BirdPinned";
+    public const string BirdShooed = "BirdShooed";
 }
 
 public static class EventTargetType

@@ -250,6 +250,7 @@ class _PopupSurface extends StatelessWidget {
   EventKind.friendRequestAccepted => (Icons.person, CroColors.deliveryAmber),
   EventKind.friendRequestReceived => (Icons.person_add, CroColors.deliveryAmber),
   EventKind.birdPinned => (Icons.push_pin, CroColors.deliveryAmber),
+  EventKind.birdShooed => (Icons.back_hand, CroColors.deliveryAmber),
   _ => (Icons.notifications, CroColors.fog),
 };
 

@@ -84,6 +84,21 @@ public class EventService(
             sourceUserId: pin.ReceiverId);
     }, nameof(RecordBirdPinnedAsync), pin.Id);
 
+    // shooedBird is already updated to its post-shoo traveling state (NestFromName is wherever
+    // it just got shooed from) - same "read the already-saved record" shape RecordBirdPinnedAsync
+    // uses, not the pre-shoo Bird BirdService.ShooAsync started from.
+    public Task RecordBirdShooedAsync(Bird shooedBird, string shooerUserId, string shooerUsername) => RecordBestEffortAsync(async () =>
+    {
+        await CreateAsync(
+            shooedBird.UserId,
+            EventKind.BirdShooed,
+            $"{shooerUsername} shooed {shooedBird.Name} back to you from {shooedBird.NestFromName ?? "their nest"}",
+            isNotification: true,
+            targetType: EventTargetType.Bird,
+            targetId: shooedBird.Id,
+            sourceUserId: shooerUserId);
+    }, nameof(RecordBirdShooedAsync), shooedBird.Id);
+
     public Task RecordBirdJoinedFlockAsync(Bird newBird) => RecordBestEffortAsync(async () =>
     {
         await CreateAsync(
