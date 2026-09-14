@@ -217,12 +217,11 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectSearchNest(Waypoint nest) => _selectNest(_waypointById(nest.id) ?? nest);
 
-  // A tap for a bird that's home behaves as before (opens its own bird panel, map stays
-  // put). Away-at-a-friend's-nest or at-a-hub instead opens THAT nest's/hub's own panel
-  // (reusing the exact selection path the map's own markers already use) so the map
-  // pans/zooms there too (see WebMapScreen's didUpdateWidget). A still-in-flight bird keeps
-  // opening its own bird panel - there's no fixed nest/hub to show a panel for - but the map
-  // still follows its live position, since selectedBirdId reaches WebMapScreen either way.
+  // A bird at rest - home or away, nest or hub - opens THAT host's own panel (reusing the
+  // exact selection path the map's own markers already use) so the map pans/zooms there too
+  // (see WebMapScreen's didUpdateWidget). A still-in-flight bird keeps opening its own bird
+  // panel - there's no fixed nest/hub to show a panel for - but the map still follows its
+  // live position, since selectedBirdId reaches WebMapScreen either way.
   // Shared by the dock tap and an "arrived" notification tap, so both land on the same spot.
   void _onDockBirdTap(DockBirdView view) => _openBirdOrHost(view.bird);
 
@@ -235,7 +234,7 @@ class WebShellScreenState extends State<WebShellScreen> {
         return;
       }
       final nest = _waypointById(hostId);
-      if (nest != null && !_data.ownNests.any((n) => n.id == nest.id)) {
+      if (nest != null) {
         _selectNest(nest);
         return;
       }
