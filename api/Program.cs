@@ -2048,7 +2048,37 @@ internal static class StartupProvisioning
 {
     private static readonly ConcurrentDictionary<string, Task> Runs = new();
 
-    public static Task RunOnceAsync(string key, Func<Task> provision) => Runs.GetOrAdd(key, _ => provision());
+    public static Task RunOnceAsync(string key, Func<Task> provision) => Runs.GetOrAdd(key, _ => RunWithRetryAsync(provision));
+
+    // Even sequential (post-dedup), the CI Cosmos emulator still occasionally 503s
+    // ("high demand") on a container-create call under GitHub Actions' constrained CPU -
+    // see TECH_DEBT.md. Every call in the provisioning block is idempotent by design, so
+    // retrying the whole thing is safe. This matters more now than before the dedup: since
+    // GetOrAdd caches whatever Task the first caller produces, one transient 503 used to fail
+    // only that one host - now it fails every one of the ~25 hosts sharing this key.
+    private static async Task RunWithRetryAsync(Func<Task> provision)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await provision();
+                return;
+            }
+            catch (Exception ex) when (attempt < maxAttempts && IsTransientServiceUnavailable(ex))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
+            }
+        }
+    }
+
+    private static bool IsTransientServiceUnavailable(Exception ex) => ex switch
+    {
+        CosmosException cosmosEx => cosmosEx.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable,
+        Azure.RequestFailedException blobEx => blobEx.Status == (int)System.Net.HttpStatusCode.ServiceUnavailable,
+        _ => false,
+    };
 }
 
 public partial class Program { }
