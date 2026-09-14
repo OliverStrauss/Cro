@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/friend.dart';
@@ -59,6 +60,7 @@ void main() {
     String? selectedHubId,
     ValueChanged<Hub>? onSelectHub,
     MapController? mapController,
+    int focusRequest = 0,
   }) {
     return MaterialApp(
       theme: croTheme,
@@ -86,6 +88,7 @@ void main() {
           isAdmin: isAdmin,
           addingHub: addingHub,
           onCancelAddHub: onCancelAddHub,
+          focusRequest: focusRequest,
         ),
       ),
     );
@@ -406,6 +409,39 @@ void main() {
 
       expect(controller.camera.center.latitude, closeTo(before.latitude, 1e-9));
       expect(controller.camera.center.longitude, closeTo(before.longitude, 1e-9));
+    });
+
+    testWidgets('bumping focusRequest re-centers on an already-selected nest', (tester) async {
+      final controller = MapController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(buildMap(mapController: controller, selectedNestId: friendNest.id));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      // Simulate the user having panned away from the already-selected nest.
+      controller.move(const LatLng(10, 10), 5);
+      expect(controller.camera.center.latitude, closeTo(10, 0.001));
+
+      // Same selectedNestId as before - only focusRequest changed (e.g. Follow on map, or
+      // the nest locator button tapped again) - the camera should still re-center.
+      await tester.pumpWidget(buildMap(mapController: controller, selectedNestId: friendNest.id, focusRequest: 1));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(controller.camera.center.latitude, closeTo(friendNest.latitude, 0.001));
+      expect(controller.camera.center.longitude, closeTo(friendNest.longitude, 0.001));
+      expect(controller.camera.zoom, 14);
+    });
+
+    testWidgets('an unrelated rebuild with the same focusRequest does not move the camera', (tester) async {
+      final controller = MapController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(buildMap(mapController: controller, selectedNestId: friendNest.id, focusRequest: 1));
+      await tester.pump(const Duration(milliseconds: 600));
+      controller.move(const LatLng(10, 10), 5);
+
+      await tester.pumpWidget(buildMap(mapController: controller, selectedNestId: friendNest.id, focusRequest: 1));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(controller.camera.center.latitude, closeTo(10, 0.001));
     });
   });
 }

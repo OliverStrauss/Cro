@@ -326,6 +326,78 @@ void main() {
     expect(find.byKey(const Key('webContextPanel')), findsNothing);
   });
 
+  testWidgets('nest locator button is hidden until the user has an own nest', (tester) async {
+    setDesktopSize(tester);
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webNestLocatorButton')), findsNothing);
+  });
+
+  testWidgets('tapping the nest locator button jumps to the map and opens the own nest panel', (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('webNavNests')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webNestsScreen')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webNestLocatorButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webNavMap')), findsOneWidget);
+    expect(find.byKey(const Key('webContextPanel')), findsOneWidget);
+    expect(find.text('Your nest'), findsOneWidget);
+  });
+
+  testWidgets('follow on map on an open bird panel re-centers without leaving the map', (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    friendsService.friendWaypointsToReturn = [
+      Waypoint(id: 'f1', userId: 'u2', name: "Mia's Cabin", latitude: 43, longitude: -92, username: 'mia', color: '#E53935'),
+    ];
+    birdService.birdsToReturn = [
+      Bird(
+        id: 'b1',
+        userId: 'u1',
+        name: 'Otto',
+        isTraveling: true,
+        nestFromId: 'n1',
+        nestToId: 'f1',
+        type: 'Cro',
+        departedAt: DateTime.now().subtract(const Duration(minutes: 1)),
+        estimatedArrivalAt: DateTime.now().add(const Duration(minutes: 1)),
+      ),
+    ];
+    // Not pumpAndSettle: a traveling bird starts the map's repeating bob animation, which
+    // never "settles" - bounded pumps instead, same convention used above for a friend's
+    // public bird marker.
+    await tester.pumpWidget(buildShell());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.byKey(const Key('dockCard_b1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(BirdPanelContent), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('birdPanelFollowOnMap')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    // Still on the map, panel still open - the fix is that this button now re-centers the
+    // camera (see web_map_screen_test.dart's focusRequest coverage) rather than the old
+    // dead tab-switch, not that it navigates anywhere.
+    expect(find.byKey(const Key('webNavMap')), findsOneWidget);
+    expect(find.byType(BirdPanelContent), findsOneWidget);
+  });
+
   testWidgets('tapping an unread Hub marker opens its panel and marks it read', (tester) async {
     setDesktopSize(tester);
     hubService.hubsToReturn = [

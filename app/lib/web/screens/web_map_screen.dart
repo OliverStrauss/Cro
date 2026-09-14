@@ -84,6 +84,12 @@ class WebMapScreen extends StatefulWidget {
   // nullable-and-defaulted-if-absent convention FlutterMap's own widget uses for the same
   // reason. Null in real usage; WebMapScreen creates and owns its own otherwise.
   final MapController? mapController;
+  // Bumped by WebShellScreen to force a re-center on whichever hub/nest/bird is currently
+  // selected, even when that id hasn't changed - _syncCameraFocus below otherwise only
+  // triggers on an id change, which is a no-op for "re-center on what's already selected"
+  // (e.g. the nest locator button, or a Follow on map button tapped after the user panned
+  // away from an already-open panel's target).
+  final int focusRequest;
 
   const WebMapScreen({
     super.key,
@@ -114,6 +120,7 @@ class WebMapScreen extends StatefulWidget {
     required this.onSelectBird,
     required this.onSelectFriendBird,
     this.onSelectPublicBird,
+    this.focusRequest = 0,
   });
 
   @override
@@ -154,13 +161,17 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
   // marker or an unrelated data poll never yanks the view out from under the user. Priority
   // (hub, then nest, then bird) only matters when more than one id changes in the same
   // update, which never happens in practice - each selection path clears the others.
+  // A bumped focusRequest overrides the "changed" requirement for whichever target is
+  // currently selected, so an explicit re-center request (nest locator, Follow on map)
+  // still works when the id was already selected.
   void _syncCameraFocus(WebMapScreen oldWidget) {
+    final forced = widget.focusRequest != oldWidget.focusRequest;
     LatLng? target;
-    if (widget.selectedHubId != null && widget.selectedHubId != oldWidget.selectedHubId) {
+    if (widget.selectedHubId != null && (forced || widget.selectedHubId != oldWidget.selectedHubId)) {
       target = _hubLatLng(widget.selectedHubId!);
-    } else if (widget.selectedNestId != null && widget.selectedNestId != oldWidget.selectedNestId) {
+    } else if (widget.selectedNestId != null && (forced || widget.selectedNestId != oldWidget.selectedNestId)) {
       target = _nestLatLng(widget.selectedNestId!);
-    } else if (widget.selectedBirdId != null && widget.selectedBirdId != oldWidget.selectedBirdId) {
+    } else if (widget.selectedBirdId != null && (forced || widget.selectedBirdId != oldWidget.selectedBirdId)) {
       // Null for a home bird (nothing to follow) or a friend/public bird (their tap path
       // never routes through here) - _animateCameraTo is simply skipped in that case.
       target = _ownBirdLatLng(widget.selectedBirdId!);
