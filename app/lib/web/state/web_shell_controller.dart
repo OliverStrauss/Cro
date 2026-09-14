@@ -2,7 +2,7 @@ import '../../models/bird.dart';
 import '../../models/friend_request.dart';
 
 /// Which top-level screen the icon rail has selected.
-enum WebNavItem { map, nests, hubs, profile }
+enum WebNavItem { map, nests, hubs, pinned, profile }
 
 /// What the right-hand context panel is currently showing. The panel itself is only mounted
 /// when one of these is selected - there is no "nothing selected" member here. `friendBird`

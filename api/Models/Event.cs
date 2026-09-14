@@ -43,6 +43,7 @@ public static class EventKind
     public const string FriendAdded = "FriendAdded";
     public const string FriendRequestAccepted = "FriendRequestAccepted";
     public const string FriendRequestReceived = "FriendRequestReceived";
+    public const string BirdPinned = "BirdPinned";
 }
 
 public static class EventTargetType
@@ -50,4 +51,5 @@ public static class EventTargetType
     public const string Bird = "Bird";
     public const string Nest = "Nest";
     public const string Hub = "Hub";
+    public const string Pin = "Pin";
 }

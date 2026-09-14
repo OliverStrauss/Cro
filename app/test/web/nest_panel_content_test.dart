@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/models/waypoint.dart';
 import 'package:cro_app/services/bird_service.dart';
+import 'package:cro_app/services/pin_service.dart';
 import 'package:cro_app/services/profile_service.dart';
 import 'package:cro_app/services/waypoint_service.dart';
 import 'package:cro_app/state/auth_state.dart';
@@ -37,6 +38,12 @@ class _FakeProfileService implements ProfileService {
       throw UnimplementedError('${invocation.memberName} is not used here');
 }
 
+class _FakePinService implements PinService {
+  @override
+  Future<dynamic> noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used here');
+}
+
 void main() {
   // A syntactically valid (unsigned) JWT with a fixed subject - NestPanelContent decodes
   // this client-side to split "delivered to you" from "birds here" on an own-nest render.
@@ -61,6 +68,7 @@ void main() {
           waypointService: waypointService ?? _FakeWaypointService(),
           birdService: birdService ?? _FakeBirdService(),
           profileService: _FakeProfileService(),
+          pinService: _FakePinService(),
           onChanged: () {},
           onSelectBird: onSelectBird ?? (_) {},
         ),

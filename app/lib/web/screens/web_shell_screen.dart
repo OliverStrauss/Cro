@@ -10,6 +10,7 @@ import '../../services/bird_reaction_service.dart';
 import '../../services/bird_service.dart';
 import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
+import '../../services/pin_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
@@ -26,6 +27,7 @@ import '../widgets/your_birds_dock.dart';
 import 'web_hubs_screen.dart';
 import 'web_map_screen.dart';
 import 'web_nests_screen.dart';
+import 'web_pinned_screen.dart';
 import 'web_profile_screen.dart';
 
 /// Top-level widget for the app's single UI (rail + content + floating actions cluster +
@@ -45,6 +47,7 @@ class WebShellScreen extends StatefulWidget {
   final ProfileService? profileService;
   final EventService? eventService;
   final BirdReactionService? reactionService;
+  final PinService? pinService;
 
   const WebShellScreen({
     super.key,
@@ -56,6 +59,7 @@ class WebShellScreen extends StatefulWidget {
     this.profileService,
     this.eventService,
     this.reactionService,
+    this.pinService,
   });
 
   @override
@@ -72,6 +76,7 @@ class WebShellScreenState extends State<WebShellScreen> {
     profileService: widget.profileService,
     eventService: widget.eventService,
     reactionService: widget.reactionService,
+    pinService: widget.pinService,
   );
 
   WebNavItem _selectedNav = WebNavItem.map;
@@ -400,6 +405,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                         hubService: _data.hubService,
                         profileService: _data.profileService,
                         reactionService: _data.reactionService,
+                        pinService: _data.pinService,
                         onDataChanged: _data.load,
                         onFollowOnMap: () => _selectNav(WebNavItem.map),
                         onSelectBird: _selectBird,
@@ -487,6 +493,12 @@ class WebShellScreenState extends State<WebShellScreen> {
           profileService: _data.profileService,
           onDataChanged: _data.load,
           onStartAddHub: _startAddHub,
+        );
+      case WebNavItem.pinned:
+        return WebPinnedScreen(
+          authState: widget.authState,
+          pinService: _data.pinService,
+          friendsService: _data.friendsService,
         );
       case WebNavItem.profile:
         return WebProfileScreen(

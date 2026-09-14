@@ -55,6 +55,7 @@ class EventKind {
   static const friendAdded = 'FriendAdded';
   static const friendRequestAccepted = 'FriendRequestAccepted';
   static const friendRequestReceived = 'FriendRequestReceived';
+  static const birdPinned = 'BirdPinned';
 }
 
 // Matches api/Models/Event.cs's EventTargetType constants.
@@ -62,4 +63,5 @@ class EventTargetType {
   static const bird = 'Bird';
   static const nest = 'Nest';
   static const hub = 'Hub';
+  static const pin = 'Pin';
 }

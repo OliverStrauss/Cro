@@ -16,23 +16,26 @@ namespace CroApp.Api;
 // between them for demo variety. Users is
 // wiped and replaced; Waypoints and Birds only ever get new rows added, never wiped (so
 // locally-placed Hubs and any manually-sent birds survive a re-run) - Hubs themselves and
-// Reactions are left exactly as they are. HubMessages IS wiped, unlike those: it's the one
-// other container that stores a snapshotted Users reference (SenderId) rather than owning
-// its own identity, so leaving old rows in place after a Users wipe wouldn't just be inert
-// leftover data - the web UI's Hub message board reads that stale SenderId to decide
-// whether to show an "Add friend" button, and a since-deleted sender's id can no longer
-// match anyone in the new users' friend lists, wrongly showing that button for someone
-// who's actually already a friend under their new id.
+// Reactions are left exactly as they are. HubMessages and Pins ARE wiped, unlike those:
+// they're the containers that store a snapshotted Users reference (SenderId, and for Pins
+// also ReceiverId as its own partition key) rather than owning their own identity, so leaving
+// old rows in place after a Users wipe wouldn't just be inert leftover data - the web UI's
+// Hub message board reads a stale SenderId to decide whether to show an "Add friend" button,
+// and a since-deleted sender's id can no longer match anyone in the new users' friend lists,
+// wrongly showing that button for someone who's actually already a friend under their new id.
+// Pins have the same problem for both ends (a since-deleted ReceiverId partition can't even
+// be queried back by its new owner).
 public static class DevDataSeeder
 {
     private const string Password = "1";
 
-    public static async Task SeedFixedDevUsersAsync(Database database, string usersContainerName, string waypointsContainerName, string birdsContainerName, string hubMessagesContainerName)
+    public static async Task SeedFixedDevUsersAsync(Database database, string usersContainerName, string waypointsContainerName, string birdsContainerName, string hubMessagesContainerName, string pinsContainerName)
     {
         var usersContainer = database.GetContainer(usersContainerName);
         var waypointsContainer = database.GetContainer(waypointsContainerName);
         var birdsContainer = database.GetContainer(birdsContainerName);
         var hubMessagesContainer = database.GetContainer(hubMessagesContainerName);
+        var pinsContainer = database.GetContainer(pinsContainerName);
 
         Console.WriteLine("Wiping existing Users (Hubs, Waypoints, Birds, and Reactions are untouched)...");
         var existingIds = new List<string>();
@@ -69,6 +72,24 @@ public static class DevDataSeeder
             await hubMessagesContainer.DeleteItemAsync<HubMessage>(id, new PartitionKey(hubId));
         }
         Console.WriteLine($"Cleared {hubMessageIds.Count} Hub message board row(s) (stale sender references after the Users wipe above).");
+
+        // Same reasoning as HubMessages above, but Pins is partitioned by ReceiverId, so every
+        // row's own partition key is a now-deleted user - a plain SELECT again has no single
+        // partition key to scope to.
+        var pinIds = new List<(string Id, string ReceiverId)>();
+        var pinQuery = pinsContainer.GetItemQueryIterator<PinnedBird>(new QueryDefinition("SELECT * FROM c"));
+        while (pinQuery.HasMoreResults)
+        {
+            foreach (var existing in await pinQuery.ReadNextAsync())
+            {
+                pinIds.Add((existing.Id, existing.ReceiverId));
+            }
+        }
+        foreach (var (id, receiverId) in pinIds)
+        {
+            await pinsContainer.DeleteItemAsync<PinnedBird>(id, new PartitionKey(receiverId));
+        }
+        Console.WriteLine($"Cleared {pinIds.Count} pinned message(s) (stale sender/receiver references after the Users wipe above).");
 
         string[] usernames = ["Admin", "Test1", "Test2", "Oliver", "Annie"];
         var hasher = new PasswordHasher<User>();

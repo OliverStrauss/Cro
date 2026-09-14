@@ -5,10 +5,11 @@ import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/cro_logo_mark.dart';
 import '../state/web_shell_controller.dart';
 
-/// The 76px icon rail: logo, Map/Nests/Hubs/Profile nav (no Birds item - the dock
-/// replaces it; Friends is merged into Profile, which carries its incoming-invite badge),
-/// avatar pinned at the bottom. Deliberately has no "Send a bird"/notification affordance of
-/// its own - those live in TopBar.
+/// The 76px icon rail: logo, Map/Nests/Hubs/Pinned/Profile nav (no Birds item - the dock
+/// replaces it; Friends is merged into Profile, which carries its incoming-invite badge).
+/// Pinned gets its own item rather than folding into Profile, same "first-class persistent
+/// board" reasoning Hubs already gets one for. Avatar pinned at the bottom. Deliberately has
+/// no "Send a bird"/notification affordance of its own - those live in TopBar.
 class IconRail extends StatelessWidget {
   final WebNavItem selected;
   final ValueChanged<WebNavItem> onSelect;
@@ -60,6 +61,13 @@ class IconRail extends StatelessWidget {
             label: 'Hubs',
             selected: selected == WebNavItem.hubs,
             onTap: () => onSelect(WebNavItem.hubs),
+          ),
+          _RailItem(
+            key: const Key('webNavPinned'),
+            icon: Icons.push_pin_rounded,
+            label: 'Pinned',
+            selected: selected == WebNavItem.pinned,
+            onTap: () => onSelect(WebNavItem.pinned),
           ),
           _RailItem(
             key: const Key('webNavProfile'),
