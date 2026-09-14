@@ -167,20 +167,36 @@ history. Fine at launch scale; will need either a TTL (losing the "permanent rec
 noted in `Program.cs`'s Events container comment) or real server-side pagination once
 long-lived accounts accumulate enough history for this to matter.
 
-## Blob container public-access + CORS is a manual prod step, not automated anywhere
+## ~~Blob container public-access + CORS is a manual prod step, not automated anywhere~~ (resolved 2026-09-14)
 
 `Program.cs`'s startup block that sets every picture container to `PublicAccessType.Blob`
-and adds a permissive Blob CORS rule only runs `if (app.Environment.IsDevelopment())` (by
-design - see CLAUDE.md's "Production container creation is a deliberate one-time step").
-Going live on `croappstorage`/`cro-prod` (#149's CD pipeline) hit this directly: no one ran
-the prod-equivalent step, so every picture container was private with no CORS, and every
-picture screen (profile, birds, nests, hubs) failed to load images in production. Fixed
-manually via `az storage container set-permission`/`az storage cors add` on 2026-09-10 (see
-CLAUDE.md). Unlike Cosmos containers, there's no `Tools/` equivalent (like `SeedDevUsers`)
-that runs this against a real account non-interactively - worth adding a small one-time
-provisioning script (or an `az cli` step in the CD workflow, gated to run once / made
-idempotent) so a future storage-account recreation doesn't silently reintroduce the same
-outage.
+and adds a permissive Blob CORS rule only ran `if (app.Environment.IsDevelopment())`. Going
+live on `croappstorage`/`cro-prod` (#149's CD pipeline) hit this directly: no one ran the
+prod-equivalent step, so every picture container was private with no CORS, and every picture
+screen (profile, birds, nests, hubs) failed to load images in production. Fixed manually via
+`az storage container set-permission`/`az storage cors add` on 2026-09-10 (see CLAUDE.md) as
+a stopgap, then fixed for good below.
+
+## ~~New Cosmos containers need a manual prod step too - the `Pins` container launched missing from prod~~ (resolved 2026-09-14)
+
+Same root cause as the blob-storage entry above, second occurrence: a brand-new Cosmos
+container (`Pins`, added by #179's pin feature) never got created against the real
+`cro-app-cosmos` account (`cro-prod`) since container creation was Development-only.
+Discovered 2026-09-14: pinning a bird worked fine locally but failed in production with a
+generic "Could not pin this bird" popup (the Cosmos SDK throwing on a missing container
+isn't a caught `ServiceException`, so it surfaces as an unhandled 500 with no JSON `error`
+body for the client to show). Fixed as a stopgap via `az cosmosdb sql container create -g
+cro-prod -a cro-app-cosmos -d CroApp -n Pins --partition-key-path /receiverId`.
+
+**Real fix for both entries**: `Program.cs`'s container/blob-container provisioning block no
+longer checks `app.Environment.IsDevelopment()` - it now runs on every boot, in every
+environment. `CreateContainerIfNotExistsAsync`/`CreateIfNotExistsAsync` are idempotent
+no-ops once a container exists, so this costs nothing at steady state and means a brand-new
+container defined in code reaches prod automatically on the next deploy, closing this class
+of bug for good instead of relying on someone remembering a matching `az` command. Only the
+destructive dev-user-reseeding step (which wipes `Users`) stays gated to Development - see
+the comments in `Program.cs`. `ProdCorsTests` (`CorsTests.cs`) now exercises this path under
+a `Production` environment to catch a regression back to the old gate.
 
 ## `GET /birds/public` is a full cross-partition scan with no index/materialized view
 

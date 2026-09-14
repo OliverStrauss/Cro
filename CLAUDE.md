@@ -150,16 +150,17 @@ dev-only shortcuts" below).
 - **Stale Waypoints container after the partition-key change**: the Waypoints container's
   partition key changed from `/id` to `/userId` (a user can have up to 5 waypoints now, so
   the owning user's id is the partition key instead of the waypoint's own id).
-  `CreateContainerIfNotExistsAsync` (in `Program.cs`, dev-only startup provisioning) is a
-  no-op against an existing container, so a local "Waypoints" container created before this
-  change is stuck on the old partition key — drop it once via the emulator's Data Explorer,
+  `CreateContainerIfNotExistsAsync` (in `Program.cs`'s startup provisioning, which now runs
+  in every environment — see below) is a no-op against an existing container, so a local
+  "Waypoints" container created before this change is stuck on the old partition key — drop
+  it once via the emulator's Data Explorer,
   served on its own port at `http://localhost:1234/` (not under `:8081`, and not the classic
   emulator's `/_explorer/index.html` path — this image's Explorer is a separate service), or
   just remove and re-run the emulator container to reset all local data, before running the
   API or tests again. CI is unaffected — its Cosmos emulator service container is fresh
   every run.
 - **Hubs container**: a `Hubs` container (partition key `/status`) is provisioned the same
-  dev-only way as Waypoints, for app-curated public landmark nests.
+  way as Waypoints, for app-curated public landmark nests.
 - **Dev user seeding on startup**: on every `dotnet run`, `Program.cs` now wipes and reseeds
   the full fixed 5-user dev dataset itself, via the shared `DevDataSeeder.SeedFixedDevUsersAsync`
   (the same logic `Tools/SeedDevUsers` calls standalone — see "Seeding local dev data" below).
@@ -168,20 +169,19 @@ dev-only shortcuts" below).
   alone is now enough to get friends/nests/birds to exercise, and the standalone tool is only
   needed to reset the dataset without restarting the API.
 - **Blob container access**: all 5 picture containers (`profile-pictures`, `nest-pictures`,
-  `hub-pictures`, `bird-pictures`, `bird-media`) are provisioned on startup in Development
-  with `PublicAccessType.Blob` (public read for blobs, no listing) plus a permissive
-  Blob-service CORS rule (GET, any origin), so uploaded pictures are fetchable via a plain
-  URL and the browser's CORS-mode `Image.network`/`NetworkImage` fetch succeeds — but this
-  whole block is gated on `app.Environment.IsDevelopment()` and never runs against a real
-  deployment. Going live (#149's Azure CD pipeline) surfaced exactly this: images uploaded
-  to the real `croappstorage` account (`cro-prod` resource group) were both private and had
-  no CORS rule, so every picture screen (profile, birds, nests, hubs) failed to display.
-  Fixed manually as a one-time step against `croappstorage` on 2026-09-10 — same two
-  settings the dev-only startup code applies, run once via `az storage container
-  set-permission --public-access blob` (per container) and `az storage cors add --services
-  b` (once, account-wide). This is a manual production step, same category as Cosmos
-  container creation below — it doesn't run automatically and must be redone if the storage
-  account is ever recreated.
+  `hub-pictures`, `bird-pictures`, `bird-media`) are provisioned on every startup, in every
+  environment, with `PublicAccessType.Blob` (public read for blobs, no listing) plus a
+  permissive Blob-service CORS rule (GET, any origin), so uploaded pictures are fetchable via
+  a plain URL and the browser's CORS-mode `Image.network`/`NetworkImage` fetch succeeds. This
+  used to be gated on `app.Environment.IsDevelopment()`, which meant going live (#149's Azure
+  CD pipeline) surfaced a real outage: images uploaded to the real `croappstorage` account
+  (`cro-prod` resource group) were both private and had no CORS rule, so every picture screen
+  (profile, birds, nests, hubs) failed to display. Fixed as a one-time stopgap against
+  `croappstorage` on 2026-09-10 via `az storage container set-permission --public-access
+  blob` (per container) and `az storage cors add --services b` (once, account-wide), then
+  fixed for good on 2026-09-14 by dropping the `IsDevelopment()` gate entirely (see
+  TECH_DEBT.md) — the same settings now apply automatically on every boot, so a recreated
+  storage account or a brand-new container reaches the same state without a manual step.
 
 ### Known dev-only shortcuts (never meaningful in prod)
 
@@ -192,9 +192,9 @@ None of these should ever reach a real endpoint or a prod deployment:
 - Cosmos emulator's fixed well-known account key (above)
 - `CosmosDb:UseEmulator: true` — unconditional TLS cert acceptance
 - Azurite's `UseDevelopmentStorage=true` connection-string alias
-- The 5 picture containers' public read access + Blob CORS rule (see "Blob container
-  access" above) — dev-only in that the *startup code* only ever applies it locally; the
-  settings themselves are now also live in prod, applied manually
+- ~~The 5 picture containers' public read access + Blob CORS rule~~ — no longer dev-only as
+  of 2026-09-14; the startup code now applies it in every environment (see "Blob container
+  access" above)
 - `Program.cs`'s two seeded dev users' fixed password (`correct-horse-battery-staple`)
 - `SeedDevUsers`' five seeded accounts' fixed password (`1`) — see below
 - `DevCorsPolicy` (`Program.cs`) — Development-only CORS policy that allows any origin,
@@ -204,12 +204,14 @@ None of these should ever reach a real endpoint or a prod deployment:
   relevant since there's no prod deployment.
 
 A real Azure Cosmos DB and Storage account (`croappstorage`, `cro-prod` resource group) are
-now provisioned for prod, deployed via the Azure CD pipeline (#149). Their containers still
-need the same one-time manual setup Cosmos/Blob containers get in dev — `az cosmosdb
-create`/`sql container create --partition-key-path /id`-equivalents for any new Cosmos
-container, and `az storage container set-permission`/`az storage cors add` for any new blob
-container — since `Program.cs`'s provisioning block only runs in Development. Not required
-for local dev or CI, both of which run entirely against the emulators.
+now provisioned for prod, deployed via the Azure CD pipeline (#149). As of 2026-09-14,
+`Program.cs`'s provisioning block (container/blob-container creation, blob public access,
+blob CORS) runs on every boot in every environment, not just Development, so a new Cosmos
+container or blob container defined in code is created against the real prod account
+automatically on the next deploy/restart — no manual `az cosmosdb`/`az storage` step needed
+for that going forward (see TECH_DEBT.md for the two outages this used to cause). The Cosmos
+database/account itself and the storage account still need to exist first, same as any
+Azure resource — this only covers containers within them.
 
 ## Seeding local dev data
 
