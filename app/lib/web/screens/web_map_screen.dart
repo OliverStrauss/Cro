@@ -44,6 +44,10 @@ class WebMapScreen extends StatefulWidget {
   final Map<String, List<Bird>> nestResidentsByNestId;
   final String? selectedNestId;
   final String? selectedHubId;
+  // Set when a Place (geocoded) search result is picked - see SearchTrigger.onSelectPlace.
+  // Unlike selectedNestId/selectedHubId there's no backing app entity, so this carries the
+  // raw point directly instead of an id to look up.
+  final LatLng? searchLocation;
   // Whichever bird's panel is currently open (own or a friend's) - that marker gets a glow
   // on the map so "the bird you're following" reads at a glance among the others in flight.
   final String? selectedBirdId;
@@ -95,6 +99,7 @@ class WebMapScreen extends StatefulWidget {
     this.nestResidentsByNestId = const {},
     required this.selectedNestId,
     required this.selectedHubId,
+    this.searchLocation,
     this.selectedBirdId,
     required this.bottomInset,
     required this.onSelectNest,
@@ -159,6 +164,8 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
       // Null for a home bird (nothing to follow) or a friend/public bird (their tap path
       // never routes through here) - _animateCameraTo is simply skipped in that case.
       target = _ownBirdLatLng(widget.selectedBirdId!);
+    } else if (widget.searchLocation != null && widget.searchLocation != oldWidget.searchLocation) {
+      target = widget.searchLocation;
     }
     if (target != null) _animateCameraTo(target);
   }
@@ -338,6 +345,17 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
               ),
             MarkerLayer(
               markers: [
+                // A Place search result has no backing app entity, so it gets a plain pin
+                // instead of the Hub/Nest treatment below - cleared on the next search or by
+                // picking another map selection (see WebShellScreenState's _select* methods).
+                if (widget.searchLocation != null)
+                  Marker(
+                    key: const Key('webSearchLocationMarker'),
+                    point: widget.searchLocation!,
+                    width: 34,
+                    height: 34,
+                    child: const Icon(Icons.location_pin, size: 34, color: CroColors.deliveryAmber),
+                  ),
                 for (final hub in widget.hubs)
                   Marker(
                     key: Key('webHubMarker_${hub.id}'),

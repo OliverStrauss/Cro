@@ -12,6 +12,7 @@ import '../../services/friends_service.dart';
 import '../../services/hub_service.dart';
 import '../../services/pin_service.dart';
 import '../../services/profile_service.dart';
+import '../../services/search_service.dart';
 import '../../services/waypoint_service.dart';
 import '../../state/auth_state.dart';
 import '../../widgets/hub_name_dialog.dart';
@@ -24,6 +25,7 @@ import '../widgets/context_panel.dart';
 import '../widgets/dock_bird_card.dart';
 import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
+import '../widgets/search_trigger.dart';
 import '../widgets/your_birds_dock.dart';
 import 'web_hubs_screen.dart';
 import 'web_map_screen.dart';
@@ -49,6 +51,7 @@ class WebShellScreen extends StatefulWidget {
   final EventService? eventService;
   final BirdReactionService? reactionService;
   final PinService? pinService;
+  final SearchService? searchService;
 
   const WebShellScreen({
     super.key,
@@ -61,6 +64,7 @@ class WebShellScreen extends StatefulWidget {
     this.eventService,
     this.reactionService,
     this.pinService,
+    this.searchService,
   });
 
   @override
@@ -88,6 +92,10 @@ class WebShellScreenState extends State<WebShellScreen> {
   Bird? _selectedBird;
   FriendBird? _selectedFriendBird;
   PublicBird? _selectedPublicBird;
+  // Set when a Place (geocoded) search result is picked - see SearchTrigger.onSelectPlace
+  // and WebMapScreen.searchLocation. Mutually exclusive with every _selected* field above,
+  // same convention each of their own setters already follows.
+  LatLng? _selectedSearchLocation;
 
   DockFilter _dockFilter = DockFilter.all;
   bool _dockExpanded = false;
@@ -137,6 +145,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedBird = null;
       _selectedFriendBird = null;
       _selectedPublicBird = null;
+      _selectedSearchLocation = null;
     });
   }
 
@@ -149,6 +158,7 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedBird = null;
       _selectedFriendBird = null;
       _selectedPublicBird = null;
+      _selectedSearchLocation = null;
     });
     if ((_data.hubUnreadCounts[hub.id] ?? 0) > 0) _data.markHubRead(hub.id);
   }
@@ -162,8 +172,33 @@ class WebShellScreenState extends State<WebShellScreen> {
       _selectedHub = null;
       _selectedFriendBird = null;
       _selectedPublicBird = null;
+      _selectedSearchLocation = null;
     });
   }
+
+  // A Place (geocoded) search result has no backing app entity and no panel content to
+  // show - just a pan/zoom and a transient pin (see WebMapScreen.searchLocation).
+  void _selectSearchLocation(LatLng point) {
+    setState(() {
+      _selectedNav = WebNavItem.map;
+      _panelMode = null;
+      _selectedNest = null;
+      _selectedHub = null;
+      _selectedBird = null;
+      _selectedFriendBird = null;
+      _selectedPublicBird = null;
+      _selectedSearchLocation = point;
+    });
+  }
+
+  // A Hub/Nest search result is looked up in the already-loaded (and, for nests, fully
+  // enriched with owner fallback/friend username+color) data by id rather than trusted
+  // directly - same "resolve an id back to the canonical object" convention
+  // _openNotification already uses for a nest notification target, and needed here because
+  // GET /search returns bare Hub/Waypoint rows with none of that enrichment applied.
+  void _selectSearchHub(Hub hub) => _selectHub(_hubById(hub.id) ?? hub);
+
+  void _selectSearchNest(Waypoint nest) => _selectNest(_waypointById(nest.id) ?? nest);
 
   // A tap for a bird that's home behaves as before (opens its own bird panel, map stays
   // put). Away-at-a-friend's-nest or at-a-hub instead opens THAT nest's/hub's own panel
@@ -403,17 +438,31 @@ class WebShellScreenState extends State<WebShellScreen> {
                 Positioned(
                   top: 18,
                   right: 22,
-                  child: FloatingActionsCluster(
-                    // FriendRequestReceived events are excluded here - incomingRequests already
-                    // renders that exact pending request as its own dropdown row, so showing
-                    // both would duplicate it.
-                    unreadCount: _dropdownNotifications.where((n) => !n.isRead).length,
-                    notifications: _dropdownNotifications,
-                    onMarkAllRead: _data.markAllNotificationsRead,
-                    onOpenNotification: _openNotification,
-                    friends: _data.friends,
-                    incomingRequests: _data.incomingRequests,
-                    onOpenFriendRequest: (_) => _selectNav(WebNavItem.profile),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SearchTrigger(
+                        searchService: widget.searchService,
+                        authState: widget.authState,
+                        onSelectPlace: (place) =>
+                            _selectSearchLocation(LatLng(place.latitude, place.longitude)),
+                        onSelectHub: _selectSearchHub,
+                        onSelectNest: _selectSearchNest,
+                      ),
+                      const SizedBox(width: 10),
+                      FloatingActionsCluster(
+                        // FriendRequestReceived events are excluded here - incomingRequests already
+                        // renders that exact pending request as its own dropdown row, so showing
+                        // both would duplicate it.
+                        unreadCount: _dropdownNotifications.where((n) => !n.isRead).length,
+                        notifications: _dropdownNotifications,
+                        onMarkAllRead: _data.markAllNotificationsRead,
+                        onOpenNotification: _openNotification,
+                        friends: _data.friends,
+                        incomingRequests: _data.incomingRequests,
+                        onOpenFriendRequest: (_) => _selectNav(WebNavItem.profile),
+                      ),
+                    ],
                   ),
                 ),
                 // Floats directly over the map instead of sitting in its own Row column, so
@@ -499,6 +548,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           nestResidentsByNestId: _data.nestResidentsByNestId,
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
+          searchLocation: _selectedSearchLocation,
           selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id ?? _selectedPublicBird?.id,
           bottomInset: _dockHeight,
           onSelectNest: _selectNest,

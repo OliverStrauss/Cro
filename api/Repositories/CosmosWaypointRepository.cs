@@ -111,4 +111,30 @@ public class CosmosWaypointRepository
         }
         return results;
     }
+
+    // Case-insensitive name-prefix search scoped to a specific set of userIds (the caller
+    // plus their accepted friends, for the unified /search endpoint) - GetManyByUserIdsAsync's
+    // ARRAY_CONTAINS pattern combined with SearchByUsernamePrefixAsync's STARTSWITH +
+    // limit-stop (see CosmosUserRepository).
+    public async Task<List<Waypoint>> SearchByNamePrefixAsync(IEnumerable<string> userIds, string prefix, int limit)
+    {
+        var ids = userIds.ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var query = _container.GetItemQueryIterator<Waypoint>(
+            new QueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(@userIds, c.userId) AND STARTSWITH(c.name, @prefix, true)")
+                .WithParameter("@userIds", ids)
+                .WithParameter("@prefix", prefix));
+
+        var results = new List<Waypoint>();
+        while (query.HasMoreResults && results.Count < limit)
+        {
+            var page = await query.ReadNextAsync();
+            results.AddRange(page);
+        }
+        return results.Take(limit).ToList();
+    }
 }

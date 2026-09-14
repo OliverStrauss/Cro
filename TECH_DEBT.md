@@ -256,3 +256,17 @@ compounding issues, both now fixed:
   own a real domain yet - functionally fine, purely a trust/polish issue. Revisit (add a
   custom domain to the `cro-email-svc` Email Service, verify via DNS TXT/CNAME records) once
   Cro has a real domain for other reasons.
+
+## `GET /search`'s places section depends on Nominatim's free public instance
+
+`NominatimGeocodingService` calls `nominatim.openstreetmap.org` directly - no API key, no
+billing, chosen specifically because it pairs naturally with the map's existing OSM tiles
+(flutter_map + MapTiler/raw-OSM tiles) rather than pulling in an unrelated paid provider like
+Google Places. Its usage policy caps free use at roughly 1 request/second and expects a real
+identifying `User-Agent` (set at registration in `Program.cs`); the web shell's 250ms search
+debounce keeps real traffic well under that cap at this app's current scale, and a transient
+outage there degrades to an empty Places section rather than failing the whole search (see
+`IGeocodingService`'s try/catch in the `/search` endpoint). Once real user traffic grows
+enough to risk that rate cap, this needs either a self-hosted Nominatim instance or a move to
+a paid geocoder (Mapbox was the runner-up when this was scoped, for its generous free tier and
+much better address/POI coverage than Nominatim's OSM-derived data).

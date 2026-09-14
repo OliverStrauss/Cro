@@ -88,4 +88,25 @@ public class CosmosHubRepository
     {
         await _container.DeleteItemAsync<Hub>(hubId, new PartitionKey(status));
     }
+
+    // Case-insensitive name-prefix search over Approved hubs only, for the unified /search
+    // endpoint - same STARTSWITH + limit-stop pattern as
+    // CosmosUserRepository.SearchByUsernamePrefixAsync, scoped to the Approved partition
+    // the same way ListApprovedAsync above already is.
+    public async Task<List<Hub>> SearchByNamePrefixAsync(string prefix, int limit)
+    {
+        var query = _container.GetItemQueryIterator<Hub>(
+            new QueryDefinition("SELECT * FROM c WHERE c.status = @status AND STARTSWITH(c.name, @prefix, true)")
+                .WithParameter("@status", HubStatus.Approved)
+                .WithParameter("@prefix", prefix),
+            requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(HubStatus.Approved) });
+
+        var results = new List<Hub>();
+        while (query.HasMoreResults && results.Count < limit)
+        {
+            var page = await query.ReadNextAsync();
+            results.AddRange(page);
+        }
+        return results.Take(limit).ToList();
+    }
 }

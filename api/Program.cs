@@ -132,6 +132,14 @@ builder.Services.AddScoped<ProfilePictureService>();
 builder.Services.AddScoped<NestPictureService>();
 builder.Services.AddScoped<BirdPictureService>();
 builder.Services.AddScoped<BirdMediaService>();
+builder.Services.AddHttpClient<IGeocodingService, NominatimGeocodingService>(client =>
+{
+    client.BaseAddress = new Uri("https://nominatim.openstreetmap.org/");
+    // Nominatim's usage policy requires a real identifying User-Agent - browsers strip a
+    // custom one, which is one reason this call happens server-side instead of from
+    // Flutter web (see NominatimGeocodingService).
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("CroApp/1.0");
+});
 
 // Real sending (via Azure Communication Services' Email API - see AcsEmailSender for why not
 // SMTP) is only wired up once Acs:ConnectionString is actually configured; until then,
@@ -1651,6 +1659,58 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, CosmosUserRep
 })
 .RequireAuthorization()
 .WithName("GetFriendsWaypoints");
+
+// Unified search across real-world places (via geocoding), Hubs, and Nests - powers the
+// web shell's search trigger next to the notification bell. Nest matches are scoped to the
+// caller's own nests plus friends' (same visibility GET /waypoints + GET /friends/waypoints
+// already expose, regardless of a nest's own IsPublic flag); Hub matches are Approved-only,
+// same as GET /hubs.
+app.MapGet("/search", async (
+    string? q,
+    ClaimsPrincipal principal,
+    CosmosUserRepository userRepo,
+    CosmosHubRepository hubRepo,
+    CosmosWaypointRepository waypointRepo,
+    IGeocodingService geocodingService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var prefix = q?.Trim() ?? "";
+    if (prefix.Length == 0)
+    {
+        return Results.Ok(new { places = Array.Empty<PlaceSearchResult>(), hubs = Array.Empty<Hub>(), nests = Array.Empty<Waypoint>() });
+    }
+
+    var user = await userRepo.GetByIdAsync(userId);
+    var nestUserIds = (user?.Friends ?? [])
+        .Where(f => f.Status == FriendStatus.Accepted)
+        .Select(f => f.Id)
+        .Append(userId)
+        .ToList();
+
+    List<PlaceSearchResult> places;
+    try
+    {
+        places = await geocodingService.SearchAsync(prefix);
+    }
+    catch (HttpRequestException)
+    {
+        // Geocoding is a third-party network call - a transient outage there shouldn't take
+        // down Hub/Nest search, which are our own data and always available.
+        places = [];
+    }
+
+    var hubs = await hubRepo.SearchByNamePrefixAsync(prefix, limit: 5);
+    var nests = await waypointRepo.SearchByNamePrefixAsync(nestUserIds, prefix, limit: 5);
+
+    return Results.Ok(new { places, hubs, nests });
+})
+.RequireAuthorization()
+.WithName("Search");
 
 app.MapGet("/friends/birds", async (ClaimsPrincipal principal, CosmosUserRepository userRepo, BirdService birdService, CosmosBirdReadStateRepository readStateRepository) =>
 {
