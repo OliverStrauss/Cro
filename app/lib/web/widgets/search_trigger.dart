@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../models/hub.dart';
@@ -47,12 +45,13 @@ class _SearchTriggerState extends State<SearchTrigger> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   OverlayEntry? _entry;
-  Timer? _debounce;
   SearchResults? _results;
+  // Bumped on every keystroke so a slower, older request completing after a newer one
+  // can't overwrite the dropdown with stale results - see _search.
+  int _requestId = 0;
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _controller.dispose();
     _focusNode.dispose();
     _entry?.remove();
@@ -112,30 +111,33 @@ class _SearchTriggerState extends State<SearchTrigger> {
     _entry = null;
     _controller.clear();
     _results = null;
+    // Invalidates any still-in-flight request from before closing, same reason _search
+    // checks _requestId before applying a response.
+    _requestId++;
     if (mounted) setState(() {});
   }
 
   void _onQueryChanged(String query) {
-    _debounce?.cancel();
     final trimmed = query.trim();
     if (trimmed.isEmpty) {
+      _requestId++;
       setState(() => _results = null);
       _entry?.markNeedsBuild();
       return;
     }
-    // Same 250ms debounce as web_profile_screen.dart's friend search.
-    _debounce = Timer(
-      const Duration(milliseconds: 250),
-      () => _search(trimmed),
-    );
+    _search(trimmed);
   }
 
   Future<void> _search(String query) async {
     final token = widget.authState.token;
     if (token == null) return;
+    final requestId = ++_requestId;
     try {
       final results = await _searchService.search(token, query);
-      if (!mounted) return;
+      // Discard a response to a keystroke that's no longer the latest one - otherwise a
+      // slower earlier request completing after a faster later one would flash stale
+      // results back onto the dropdown.
+      if (!mounted || requestId != _requestId) return;
       setState(() => _results = results);
       _entry?.markNeedsBuild();
     } catch (_) {
