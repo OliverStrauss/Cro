@@ -5,11 +5,12 @@ import '../services/profile_service.dart';
 import '../theme.dart';
 import 'bird_payload_view.dart';
 
-// Bottom sheet shown when tapping a bird someone else sent that's landed at the caller's
-// own nest - same chrome as BirdDetailsSheet, but for reading an arrived message instead of
-// tracking one still in flight: no ETA/progress, just who sent it and the payload itself
-// (text, image, and/or a voice clip, whichever the bird's type carries). Marks the bird read
-// on open - same as opening a text thread marks it read elsewhere.
+// Dialog shown when tapping a bird someone else sent that's landed at the caller's own
+// nest - for reading an arrived message: no ETA/progress, just who sent it and the payload
+// itself (text, image, and/or a voice clip, whichever the bird's type carries). Marks the
+// bird read on open - same as opening a text thread marks it read elsewhere. A centered
+// Dialog (send_bird_dialog.dart's shell) rather than a bottom sheet - this is the web UI,
+// which has no bottom-sheet convention elsewhere.
 class ReceivedBirdSheet extends StatefulWidget {
   final String birdId;
   final String name;
@@ -52,10 +53,8 @@ class ReceivedBirdSheet extends StatefulWidget {
     required ProfileService profileService,
     required BirdService birdService,
   }) {
-    return showModalBottomSheet<void>(
+    return showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) => ReceivedBirdSheet(
         birdId: birdId,
         name: name,
@@ -111,78 +110,53 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Dialog(
       key: const Key('receivedBirdSheet'),
-      decoration: const BoxDecoration(
-        color: CroColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        // rgba(43,47,51,0.18) per the sheet-shadow token.
-        boxShadow: [BoxShadow(color: Color(0x2E2B2F33), blurRadius: 30, offset: Offset(0, -10))],
-      ),
-      padding: const EdgeInsets.fromLTRB(22, 10, 22, 26),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  // rgba(43,47,51,0.15) drag-handle token.
-                  color: const Color(0x262B2F33),
-                  borderRadius: BorderRadius.circular(2),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.name,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: CroColors.ink),
                 ),
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.name,
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: CroColors.ink),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${widget.type} · From $_senderLabel',
-                          key: const Key('receivedBirdSender'),
-                          style: CroTextStyles.data(size: 13),
-                        ),
-                      ],
+                const SizedBox(height: 3),
+                Text(
+                  '${widget.type} · From $_senderLabel',
+                  key: const Key('receivedBirdSender'),
+                  style: CroTextStyles.data(size: 13),
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: BirdPayloadView(
+                    content: widget.content,
+                    audioUrl: widget.audioUrl,
+                    imageUrl: widget.imageUrl,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    key: const Key('receivedBirdCloseButton'),
+                    borderRadius: CroBorders.radiusSmall,
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: Text('Close', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: BirdPayloadView(
-                  content: widget.content,
-                  audioUrl: widget.audioUrl,
-                  imageUrl: widget.imageUrl,
                 ),
-              ),
-              const SizedBox(height: 18),
-              Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  key: const Key('receivedBirdCloseButton'),
-                  borderRadius: CroBorders.radiusSmall,
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: Text('Close', style: CroTextStyles.label(size: 12, color: CroColors.deepWaypoint)),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -160,7 +160,6 @@ class _NestPanelContentState extends State<NestPanelContent> {
     );
     if (!mounted) return;
     await _loadResidents();
-    widget.onChanged();
   }
 
   void _toast(String message, {bool isError = false}) {
