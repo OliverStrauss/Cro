@@ -502,6 +502,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                         onDataChanged: _data.load,
                         onFollowOnMap: () => _selectNav(WebNavItem.map),
                         onSelectBird: _selectBird,
+                        onViewPinned: () => _selectNav(WebNavItem.pinned),
                       ),
                     ),
                   ),

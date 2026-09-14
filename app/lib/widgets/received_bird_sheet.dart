@@ -91,19 +91,26 @@ class ReceivedBirdSheet extends StatefulWidget {
 
 class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
   String _senderLabel = '…';
-  // Session-local only - this sheet doesn't know on open whether an earlier visit already
-  // pinned this same delivery (see PinnedBird.BuildId's dedup key), so it always starts
-  // unpinned; re-pinning the same delivery is idempotent server-side anyway.
   bool _isPinned = false;
-  String? _pinId;
   bool _isTogglingPin = false;
 
   @override
   void initState() {
     super.initState();
     _loadSender();
+    _loadPinStatus();
     if (!widget.isRead) {
       _markRead();
+    }
+  }
+
+  Future<void> _loadPinStatus() async {
+    try {
+      final pin = await widget.pinService.getPinStatus(widget.token, widget.birdId);
+      if (!mounted || pin == null) return;
+      setState(() => _isPinned = true);
+    } catch (_) {
+      // Not worth surfacing - the pin button still works either way, just starts unpinned.
     }
   }
 
@@ -128,33 +135,20 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
     }
   }
 
-  Future<void> _togglePin() async {
+  // Pin-only - once pinned, this sheet just shows that state (filled, colored, disabled).
+  // Unpinning is a Pinned-screen action (see web_pinned_screen.dart's "Yours" tab), not
+  // something offered back here.
+  Future<void> _pin() async {
     setState(() => _isTogglingPin = true);
     try {
-      if (_isPinned) {
-        await widget.pinService.unpinBird(widget.token, _pinId!);
-        if (!mounted) return;
-        setState(() {
-          _isPinned = false;
-          _pinId = null;
-        });
-        _toast('Unpinned');
-      } else {
-        final pin = await widget.pinService.pinBird(
-          widget.token,
-          widget.birdId,
-        );
-        if (!mounted) return;
-        setState(() {
-          _isPinned = true;
-          _pinId = pin.id;
-        });
-        _toast(
-          widget.isPublic
-              ? 'Pinned for everyone to see'
-              : 'Pinned to your saved messages',
-        );
-      }
+      await widget.pinService.pinBird(widget.token, widget.birdId);
+      if (!mounted) return;
+      setState(() => _isPinned = true);
+      _toast(
+        widget.isPublic
+            ? 'Pinned for everyone to see'
+            : 'Pinned to your saved messages',
+      );
     } catch (e) {
       if (!mounted) return;
       _toast(e.toString(), isError: true);
@@ -220,7 +214,7 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                 ),
                 Tooltip(
                   message: _isPinned
-                      ? 'Unpin'
+                      ? 'Pinned'
                       : (widget.isPublic ? 'Pin publicly' : 'Pin for yourself'),
                   child: IconButton(
                     key: const Key('receivedBirdPinButton'),
@@ -230,7 +224,7 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                           ? Theme.of(context).colorScheme.primary
                           : CroColors.fog,
                     ),
-                    onPressed: _isTogglingPin ? null : _togglePin,
+                    onPressed: _isPinned || _isTogglingPin ? null : _pin,
                   ),
                 ),
               ],

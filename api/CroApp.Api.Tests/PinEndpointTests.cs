@@ -276,6 +276,27 @@ public class PinEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains(mine!, p => p.Id == pin.Id);
     }
 
+    [Fact]
+    public async Task GetPinForBird_ReflectsRealState_AndClearsAfterUnpin()
+    {
+        var (_, birdId, _, receiverToken) = await DeliverBirdAsync("Status Note", "check me", isPublic: false);
+
+        var beforeResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/birds/{birdId}/pin", receiverToken));
+        Assert.Equal(HttpStatusCode.NotFound, beforeResponse.StatusCode);
+
+        var pin = (await (await PinAsync(receiverToken, birdId)).Content.ReadFromJsonAsync<PinnedBirdDto>())!;
+
+        var afterResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/birds/{birdId}/pin", receiverToken));
+        afterResponse.EnsureSuccessStatusCode();
+        var status = (await afterResponse.Content.ReadFromJsonAsync<PinnedBirdDto>())!;
+        Assert.Equal(pin.Id, status.Id);
+
+        (await _client.SendAsync(AuthedRequest(HttpMethod.Delete, $"/pins/{pin.Id}", receiverToken))).EnsureSuccessStatusCode();
+
+        var afterUnpinResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/birds/{birdId}/pin", receiverToken));
+        Assert.Equal(HttpStatusCode.NotFound, afterUnpinResponse.StatusCode);
+    }
+
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record UserResponseDto(string Id, string Username, string Email);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);

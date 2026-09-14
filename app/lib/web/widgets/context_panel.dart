@@ -50,6 +50,7 @@ class ContextPanel extends StatelessWidget {
   final VoidCallback onDataChanged;
   final VoidCallback onFollowOnMap;
   final ValueChanged<Bird> onSelectBird;
+  final VoidCallback onViewPinned;
 
   const ContextPanel({
     super.key,
@@ -76,6 +77,7 @@ class ContextPanel extends StatelessWidget {
     required this.onDataChanged,
     required this.onFollowOnMap,
     required this.onSelectBird,
+    required this.onViewPinned,
   });
 
   @override
@@ -105,8 +107,10 @@ class ContextPanel extends StatelessWidget {
           birdService: birdService,
           profileService: profileService,
           pinService: pinService,
+          friendsService: friendsService,
           onChanged: onDataChanged,
           onSelectBird: onSelectBird,
+          onViewPinned: onViewPinned,
         ),
         PanelMode.hub when selectedHub != null => HubPanelContent(
           key: ValueKey('hub_${selectedHub!.id}'),

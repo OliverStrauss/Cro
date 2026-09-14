@@ -1351,6 +1351,31 @@ app.MapPost("/birds/{id}/pin", async (string id, ClaimsPrincipal principal, PinS
 .RequireAuthorization()
 .WithName("PinBird");
 
+// Whether the bird's current delivery is already pinned by the caller - lets the client show
+// real "already pinned" state (filled icon, no unpin here) instead of always starting fresh.
+// 404 both when the bird doesn't exist and when this delivery was never pinned - same
+// "don't leak which" shape PinAsync's own 404 uses.
+app.MapGet("/birds/{id}/pin", async (string id, ClaimsPrincipal principal, PinService pinService) =>
+{
+    var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var pin = await pinService.GetForCurrentDeliveryAsync(userId, id);
+        return pin is null ? Results.NotFound() : Results.Ok(pin);
+    }
+    catch (ServiceException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
+    }
+})
+.RequireAuthorization()
+.WithName("GetPinForBird");
+
 // Everything the caller has ever pinned themselves - the "saved messages" list, private and
 // public pins both (only the receiver can see their own private ones anyway).
 app.MapGet("/pins/mine", async (ClaimsPrincipal principal, PinService pinService) =>
