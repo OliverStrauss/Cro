@@ -61,6 +61,27 @@ resource is idempotent by design (already true of the original dedup fix). Verif
 186/186 tests pass against the ARM64 emulator. Not yet verified against GitHub Actions' actual
 resource-constrained runner - watch the next `main` push's `build` job.
 
+**Retry fix (#210, `e4d9525`) also did not fix it, confirmed 2026-09-14.** Merged into `main`
+believing the local 186/186 pass was representative; the very push that merged it (`gh run
+34897236874`) still shows `Failed: 186, Passed: 0` on **all three** of the workflow's own
+fresh-emulator retry attempts - identical to the pre-fix signature, not improved. One of the
+three attempts alone ran 26 minutes (vs. ~7-19s for the other two and for every prior failing
+run), which reads as the emulator container going into sustained distress for that stretch, not
+a short transient blip - the kind of failure `RunWithRetryAsync`'s 3-attempts-with-backoff was
+built to ride out. Re-confirmed live: `curl -i POST /birds/{id}/shoo` against `cro-api` still
+returns an empty-body, no-`Content-Type` `404` (ASP.NET Core's own "no route matched," not the
+app's `Results.Json` error path) - `cro-api` is still running whatever last deployed before
+#179, now missing #190, #192, #193, #199, #201, #206 (shoo), #207, #209, and #210 itself.
+
+This is the second consecutive merged fix for the same underlying 503 that failed to resolve it
+on GitHub Actions' actual runner (first the dedup in #193, now the retry in #210) - per
+`superpowers:systematic-debugging`'s escalation rule, a third attempt in the same direction
+(more retries, longer backoff) shouldn't be tried blind. Worth questioning instead: is a
+~25-host-per-run integration suite hitting one shared, resource-constrained emulator container
+the right shape for this test suite at all, versus e.g. a bigger CI runner, serializing the
+Cosmos-touching test classes, or one emulator container per test collection instead of one
+shared globally. Needs a decision, not another patch.
+
 ## Radio Log redesign (`redesign/radio-log-visual-overhaul`) has no visual comp and no browser QA pass
 
 The whole-web-app visual overhaul (theme, typography, hairline card/button language - see
