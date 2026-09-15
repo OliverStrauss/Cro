@@ -75,6 +75,7 @@ void main() {
     required bool isPublic,
     PinService? pinService,
     BirdService? birdService,
+    String? content = 'hi there',
   }) async {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -86,7 +87,7 @@ void main() {
               name: 'Otto',
               type: 'Cro',
               senderId: 'sender1',
-              content: 'hi there',
+              content: content,
               isRead: true,
               isPublic: isPublic,
               token: 'tok',
@@ -156,6 +157,13 @@ void main() {
     final button = tester.widget<IconButton>(find.byKey(const Key('receivedBirdPinButton')));
     expect(button.onPressed, isNull);
     expect(pinService.lastPinnedBirdId, isNull);
+  });
+
+  testWidgets('a bird with no payload hides the pin button - nothing to pin', (tester) async {
+    await pump(tester, isPublic: false, content: null);
+
+    expect(find.text('This bird carried no message.'), findsOneWidget);
+    expect(find.byKey(const Key('receivedBirdPinButton')), findsNothing);
   });
 
   testWidgets('shooing a delivered bird sends it home and closes the sheet', (tester) async {

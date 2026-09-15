@@ -229,21 +229,26 @@ class _ReceivedBirdSheetState extends State<ReceivedBirdSheet> {
                     ],
                   ),
                 ),
-                Tooltip(
-                  message: _isPinned
-                      ? 'Pinned'
-                      : (widget.isPublic ? 'Pin publicly' : 'Pin for yourself'),
-                  child: IconButton(
-                    key: const Key('receivedBirdPinButton'),
-                    icon: Icon(
-                      _isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                      color: _isPinned
-                          ? Theme.of(context).colorScheme.primary
-                          : CroColors.fog,
+                if (BirdPayloadView.hasPayload(
+                  content: widget.content,
+                  audioUrl: widget.audioUrl,
+                  imageUrl: widget.imageUrl,
+                ))
+                  Tooltip(
+                    message: _isPinned
+                        ? 'Pinned'
+                        : (widget.isPublic ? 'Pin publicly' : 'Pin for yourself'),
+                    child: IconButton(
+                      key: const Key('receivedBirdPinButton'),
+                      icon: Icon(
+                        _isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                        color: _isPinned
+                            ? Theme.of(context).colorScheme.primary
+                            : CroColors.fog,
+                      ),
+                      onPressed: _isPinned || _isTogglingPin ? null : _pin,
                     ),
-                    onPressed: _isPinned || _isTogglingPin ? null : _pin,
                   ),
-                ),
                 Tooltip(
                   message: 'Shoo it home',
                   child: IconButton(
