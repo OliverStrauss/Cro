@@ -210,8 +210,9 @@ class _WebMapScreenState extends State<WebMapScreen>
       if (bird.id != birdId) continue;
       if (!bird.isTraveling ||
           bird.departedAt == null ||
-          bird.estimatedArrivalAt == null)
+          bird.estimatedArrivalAt == null) {
         return null;
+      }
       final origin = _nestsById[bird.nestFromId];
       final destination = _nestsById[bird.nestToId];
       if (origin == null || destination == null) return null;
@@ -296,8 +297,9 @@ class _WebMapScreenState extends State<WebMapScreen>
     for (final bird in widget.birds) {
       if (!bird.isTraveling ||
           bird.departedAt == null ||
-          bird.estimatedArrivalAt == null)
+          bird.estimatedArrivalAt == null) {
         continue;
+      }
       final origin = nestsById[bird.nestFromId];
       final destination = nestsById[bird.nestToId];
       if (origin == null || destination == null) continue;
