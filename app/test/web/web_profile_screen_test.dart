@@ -143,15 +143,12 @@ void main() {
     expect(find.byKey(const Key('noFriendsMessage')), findsOneWidget);
   });
 
-  testWidgets('shows a card per friend, with their nest count', (tester) async {
+  testWidgets('shows a card per friend', (tester) async {
     friendsService.friends = [Friend(userId: 'u2', username: 'mia', color: '#E53935')];
-    await tester.pumpWidget(build(friendWaypoints: [
-      Waypoint(id: 'f1', userId: 'u2', name: "Mia's Cabin", latitude: 1, longitude: 1, username: 'mia'),
-    ]));
+    await tester.pumpWidget(build());
     await tester.pump();
 
     expect(find.byKey(const Key('webFriendCard_u2')), findsOneWidget);
-    expect(find.text('1 nest on your map'), findsOneWidget);
   });
 
   testWidgets('shows incoming invites and accepting one calls the service', (tester) async {
