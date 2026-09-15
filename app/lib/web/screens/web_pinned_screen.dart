@@ -20,12 +20,16 @@ class WebPinnedScreen extends StatefulWidget {
   final AuthState authState;
   final PinService pinService;
   final FriendsService friendsService;
+  // Called with a pin's waypointId when its nest link is tapped - the caller resolves it
+  // against the shell's own-nest/friend-nest lists and navigates (see WebShellScreen).
+  final ValueChanged<String> onOpenNest;
 
   const WebPinnedScreen({
     super.key,
     required this.authState,
     required this.pinService,
     required this.friendsService,
+    required this.onOpenNest,
   });
 
   @override
@@ -212,6 +216,7 @@ class _WebPinnedScreenState extends State<WebPinnedScreen> {
             friendsService: widget.friendsService,
             removeTooltip: _showPublic ? 'Take down' : 'Unpin',
             onRemove: canRemove ? () => _unpin(pin) : null,
+            onOpenNest: widget.onOpenNest,
           );
         },
       ),

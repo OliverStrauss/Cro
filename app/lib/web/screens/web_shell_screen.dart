@@ -217,6 +217,20 @@ class WebShellScreenState extends State<WebShellScreen> {
 
   void _selectSearchNest(Waypoint nest) => _selectNest(_waypointById(nest.id) ?? nest);
 
+  // A Pinned-screen card's nest link - _waypointById only ever resolves the caller's own
+  // nests or a friend's (see its definition), so a stranger's nest naturally falls through
+  // to the snackbar instead of ever being reachable here.
+  void _openNestById(String waypointId) {
+    final nest = _waypointById(waypointId);
+    if (nest == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("That nest isn't visible to you")),
+      );
+      return;
+    }
+    _selectNest(nest);
+  }
+
   // A bird at rest - home or away, nest or hub - opens THAT host's own panel (reusing the
   // exact selection path the map's own markers already use) so the map pans/zooms there too
   // (see WebMapScreen's didUpdateWidget). A still-in-flight bird keeps opening its own bird
@@ -616,6 +630,7 @@ class WebShellScreenState extends State<WebShellScreen> {
           authState: widget.authState,
           pinService: _data.pinService,
           friendsService: _data.friendsService,
+          onOpenNest: _openNestById,
         );
       case WebNavItem.profile:
         return WebProfileScreen(

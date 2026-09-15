@@ -21,6 +21,9 @@ public record PinnedBird(
     string BirdId,
     string BirdName,
     string? OriginNestName,
+    // The nest the bird landed on, captured at pin time - nullable because pins made before
+    // this field existed have none, and simply aren't navigable to a nest (no backfill).
+    string? WaypointId,
     string Type,
     string? Content,
     string? AudioUrl,
