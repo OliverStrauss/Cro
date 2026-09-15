@@ -82,6 +82,37 @@ the right shape for this test suite at all, versus e.g. a bigger CI runner, seri
 Cosmos-touching test classes, or one emulator container per test collection instead of one
 shared globally. Needs a decision, not another patch.
 
+**Resolved 2026-09-14 (PR #212) by replacing the emulator image itself instead of tuning
+around it.** Swapped the classic `azure-cosmos-emulator:latest` image for `vnext-preview` -
+the same image local Apple Silicon dev already runs reliably, confirmed via Microsoft's
+current docs to support amd64 (what GitHub-hosted runners use) and GA, not ARM64-only preview
+(design spec: `docs/superpowers/specs/2026-09-14-ci-cosmos-emulator-overhaul-design.md`) -
+removing the classic image's own documented crash bug entirely rather than continuing to tune
+retry/backoff parameters around it. Also added a `notify-on-failure` job so a red
+push-triggered `main` build can't silently go unnoticed again (closes the blind spot flagged
+twice above). **Verified end to end**: PR #212's own `pull_request`-triggered run passed on
+the first attempt in 3m25s, no retries needed - a dramatic change from every prior run's 100%
+failure. After merge, the resulting push-to-`main` run (`gh run 34921549008`) also
+succeeded, and `deploy` actually ran for the first time in two days. Live `curl -i -X POST
+https://cro-api.azurewebsites.net/birds/{id}/shoo` now returns a proper JSON
+`{"error":"Bird not found."}` 404 instead of the empty-body, routing-miss 404 this
+investigation started from - `cro-api` is confirmed current with `main` again, carrying #190
+through #212.
+
+## Integration tests depend entirely on a live Cosmos/Blob emulator - no fake/in-memory repository tier
+
+All ~26 `CroApp.Api.Tests` classes spin up a full `WebApplicationFactory<Program>` against a
+real Cosmos emulator and Azurite, with no lighter-weight tier for tests that don't actually
+need real Cosmos semantics (partition routing, unique constraints, etc.). This is why CI's
+reliability has always been bottlenecked on the emulator's own resource behavior rather than
+the test suite's logic - see the CI entry above for the 2026-09-14 emulator-image swap that
+addressed the immediate symptom. A fake/in-memory repository implementation for tests that
+don't need real Cosmos semantics, reserving the live emulator for a small, deliberately-curated
+integration subset, would remove this bottleneck close to entirely rather than depending on
+whichever emulator image happens to behave under CI's resource constraints. Sized as a real
+test-architecture project, not a CI-config tweak - not undertaken as part of the 2026-09-14
+overhaul.
+
 ## Radio Log redesign (`redesign/radio-log-visual-overhaul`) has no visual comp and no browser QA pass
 
 The whole-web-app visual overhaul (theme, typography, hairline card/button language - see
