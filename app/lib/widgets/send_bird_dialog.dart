@@ -203,7 +203,11 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
     }
 
     _audioBytes = [];
-    final stream = await _recorder.startStream(const RecordConfig());
+    // RecordConfig's default encoder (aacLc) has no supported MediaRecorder mime type in
+    // Chrome/Firefox on web (record_web's getSupportedMimeType returns null for it there),
+    // so startStream throws before any audio is captured. Opus/webm is the one web browsers
+    // actually support - see the matching 'audio/webm' content type below.
+    final stream = await _recorder.startStream(const RecordConfig(encoder: AudioEncoder.opus));
     _audioSub = stream.listen((chunk) => _audioBytes!.addAll(chunk));
     setState(() => _isRecording = true);
   }
@@ -383,10 +387,10 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                                   ? _audioBytes
                                   : (_wantsImage ? _imageBytes : null),
                               mediaContentType: _wantsAudio
-                                  ? 'audio/wav'
+                                  ? 'audio/webm'
                                   : (_wantsImage ? 'image/jpeg' : null),
                               mediaFilename: _wantsAudio
-                                  ? 'clip.wav'
+                                  ? 'clip.webm'
                                   : (_wantsImage
                                         ? (_imageFilename ?? 'photo.jpg')
                                         : null),
