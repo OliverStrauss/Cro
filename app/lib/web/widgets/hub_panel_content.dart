@@ -15,6 +15,7 @@ import '../../utils/jwt_utils.dart';
 import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/hub_message_card.dart';
 import 'coordinate_readout.dart';
+import 'hover_lift.dart';
 
 /// The hub detail panel body - header, then (when non-empty) a "Your birds here" section for
 /// any of the caller's own birds currently parked at this hub - reuses the exact same
@@ -65,8 +66,9 @@ class _HubPanelContentState extends State<HubPanelContent> {
 
   // Mirrors NestPanelContent._myBirdsHere: the caller's own birds currently resting (not
   // traveling) at this hub.
-  List<Bird> get _myBirdsHere =>
-      widget.ownBirds.where((b) => b.currentNestId == widget.hub.id && !b.isTraveling).toList();
+  List<Bird> get _myBirdsHere => widget.ownBirds
+      .where((b) => b.currentNestId == widget.hub.id && !b.isTraveling)
+      .toList();
 
   @override
   void initState() {
@@ -129,7 +131,11 @@ class _HubPanelContentState extends State<HubPanelContent> {
     try {
       final xFile = await widget.profileService.pickImage();
       if (xFile == null) return;
-      picked = (await xFile.readAsBytes(), xFile.name, xFile.mimeType ?? 'image/jpeg');
+      picked = (
+        await xFile.readAsBytes(),
+        xFile.name,
+        xFile.mimeType ?? 'image/jpeg',
+      );
     } catch (e) {
       _toast(e.toString(), isError: true);
       return;
@@ -155,7 +161,10 @@ class _HubPanelContentState extends State<HubPanelContent> {
   void _toast(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: isError ? Theme.of(context).colorScheme.error : null),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
     );
   }
 
@@ -191,7 +200,11 @@ class _HubPanelContentState extends State<HubPanelContent> {
                       onTap: widget.onClose,
                       child: const Padding(
                         padding: EdgeInsets.all(6),
-                        child: Icon(Icons.close, size: 20, color: CroColors.fog),
+                        child: Icon(
+                          Icons.close,
+                          size: 20,
+                          color: CroColors.fog,
+                        ),
                       ),
                     ),
                   ),
@@ -216,15 +229,23 @@ class _HubPanelContentState extends State<HubPanelContent> {
                           hasBorder: true,
                           borderColor: CroColors.deliveryAmber,
                         ),
-                        if (_isUploadingPicture) const CircularProgressIndicator(),
+                        if (_isUploadingPicture)
+                          const CircularProgressIndicator(),
                         if (!_isUploadingPicture)
                           Positioned(
                             bottom: 0,
                             right: 0,
                             child: Container(
                               padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(color: CroColors.deepWaypoint, shape: BoxShape.circle),
-                              child: const Icon(Icons.photo_camera, size: 14, color: CroColors.surface),
+                              decoration: const BoxDecoration(
+                                color: CroColors.deepWaypoint,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.photo_camera,
+                                size: 14,
+                                color: CroColors.surface,
+                              ),
                             ),
                           ),
                       ],
@@ -233,7 +254,14 @@ class _HubPanelContentState extends State<HubPanelContent> {
                 ),
               ),
               const SizedBox(height: 10),
-              Text(hub.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              Text(
+                hub.name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 3),
               Text(
                 '${hub.category ?? 'Landmark'} · anyone can send here',
@@ -245,7 +273,11 @@ class _HubPanelContentState extends State<HubPanelContent> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: CoordinateReadout(latitude: hub.latitude, longitude: hub.longitude, centered: true),
+          child: CoordinateReadout(
+            latitude: hub.latitude,
+            longitude: hub.longitude,
+            centered: true,
+          ),
         ),
         if (_myBirdsHere.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -274,7 +306,10 @@ class _HubPanelContentState extends State<HubPanelContent> {
 
   Widget _body() {
     if (_isLoading) {
-      return const Center(key: Key('hubPanelLoading'), child: CircularProgressIndicator());
+      return const Center(
+        key: Key('hubPanelLoading'),
+        child: CircularProgressIndicator(),
+      );
     }
     if (_errorMessage != null) {
       return Center(
@@ -294,7 +329,10 @@ class _HubPanelContentState extends State<HubPanelContent> {
         key: Key('hubPanelEmpty'),
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('No messages here yet - be the first to send a bird this way', textAlign: TextAlign.center),
+          child: Text(
+            'No messages here yet - be the first to send a bird this way',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -324,34 +362,63 @@ class _HubPanelContentState extends State<HubPanelContent> {
   Widget _residentRow(Bird bird) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: CroColors.warmSurface,
-        borderRadius: CroBorders.radius,
-        child: InkWell(
-          key: Key('hubPanelResident_${bird.id}'),
+      child: HoverLift(
+        builder: (context, hovering) => Material(
+          color: CroColors.warmSurface,
+          elevation: hovering ? 2 : 0,
+          shadowColor: CroColors.ink.withValues(alpha: 0.25),
           borderRadius: CroBorders.radius,
-          onTap: () => widget.onSelectBird(bird),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-            child: Row(
-              children: [
-                Container(width: 28, height: 28, decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle)),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      Text(
-                        bird.updatedAt == null ? bird.type : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
-                        style: CroTextStyles.data(size: 11.5),
-                      ),
-                    ],
+          child: InkWell(
+            key: Key('hubPanelResident_${bird.id}'),
+            borderRadius: CroBorders.radius,
+            onTap: () => widget.onSelectBird(bird),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: const BoxDecoration(
+                      color: CroColors.waypointBlue,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.flutter_dash,
+                      size: 14,
+                      color: CroColors.surface,
+                    ),
                   ),
-                ),
-                const Icon(Icons.chevron_right, size: 18, color: CroColors.fog),
-              ],
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          bird.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          bird.updatedAt == null
+                              ? bird.type
+                              : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
+                          style: CroTextStyles.data(size: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: CroColors.fog,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

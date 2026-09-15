@@ -110,6 +110,12 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
     private Task<HttpResponseMessage> GetNestResidentsAsync(string? token, string nestId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/waypoints/{nestId}/birds", token));
 
+    private Task<HttpResponseMessage> GetOwnBirdsAsync(string? token) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Get, "/birds", token));
+
+    private Task<HttpResponseMessage> GetFriendsAsync(string? token) =>
+        _client.SendAsync(AuthedRequest(HttpMethod.Get, "/friends", token));
+
     private Task<HttpResponseMessage> MarkReadAsync(string? token, string birdId) =>
         _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/birds/{birdId}/read", token));
 
@@ -253,10 +259,86 @@ public class BirdArrivalEndpointTests : IClassFixture<WebApplicationFactory<Prog
             "the more recently arrived bird should be listed before the earlier one");
     }
 
+    [Fact]
+    public async Task BirdArrival_AtFriendsNest_IncrementsBothSidesExchangeCount()
+    {
+        var usernameA = $"exch-a-{Guid.NewGuid():N}";
+        var usernameB = $"exch-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA, new { Username = usernameB }));
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var aNest = await CreateNestAsync(tokenA, "A's Nest");
+        var bNest = await CreateNestAsync(tokenB, "B's Nest");
+
+        var sentResponse = await ComposeBirdAsync(tokenA, "Cro", "A's Bird", aNest.Id, bNest.Id, content: "Hi");
+        sentResponse.EnsureSuccessStatusCode();
+        await WaitForIndexingAsync();
+
+        // GET /friends never touches birds itself - the arrival (and the exchange-count
+        // bump alongside it, see ResolveArrivalIfDueAsync) is only ever resolved lazily by
+        // some query that touches the bird, same as every other arrival test in this file.
+        (await GetNestResidentsAsync(tokenB, bNest.Id)).EnsureSuccessStatusCode();
+
+        var friendsForAResponse = await GetFriendsAsync(tokenA);
+        friendsForAResponse.EnsureSuccessStatusCode();
+        var friendsForA = await friendsForAResponse.Content.ReadFromJsonAsync<List<FriendDto>>();
+
+        var friendsForBResponse = await GetFriendsAsync(tokenB);
+        friendsForBResponse.EnsureSuccessStatusCode();
+        var friendsForB = await friendsForBResponse.Content.ReadFromJsonAsync<List<FriendDto>>();
+
+        Assert.Equal(1, friendsForA!.Single(f => f.Id == idB).ExchangeCount);
+        Assert.Equal(1, friendsForB!.Single(f => f.Id == idA).ExchangeCount);
+    }
+
+    [Fact]
+    public async Task BirdArrival_AtOwnNestOrHub_DoesNotIncrementAnyExchangeCount()
+    {
+        var usernameA = $"exch-own-a-{Guid.NewGuid():N}";
+        var usernameB = $"exch-own-b-{Guid.NewGuid():N}";
+        var (idA, tokenA) = await RegisterAndLoginAsync(usernameA, "correct-horse-battery-staple");
+        var (idB, tokenB) = await RegisterAndLoginAsync(usernameB, "correct-horse-battery-staple");
+
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", tokenA, new { Username = usernameB }));
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{idA}/accept", tokenB));
+
+        var aNest = await CreateNestAsync(tokenA, "A's Nest");
+        var bounceHub = await CreateHubAsync(await LoginAsync("Admin 1", SeedPassword), $"Exch Bounce Hub {Guid.NewGuid():N}", 52.0, 52.0);
+
+        // A's own bird, sent to a Hub then bounced back to A's own nest - neither leg ever
+        // lands at a friend's nest, so B's exchange count with A must stay untouched
+        // throughout, and A's own count for B must never move either.
+        var composeResponse = await ComposeBirdAsync(tokenA, "Cro", "A's Bird", aNest.Id, bounceHub.Id, content: "To hub");
+        composeResponse.EnsureSuccessStatusCode();
+        var composed = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+        await WaitForIndexingAsync();
+        (await GetOwnBirdsAsync(tokenA)).EnsureSuccessStatusCode();
+
+        var bounceBackResponse = await SendBirdAsync(tokenA, composed.Id, aNest.Id);
+        bounceBackResponse.EnsureSuccessStatusCode();
+        await WaitForIndexingAsync();
+        (await GetOwnBirdsAsync(tokenA)).EnsureSuccessStatusCode();
+
+        var friendsForAResponse = await GetFriendsAsync(tokenA);
+        friendsForAResponse.EnsureSuccessStatusCode();
+        var friendsForA = await friendsForAResponse.Content.ReadFromJsonAsync<List<FriendDto>>();
+
+        var friendsForBResponse = await GetFriendsAsync(tokenB);
+        friendsForBResponse.EnsureSuccessStatusCode();
+        var friendsForB = await friendsForBResponse.Content.ReadFromJsonAsync<List<FriendDto>>();
+
+        Assert.Equal(0, friendsForA!.Single(f => f.Id == idB).ExchangeCount);
+        Assert.Equal(0, friendsForB!.Single(f => f.Id == idA).ExchangeCount);
+    }
+
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude, DateTimeOffset UpdatedAt, bool IsPublic);
     private record HubDto(string Id, string Name, double Latitude, double Longitude, string Status, string CreatedByUserId, DateTimeOffset CreatedAt, string? Category, string? ProfilePictureUrl);
+    private record FriendDto(string Id, string Username, string? Color, string? ProfilePictureUrl, bool IsAdmin, int ExchangeCount);
     private record BirdDto(
         string Id,
         string UserId,

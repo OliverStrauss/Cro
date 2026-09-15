@@ -3,6 +3,23 @@
 Accepted shortcuts, things flagged but out of scope at the time, and other known gaps
 worth revisiting. See `CLAUDE.md` for the working conventions this file supports.
 
+## A merge to `main` silently dropped a test-only follow-up commit (found 2026-09-14)
+
+Found while starting the "liven up Cro" polish work: `main`'s nest-count-removal change
+(`app/lib/web/screens/web_profile_screen.dart`) landed as a single fast-forwarded commit
+(`9e20bdf`), but the `fix/profile-remove-nest-count-text` branch it came from actually had
+*two* commits - `63e7db2` (the removal itself) and a follow-up, `1bab44c`, titled "Update
+profile screen test for removed nest-count text" that fixed the now-stale
+`web_profile_screen_test.dart` assertion to match. Only the first commit's file change made it
+onto `main`; the test fix never did, leaving `main` with a failing test
+(`shows a card per friend, with their nest count`, asserting on the since-deleted "1 nest on
+your map" text) that nobody would see fail until the next `flutter test` run touched that file.
+Fixed here as part of this branch (folded the stale assertion's removal into a broader test
+update alongside a new exchange-count test on the same card). Root cause not fully chased down
+- likely a manual squash/cherry-pick of just the removal commit rather than merging the branch
+as a whole - but worth watching for: a branch's later "fix the test" commit can silently not
+make it to `main` if it's merged via anything other than the branch's own PR merge button.
+
 ## CI `deploy` job silently skipped on every push since #179, because `build` kept 503ing against its own Cosmos emulator (reopened 2026-09-14)
 
 Discovered 2026-09-14 while investigating a "Could not pin this bird" report: the pin feature

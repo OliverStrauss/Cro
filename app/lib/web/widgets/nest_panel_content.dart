@@ -15,6 +15,7 @@ import '../../utils/jwt_utils.dart';
 import '../../widgets/received_bird_sheet.dart';
 import '../../widgets/waypoint_name_dialog.dart';
 import 'coordinate_readout.dart';
+import 'hover_lift.dart';
 import 'panel_header.dart';
 import 'pinned_message_card.dart';
 
@@ -82,14 +83,17 @@ class _NestPanelContentState extends State<NestPanelContent> {
   List<PinnedBird> _publicPins = [];
   bool _isLoadingPublicPins = true;
 
-  List<Bird> get _ownIdleBirds => _residents.where((b) => b.userId == _currentUserId).toList();
-  List<Bird> get _deliveredBirds => _residents.where((b) => b.userId != _currentUserId).toList();
+  List<Bird> get _ownIdleBirds =>
+      _residents.where((b) => b.userId == _currentUserId).toList();
+  List<Bird> get _deliveredBirds =>
+      _residents.where((b) => b.userId != _currentUserId).toList();
 
   // Only meaningful for a friend's nest (isOwn's own body uses _ownIdleBirds instead, from
   // the cross-partition GET /waypoints/{id}/birds fetch, which also needs to see what
   // friends delivered - this list can't answer that).
-  List<Bird> get _myBirdsHere =>
-      widget.ownBirds.where((b) => b.currentNestId == widget.nest.id && !b.isTraveling).toList();
+  List<Bird> get _myBirdsHere => widget.ownBirds
+      .where((b) => b.currentNestId == widget.nest.id && !b.isTraveling)
+      .toList();
 
   // Both lists come back from GET /waypoints/{id}/birds already newest-arrival-first (see
   // BirdService.GetNestResidentsAsync's OrderByDescending(UpdatedAt)) - same relative-time
@@ -134,10 +138,14 @@ class _NestPanelContentState extends State<NestPanelContent> {
   Future<void> _loadPublicPins() async {
     setState(() => _isLoadingPublicPins = true);
     try {
-      final allPublicPins = await widget.pinService.listPublicPins(widget.authState.token!);
+      final allPublicPins = await widget.pinService.listPublicPins(
+        widget.authState.token!,
+      );
       if (!mounted) return;
       setState(() {
-        _publicPins = allPublicPins.where((p) => p.receiverId == widget.nest.userId).toList();
+        _publicPins = allPublicPins
+            .where((p) => p.receiverId == widget.nest.userId)
+            .toList();
         _isLoadingPublicPins = false;
       });
     } catch (_) {
@@ -148,7 +156,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
   Future<void> _loadResidents() async {
     setState(() => _isLoadingResidents = true);
     try {
-      final residents = await widget.birdService.getNestResidents(widget.authState.token!, widget.nest.id);
+      final residents = await widget.birdService.getNestResidents(
+        widget.authState.token!,
+        widget.nest.id,
+      );
       if (!mounted) return;
       setState(() {
         _residents = residents;
@@ -207,21 +218,30 @@ class _NestPanelContentState extends State<NestPanelContent> {
   void _toast(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: isError ? Theme.of(context).colorScheme.error : null),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final nest = widget.nest;
-    final color = widget.isOwn ? CroColors.waypointBlue : hexToColor(nest.color ?? '#6B7280');
+    final color = widget.isOwn
+        ? CroColors.waypointBlue
+        : hexToColor(nest.color ?? '#6B7280');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         PanelHeader(
-          avatar: CircleAvatar(radius: 26, backgroundColor: color, child: const Icon(Icons.home, color: CroColors.surface)),
+          avatar: CircleAvatar(
+            radius: 26,
+            backgroundColor: color,
+            child: const Icon(Icons.home, color: CroColors.surface),
+          ),
           title: widget.isOwn ? 'Your nest' : "${nest.username}'s nest",
           subtitle: _name,
           onClose: widget.onClose,
@@ -230,12 +250,19 @@ class _NestPanelContentState extends State<NestPanelContent> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Row(
             children: [
-              CoordinateReadout(latitude: nest.latitude, longitude: nest.longitude),
+              CoordinateReadout(
+                latitude: nest.latitude,
+                longitude: nest.longitude,
+              ),
               if (widget.isOwn) ...[
                 const SizedBox(width: 10),
                 _headerLink('webRenameNestButton', 'Rename', _rename),
                 const SizedBox(width: 10),
-                _headerLink('webViewPinnedNestButton', 'View pinned', widget.onViewPinned),
+                _headerLink(
+                  'webViewPinnedNestButton',
+                  'View pinned',
+                  widget.onViewPinned,
+                ),
               ],
             ],
           ),
@@ -260,7 +287,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Text(label, style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+          child: Text(
+            label,
+            style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint),
+          ),
         ),
       ),
     );
@@ -268,7 +298,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
 
   Widget _ownBody() {
     if (_isLoadingResidents) {
-      return const Center(key: Key('nestPanelResidentsLoading'), child: CircularProgressIndicator());
+      return const Center(
+        key: Key('nestPanelResidentsLoading'),
+        child: CircularProgressIndicator(),
+      );
     }
     return ListView(
       shrinkWrap: true,
@@ -303,7 +336,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
         ],
         Text('Public pins', style: CroTextStyles.label(size: 12)),
         const SizedBox(height: 9),
-        Column(key: const Key('nestPanelPublicPinsList'), children: _publicPinsSection()),
+        Column(
+          key: const Key('nestPanelPublicPinsList'),
+          children: _publicPinsSection(),
+        ),
       ],
     );
   }
@@ -313,7 +349,10 @@ class _NestPanelContentState extends State<NestPanelContent> {
       return [
         const Center(
           key: Key('nestPanelPublicPinsLoading'),
-          child: Padding(padding: EdgeInsets.symmetric(vertical: 16), child: CircularProgressIndicator()),
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: CircularProgressIndicator(),
+          ),
         ),
       ];
     }
@@ -346,7 +385,11 @@ class _NestPanelContentState extends State<NestPanelContent> {
       Text(title, style: CroTextStyles.label(size: 12)),
       const SizedBox(height: 9),
       if (birds.isEmpty)
-        Text('This nest is empty', key: const Key('nestPanelEmpty'), style: CroTextStyles.data(size: 12.5))
+        Text(
+          'This nest is empty',
+          key: const Key('nestPanelEmpty'),
+          style: CroTextStyles.data(size: 12.5),
+        )
       else
         for (final bird in birds) _residentRow(bird),
     ];
@@ -355,46 +398,65 @@ class _NestPanelContentState extends State<NestPanelContent> {
   Widget _deliveredRow(Bird bird) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: CroColors.warmTint,
-        borderRadius: CroBorders.radius,
-        child: InkWell(
-          key: Key('nestPanelDelivered_${bird.id}'),
+      child: HoverLift(
+        builder: (context, hovering) => Material(
+          color: CroColors.warmTint,
+          elevation: hovering ? 2 : 0,
+          shadowColor: CroColors.ink.withValues(alpha: 0.25),
           borderRadius: CroBorders.radius,
-          onTap: () => _openReceivedBird(bird),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-            decoration: BoxDecoration(
-              border: Border.all(color: CroColors.deliveryAmber.withValues(alpha: 0.6)),
-              borderRadius: CroBorders.radius,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.arrow_forward_rounded, size: 14, color: CroColors.surface),
+          child: InkWell(
+            key: Key('nestPanelDelivered_${bird.id}'),
+            borderRadius: CroBorders.radius,
+            onTap: () => _openReceivedBird(bird),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: CroColors.deliveryAmber.withValues(alpha: 0.6),
                 ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      Text(
-                        bird.updatedAt == null
-                            ? (bird.isRead ? bird.type : 'New · ${bird.type}')
-                            : '${bird.isRead ? bird.type : 'New · ${bird.type}'} · ${_relativeTime(bird.updatedAt!)}',
-                        style: CroTextStyles.data(size: 11.5),
-                      ),
-                    ],
+                borderRadius: CroBorders.radius,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 14,
+                      color: CroColors.surface,
+                    ),
                   ),
-                ),
-                Text('Read', style: CroTextStyles.stamp()),
-              ],
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          bird.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          bird.updatedAt == null
+                              ? (bird.isRead ? bird.type : 'New · ${bird.type}')
+                              : '${bird.isRead ? bird.type : 'New · ${bird.type}'} · ${_relativeTime(bird.updatedAt!)}',
+                          style: CroTextStyles.data(size: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text('Read', style: CroTextStyles.stamp()),
+                ],
+              ),
             ),
           ),
         ),
@@ -405,34 +467,63 @@ class _NestPanelContentState extends State<NestPanelContent> {
   Widget _residentRow(Bird bird) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: CroColors.warmSurface,
-        borderRadius: CroBorders.radius,
-        child: InkWell(
-          key: Key('nestPanelResident_${bird.id}'),
+      child: HoverLift(
+        builder: (context, hovering) => Material(
+          color: CroColors.warmSurface,
+          elevation: hovering ? 2 : 0,
+          shadowColor: CroColors.ink.withValues(alpha: 0.25),
           borderRadius: CroBorders.radius,
-          onTap: () => widget.onSelectBird(bird),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-            child: Row(
-              children: [
-                Container(width: 28, height: 28, decoration: const BoxDecoration(color: CroColors.waypointBlue, shape: BoxShape.circle)),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(bird.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      Text(
-                        bird.updatedAt == null ? bird.type : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
-                        style: CroTextStyles.data(size: 11.5),
-                      ),
-                    ],
+          child: InkWell(
+            key: Key('nestPanelResident_${bird.id}'),
+            borderRadius: CroBorders.radius,
+            onTap: () => widget.onSelectBird(bird),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: const BoxDecoration(
+                      color: CroColors.waypointBlue,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.flutter_dash,
+                      size: 14,
+                      color: CroColors.surface,
+                    ),
                   ),
-                ),
-                const Icon(Icons.chevron_right, size: 18, color: CroColors.fog),
-              ],
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          bird.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          bird.updatedAt == null
+                              ? bird.type
+                              : '${bird.type} · ${_relativeTime(bird.updatedAt!)}',
+                          style: CroTextStyles.data(size: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: CroColors.fog,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

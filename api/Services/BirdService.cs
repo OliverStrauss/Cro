@@ -632,6 +632,37 @@ public class BirdService(
 
             await eventService.RecordHubPostAsync(arrived, landedHub);
         }
+        else
+        {
+            // Bumps both sides' FriendEntry.ExchangeCount when a bird lands at a friend's
+            // nest (not the sender's own, not a Hub - that's the landedHub branch above).
+            // Same best-effort shape as the Hub board write: a failed count bump must never
+            // fail the caller's actual query just because this secondary write hiccuped.
+            try
+            {
+                var landedNest = await waypointRepository.GetByIdAsync(arrived.NestToId ?? string.Empty);
+                if (landedNest is not null && landedNest.UserId != arrived.UserId)
+                {
+                    var sender = await userRepository.GetByIdAsync(arrived.UserId);
+                    var recipient = await userRepository.GetByIdAsync(landedNest.UserId);
+                    if (sender is not null && recipient is not null)
+                    {
+                        var updatedSenderFriends = (sender.Friends ?? [])
+                            .Select(f => f.Id == recipient.Id ? f with { ExchangeCount = f.ExchangeCount + 1 } : f)
+                            .ToList();
+                        var updatedRecipientFriends = (recipient.Friends ?? [])
+                            .Select(f => f.Id == sender.Id ? f with { ExchangeCount = f.ExchangeCount + 1 } : f)
+                            .ToList();
+                        await userRepository.UpdateAsync(sender with { Friends = updatedSenderFriends });
+                        await userRepository.UpdateAsync(recipient with { Friends = updatedRecipientFriends });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to bump friend exchange count for bird {BirdId} landing at nest {NestId}", arrived.Id, arrived.NestToId);
+            }
+        }
 
         return arrived;
     }

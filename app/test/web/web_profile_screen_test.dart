@@ -15,7 +15,9 @@ import 'package:cro_app/web/screens/web_profile_screen.dart';
 class _FakeProfileService implements ProfileService {
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not used by WebProfileScreen');
+      throw UnimplementedError(
+        '${invocation.memberName} is not used by WebProfileScreen',
+      );
 }
 
 class _FakeFriendsService implements FriendsService {
@@ -34,16 +36,21 @@ class _FakeFriendsService implements FriendsService {
   Future<List<Friend>> getFriends(String token) async => friends;
 
   @override
-  Future<List<FriendRequest>> getIncomingRequests(String token) async => incoming;
+  Future<List<FriendRequest>> getIncomingRequests(String token) async =>
+      incoming;
 
   @override
-  Future<List<FriendRequest>> getOutgoingRequests(String token) async => outgoing;
+  Future<List<FriendRequest>> getOutgoingRequests(String token) async =>
+      outgoing;
 
   @override
   Future<List<BlockedUser>> getBlockedUsers(String token) async => blocked;
 
   @override
-  Future<List<UserSearchResult>> searchUsers(String token, String query) async => searchResults;
+  Future<List<UserSearchResult>> searchUsers(
+    String token,
+    String query,
+  ) async => searchResults;
 
   @override
   Future<void> sendFriendRequest(String token, String username) async {
@@ -78,7 +85,9 @@ class _FakeFriendsService implements FriendsService {
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not used by WebProfileScreen');
+      throw UnimplementedError(
+        '${invocation.memberName} is not used by WebProfileScreen',
+      );
 }
 
 void main() {
@@ -143,18 +152,52 @@ void main() {
     expect(find.byKey(const Key('noFriendsMessage')), findsOneWidget);
   });
 
-  testWidgets('shows a card per friend, with their nest count', (tester) async {
-    friendsService.friends = [Friend(userId: 'u2', username: 'mia', color: '#E53935')];
-    await tester.pumpWidget(build(friendWaypoints: [
-      Waypoint(id: 'f1', userId: 'u2', name: "Mia's Cabin", latitude: 1, longitude: 1, username: 'mia'),
-    ]));
+  testWidgets('shows a card per friend', (tester) async {
+    friendsService.friends = [
+      Friend(userId: 'u2', username: 'mia', color: '#E53935'),
+    ];
+    await tester.pumpWidget(
+      build(
+        friendWaypoints: [
+          Waypoint(
+            id: 'f1',
+            userId: 'u2',
+            name: "Mia's Cabin",
+            latitude: 1,
+            longitude: 1,
+            username: 'mia',
+          ),
+        ],
+      ),
+    );
     await tester.pump();
 
     expect(find.byKey(const Key('webFriendCard_u2')), findsOneWidget);
-    expect(find.text('1 nest on your map'), findsOneWidget);
   });
 
-  testWidgets('shows incoming invites and accepting one calls the service', (tester) async {
+  testWidgets("hides a friend's exchange count when it's zero", (tester) async {
+    friendsService.friends = [
+      Friend(userId: 'u2', username: 'mia', color: '#E53935'),
+    ];
+    await tester.pumpWidget(build());
+    await tester.pump();
+    expect(find.textContaining("cro's exchanged"), findsNothing);
+  });
+
+  testWidgets("shows a friend's exchange count once it's above zero", (
+    tester,
+  ) async {
+    friendsService.friends = [
+      Friend(userId: 'u2', username: 'mia', color: '#E53935', exchangeCount: 3),
+    ];
+    await tester.pumpWidget(build());
+    await tester.pump();
+    expect(find.text("3 cro's exchanged"), findsOneWidget);
+  });
+
+  testWidgets('shows incoming invites and accepting one calls the service', (
+    tester,
+  ) async {
     friendsService.incoming = [FriendRequest(userId: 'u3', username: 'theo')];
     var changed = false;
     await tester.pumpWidget(build(onDataChanged: () => changed = true));
@@ -168,7 +211,9 @@ void main() {
     expect(changed, isTrue);
   });
 
-  testWidgets('typing in search excludes people already in a relationship', (tester) async {
+  testWidgets('typing in search excludes people already in a relationship', (
+    tester,
+  ) async {
     friendsService.friends = [Friend(userId: 'u2', username: 'mia')];
     friendsService.searchResults = [
       UserSearchResult(userId: 'u2', username: 'mia'),
@@ -185,7 +230,9 @@ void main() {
   });
 
   testWidgets('shows outgoing requests and blocked users', (tester) async {
-    friendsService.outgoing = [FriendRequest(userId: 'u6', username: 'waiting_on')];
+    friendsService.outgoing = [
+      FriendRequest(userId: 'u6', username: 'waiting_on'),
+    ];
     friendsService.blocked = [BlockedUser(userId: 'u7', username: 'spammer')];
     await tester.pumpWidget(build());
     await tester.pump();
@@ -202,7 +249,9 @@ void main() {
     expect(find.byKey(const Key('webMakeAdminButton_u2')), findsNothing);
   });
 
-  testWidgets('an admin caller can promote a non-admin friend to admin', (tester) async {
+  testWidgets('an admin caller can promote a non-admin friend to admin', (
+    tester,
+  ) async {
     friendsService.friends = [Friend(userId: 'u2', username: 'mia')];
     await tester.pumpWidget(build(isAdmin: true));
     await tester.pump();
@@ -217,13 +266,18 @@ void main() {
     expect(friendsService.lastMadeAdminId, 'u2');
   });
 
-  testWidgets('an admin caller sees no make-admin button for a friend who is already admin', (tester) async {
-    friendsService.friends = [Friend(userId: 'u2', username: 'mia', isAdmin: true)];
-    await tester.pumpWidget(build(isAdmin: true));
-    await tester.pump();
+  testWidgets(
+    'an admin caller sees no make-admin button for a friend who is already admin',
+    (tester) async {
+      friendsService.friends = [
+        Friend(userId: 'u2', username: 'mia', isAdmin: true),
+      ];
+      await tester.pumpWidget(build(isAdmin: true));
+      await tester.pump();
 
-    expect(find.byKey(const Key('webMakeAdminButton_u2')), findsNothing);
-  });
+      expect(find.byKey(const Key('webMakeAdminButton_u2')), findsNothing);
+    },
+  );
 
   testWidgets('removing a friend requires two taps to confirm', (tester) async {
     friendsService.friends = [Friend(userId: 'u2', username: 'mia')];
@@ -239,12 +293,19 @@ void main() {
     expect(friendsService.lastRemovedFriendId, 'u2');
   });
 
-  testWidgets('blocking a search result requires two taps to confirm', (tester) async {
-    friendsService.searchResults = [UserSearchResult(userId: 'u5', username: 'newperson')];
+  testWidgets('blocking a search result requires two taps to confirm', (
+    tester,
+  ) async {
+    friendsService.searchResults = [
+      UserSearchResult(userId: 'u5', username: 'newperson'),
+    ];
     await tester.pumpWidget(build());
     await tester.pump();
 
-    await tester.enterText(find.byKey(const Key('webFriendSearchField')), 'new');
+    await tester.enterText(
+      find.byKey(const Key('webFriendSearchField')),
+      'new',
+    );
     await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(find.byKey(const Key('webBlockSearchButton_u5')));

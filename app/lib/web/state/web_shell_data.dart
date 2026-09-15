@@ -83,6 +83,11 @@ class WebShellData extends ChangeNotifier {
   // at most 1 nest), fetched alongside everything else in load().
   Map<String, List<Bird>> nestResidentsByNestId = {};
 
+  // Bird ids that flipped from traveling to arrived on the most recent poll - drives
+  // DockBirdCard's one-shot arrival flash. Transient: a consumer should read it once per
+  // notify and not rely on it surviving past the next poll.
+  Set<String> justArrivedBirdIds = {};
+
   bool isLoading = true;
   String? errorMessage;
 
@@ -130,7 +135,10 @@ class WebShellData extends ChangeNotifier {
         friendsService.getFriendsWaypoints(token),
       ]);
       if (_disposed) return;
-      birds = results[0] as List<Bird>;
+      final previouslyTraveling = {for (final b in birds) if (b.isTraveling) b.id};
+      final newBirds = results[0] as List<Bird>;
+      justArrivedBirdIds = {for (final b in newBirds) if (!b.isTraveling && previouslyTraveling.contains(b.id)) b.id};
+      birds = newBirds;
       friendsBirds = results[1] as List<FriendBird>;
       publicBirds = results[2] as List<PublicBird>;
       hubUnreadCounts = results[3] as Map<String, int>;
