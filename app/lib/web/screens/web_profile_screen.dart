@@ -310,8 +310,6 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
     );
   }
 
-  int _nestCountFor(String username) => widget.friendWaypoints.where((w) => w.username == username).length;
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -477,7 +475,6 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
   // and structurally can't overlap a neighbor.
   Widget _friendCard(Friend friend) {
     final color = hexToColor(friend.color ?? '#6B7280');
-    final nestCount = _nestCountFor(friend.username);
     final isConfirmingRemove = _confirmRemoveId == friend.userId;
     return Container(
       key: Key('webFriendCard_${friend.userId}'),
@@ -498,21 +495,6 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(width: 14, height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  nestCount == 1 ? '1 nest on your map' : '$nestCount nests',
-                  overflow: TextOverflow.ellipsis,
-                  style: CroTextStyles.data(size: 11),
-                ),
-              ),
-            ],
           ),
           const SizedBox(height: 10),
           const Divider(),
