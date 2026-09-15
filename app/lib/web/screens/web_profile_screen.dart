@@ -588,13 +588,16 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
           ),
-          if (friend.exchangeCount > 0) ...[
-            const SizedBox(height: 2),
-            Text(
-              '${friend.exchangeCount} cro\'s exchanged',
-              style: CroTextStyles.data(size: 11),
-            ),
-          ],
+          const SizedBox(height: 2),
+          SizedBox(
+            height: 14,
+            child: friend.exchangeCount > 0
+                ? Text(
+                    '${friend.exchangeCount} cro\'s exchanged',
+                    style: CroTextStyles.data(size: 11),
+                  )
+                : null,
+          ),
           const SizedBox(height: 10),
           const Divider(),
           const SizedBox(height: 6),
