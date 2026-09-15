@@ -89,7 +89,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
     try {
       final xFile = await widget.profileService.pickImage();
       if (xFile == null) return;
-      picked = (await xFile.readAsBytes(), xFile.name, xFile.mimeType ?? 'image/jpeg');
+      picked = (
+        await xFile.readAsBytes(),
+        xFile.name,
+        xFile.mimeType ?? 'image/jpeg',
+      );
     } catch (e) {
       _toast(e.toString(), isError: true);
       return;
@@ -97,7 +101,12 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
 
     setState(() => _isUploading = true);
     try {
-      await widget.profileService.uploadProfilePicture(widget.authState.token!, picked.$1, filename: picked.$2, contentType: picked.$3);
+      await widget.profileService.uploadProfilePicture(
+        widget.authState.token!,
+        picked.$1,
+        filename: picked.$2,
+        contentType: picked.$3,
+      );
       widget.onDataChanged();
     } catch (e) {
       _toast(e.toString(), isError: true);
@@ -166,12 +175,18 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       if (_searchResults.isNotEmpty) setState(() => _searchResults = []);
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 250), () => _search(query));
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _search(query),
+    );
   }
 
   Future<void> _search(String query) async {
     try {
-      final results = await widget.friendsService.searchUsers(widget.authState.token!, query);
+      final results = await widget.friendsService.searchUsers(
+        widget.authState.token!,
+        query,
+      );
       if (!mounted) return;
       // Client-side exclusion of everyone already in some relationship with the caller -
       // the search endpoint itself only excludes the caller.
@@ -182,7 +197,9 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
         ..._blocked.map((b) => b.username.toLowerCase()),
       };
       setState(() {
-        _searchResults = results.where((r) => !excluded.contains(r.username.toLowerCase())).toList();
+        _searchResults = results
+            .where((r) => !excluded.contains(r.username.toLowerCase()))
+            .toList();
       });
     } catch (_) {
       // A blip on live-as-you-type search isn't worth surfacing.
@@ -191,7 +208,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
 
   Future<void> _sendRequest(String username) async {
     try {
-      await widget.friendsService.sendFriendRequest(widget.authState.token!, username);
+      await widget.friendsService.sendFriendRequest(
+        widget.authState.token!,
+        username,
+      );
       _searchController.clear();
       setState(() => _searchResults = []);
       await _load();
@@ -219,7 +239,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
 
   Future<void> _accept(String requesterId) async {
     try {
-      await widget.friendsService.acceptFriendRequest(widget.authState.token!, requesterId);
+      await widget.friendsService.acceptFriendRequest(
+        widget.authState.token!,
+        requesterId,
+      );
       await _load();
       widget.onDataChanged();
     } catch (e) {
@@ -229,7 +252,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
 
   Future<void> _decline(String requesterId) async {
     try {
-      await widget.friendsService.declineFriendRequest(widget.authState.token!, requesterId);
+      await widget.friendsService.declineFriendRequest(
+        widget.authState.token!,
+        requesterId,
+      );
       await _load();
       widget.onDataChanged();
     } catch (e) {
@@ -239,7 +265,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
 
   Future<void> _cancelOutgoing(String targetId) async {
     try {
-      await widget.friendsService.removeFriend(widget.authState.token!, targetId);
+      await widget.friendsService.removeFriend(
+        widget.authState.token!,
+        targetId,
+      );
       await _load();
     } catch (e) {
       _toast(e.toString(), isError: true);
@@ -253,7 +282,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
     }
     setState(() => _confirmRemoveId = null);
     try {
-      await widget.friendsService.removeFriend(widget.authState.token!, friendId);
+      await widget.friendsService.removeFriend(
+        widget.authState.token!,
+        friendId,
+      );
       await _load();
       widget.onDataChanged();
     } catch (e) {
@@ -295,7 +327,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
     if (confirmed != true) return;
 
     try {
-      await widget.friendsService.makeAdmin(widget.authState.token!, friend.userId);
+      await widget.friendsService.makeAdmin(
+        widget.authState.token!,
+        friend.userId,
+      );
       _toast('${friend.username} is now an admin');
       await _load();
     } catch (e) {
@@ -306,14 +341,20 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
   void _toast(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: isError ? Theme.of(context).colorScheme.error : null),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(key: Key('webProfileLoading'), child: CircularProgressIndicator());
+      return const Center(
+        key: Key('webProfileLoading'),
+        child: CircularProgressIndicator(),
+      );
     }
     if (_errorMessage != null) {
       return Center(
@@ -347,12 +388,19 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               children: [
                 Text('Your friends', style: CroTextStyles.label(size: 13)),
                 const SizedBox(width: 10),
-                Text('trail colors are assigned automatically', style: CroTextStyles.data(size: 11.5)),
+                Text(
+                  'trail colors are assigned automatically',
+                  style: CroTextStyles.data(size: 11.5),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             if (_friends.isEmpty)
-              Text('No friends yet', key: const Key('noFriendsMessage'), style: CroTextStyles.data(size: 12.5))
+              Text(
+                'No friends yet',
+                key: const Key('noFriendsMessage'),
+                style: CroTextStyles.data(size: 12.5),
+              )
             else
               Wrap(
                 spacing: 12,
@@ -367,7 +415,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               child: TextField(
                 key: const Key('webFriendSearchField'),
                 controller: _searchController,
-                decoration: const InputDecoration(hintText: 'Search by username', prefixIcon: Icon(Icons.search)),
+                decoration: const InputDecoration(
+                  hintText: 'Search by username',
+                  prefixIcon: Icon(Icons.search),
+                ),
               ),
             ),
             if (_searchResults.isNotEmpty) _searchResultsList(),
@@ -375,13 +426,22 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               const SizedBox(height: 26),
               Text('Invites for you', style: CroTextStyles.label(size: 13)),
               const SizedBox(height: 12),
-              Wrap(spacing: 12, runSpacing: 12, children: [for (final r in _incoming) _inviteCard(r)]),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [for (final r in _incoming) _inviteCard(r)],
+              ),
             ],
             if (_outgoing.isNotEmpty) ...[
               const SizedBox(height: 26),
               Text('Waiting on them', style: CroTextStyles.label(size: 13)),
               const SizedBox(height: 12),
-              SizedBox(width: 420, child: Column(children: [for (final r in _outgoing) _outgoingRow(r)])),
+              SizedBox(
+                width: 420,
+                child: Column(
+                  children: [for (final r in _outgoing) _outgoingRow(r)],
+                ),
+              ),
             ],
             const SizedBox(height: 26),
             Text('Blocked', style: CroTextStyles.label(size: 13)),
@@ -389,7 +449,12 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             if (_blocked.isEmpty)
               Text('No blocked users', style: CroTextStyles.data(size: 12.5))
             else
-              SizedBox(width: 420, child: Column(children: [for (final b in _blocked) _blockedRow(b)])),
+              SizedBox(
+                width: 420,
+                child: Column(
+                  children: [for (final b in _blocked) _blockedRow(b)],
+                ),
+              ),
           ],
         ),
       ),
@@ -436,14 +501,29 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.username, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+                Text(
+                  widget.username,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text('Click your picture to change it', style: CroTextStyles.data(size: 12.5)),
+                Text(
+                  'Click your picture to change it',
+                  style: CroTextStyles.data(size: 12.5),
+                ),
                 if (widget.isAdmin) ...[
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(border: Border.all(color: CroColors.deliveryAmber), borderRadius: CroBorders.radiusSmall),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: CroColors.deliveryAmber),
+                      borderRadius: CroBorders.radiusSmall,
+                    ),
                     child: Text('Admin', style: CroTextStyles.stamp()),
                   ),
                 ],
@@ -458,7 +538,13 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               onTap: widget.authState.logout,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Text('Sign out', style: CroTextStyles.label(size: 11, color: CroColors.alertAway)),
+                child: Text(
+                  'Sign out',
+                  style: CroTextStyles.label(
+                    size: 11,
+                    color: CroColors.alertAway,
+                  ),
+                ),
               ),
             ),
           ),
@@ -488,7 +574,13 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AvatarWithFallback(imageUrl: friend.profilePictureUrl, initialsSource: friend.username, radius: 26, hasBorder: true, borderColor: color),
+          AvatarWithFallback(
+            imageUrl: friend.profilePictureUrl,
+            initialsSource: friend.username,
+            radius: 26,
+            hasBorder: true,
+            borderColor: color,
+          ),
           const SizedBox(height: 8),
           Text(
             friend.username,
@@ -496,6 +588,13 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
           ),
+          if (friend.exchangeCount > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              '${friend.exchangeCount} cro\'s exchanged',
+              style: CroTextStyles.data(size: 11),
+            ),
+          ],
           const SizedBox(height: 10),
           const Divider(),
           const SizedBox(height: 6),
@@ -513,7 +612,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                       onTap: () => _confirmMakeAdmin(friend),
                       child: const Padding(
                         padding: EdgeInsets.all(5),
-                        child: Icon(Icons.shield_outlined, size: 15, color: CroColors.deepWaypoint),
+                        child: Icon(
+                          Icons.shield_outlined,
+                          size: 15,
+                          color: CroColors.deepWaypoint,
+                        ),
                       ),
                     ),
                   ),
@@ -521,7 +624,9 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                 const SizedBox(width: 4),
               ],
               Tooltip(
-                message: isConfirmingRemove ? 'Tap again to remove' : 'Remove friend',
+                message: isConfirmingRemove
+                    ? 'Tap again to remove'
+                    : 'Remove friend',
                 child: Material(
                   type: MaterialType.transparency,
                   child: InkWell(
@@ -529,10 +634,18 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                     borderRadius: CroBorders.radiusSmall,
                     onTap: () => _removeFriend(friend.userId),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 5,
+                      ),
                       child: Text(
                         isConfirmingRemove ? 'Confirm?' : 'Remove',
-                        style: CroTextStyles.label(size: 10, color: isConfirmingRemove ? Theme.of(context).colorScheme.error : CroColors.fog),
+                        style: CroTextStyles.label(
+                          size: 10,
+                          color: isConfirmingRemove
+                              ? Theme.of(context).colorScheme.error
+                              : CroColors.fog,
+                        ),
                       ),
                     ),
                   ),
@@ -564,14 +677,21 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
               child: Row(
                 children: [
-                  AvatarWithFallback(imageUrl: r.profilePictureUrl, initialsSource: r.username, radius: 16),
+                  AvatarWithFallback(
+                    imageUrl: r.profilePictureUrl,
+                    initialsSource: r.username,
+                    radius: 16,
+                  ),
                   const SizedBox(width: 11),
                   Expanded(
                     child: Text(
                       r.username,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                   Material(
@@ -581,8 +701,17 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                       borderRadius: CroBorders.radiusSmall,
                       onTap: () => _sendRequest(r.username),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: Text('Send request', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          'Send request',
+                          style: CroTextStyles.label(
+                            size: 11,
+                            color: CroColors.deepWaypoint,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -594,10 +723,20 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                       borderRadius: CroBorders.radiusSmall,
                       onTap: () => _blockFromSearch(r.userId),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 4,
+                        ),
                         child: Text(
-                          _confirmBlockSearchId == r.userId ? 'Confirm?' : 'Block',
-                          style: CroTextStyles.label(size: 11, color: _confirmBlockSearchId == r.userId ? Theme.of(context).colorScheme.error : CroColors.fog),
+                          _confirmBlockSearchId == r.userId
+                              ? 'Confirm?'
+                              : 'Block',
+                          style: CroTextStyles.label(
+                            size: 11,
+                            color: _confirmBlockSearchId == r.userId
+                                ? Theme.of(context).colorScheme.error
+                                : CroColors.fog,
+                          ),
                         ),
                       ),
                     ),
@@ -623,7 +762,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AvatarWithFallback(imageUrl: request.profilePictureUrl, initialsSource: request.username, radius: 23),
+          AvatarWithFallback(
+            imageUrl: request.profilePictureUrl,
+            initialsSource: request.username,
+            radius: 23,
+          ),
           const SizedBox(height: 8),
           Text(
             request.username,
@@ -639,8 +782,14 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                 key: Key('webAcceptInviteButton_${request.userId}'),
                 onPressed: () => _accept(request.userId),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  textStyle: CroTextStyles.label(size: 11, color: CroColors.surface),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  textStyle: CroTextStyles.label(
+                    size: 11,
+                    color: CroColors.surface,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -651,8 +800,14 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                 key: Key('webDeclineInviteButton_${request.userId}'),
                 onPressed: () => _decline(request.userId),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-                  textStyle: CroTextStyles.label(size: 11, color: CroColors.fog),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 8,
+                  ),
+                  textStyle: CroTextStyles.label(
+                    size: 11,
+                    color: CroColors.fog,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -670,7 +825,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       key: Key('webOutgoingRow_${request.userId}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: CroBorders.radiusSmall, border: Border.all(color: CroColors.hairline)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: CroBorders.radiusSmall,
+        border: Border.all(color: CroColors.hairline),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -678,10 +837,16 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               request.username,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-          Text('Waiting', style: CroTextStyles.label(size: 10.5, color: CroColors.fog)),
+          Text(
+            'Waiting',
+            style: CroTextStyles.label(size: 10.5, color: CroColors.fog),
+          ),
           const SizedBox(width: 10),
           Tooltip(
             message: 'Cancel request',
@@ -693,7 +858,10 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
                 onTap: () => _cancelOutgoing(request.userId),
                 child: const Padding(
                   padding: EdgeInsets.all(6),
-                  child: Text('×', style: TextStyle(fontSize: 14, color: CroColors.fog)),
+                  child: Text(
+                    '×',
+                    style: TextStyle(fontSize: 14, color: CroColors.fog),
+                  ),
                 ),
               ),
             ),
@@ -708,7 +876,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
       key: Key('webBlockedRow_${user.userId}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: CroBorders.radiusSmall, border: Border.all(color: CroColors.hairline)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: CroBorders.radiusSmall,
+        border: Border.all(color: CroColors.hairline),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -716,7 +888,11 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               user.username,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: CroColors.fog),
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: CroColors.fog,
+              ),
             ),
           ),
           Material(
@@ -727,7 +903,13 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
               onTap: () => _unblock(user.userId),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Text('Unblock', style: CroTextStyles.label(size: 11, color: CroColors.deepWaypoint)),
+                child: Text(
+                  'Unblock',
+                  style: CroTextStyles.label(
+                    size: 11,
+                    color: CroColors.deepWaypoint,
+                  ),
+                ),
               ),
             ),
           ),

@@ -1661,7 +1661,7 @@ app.MapGet("/friends", async (ClaimsPrincipal principal, CosmosUserRepository us
     foreach (var friend in acceptedFriends)
     {
         var friendUser = await userRepo.GetByIdAsync(friend.Id);
-        friends.Add(new { friend.Id, friend.Username, friend.Color, friendUser?.ProfilePictureUrl, IsAdmin = friendUser?.IsAdmin ?? false });
+        friends.Add(new { friend.Id, friend.Username, friend.Color, friendUser?.ProfilePictureUrl, IsAdmin = friendUser?.IsAdmin ?? false, friend.ExchangeCount });
     }
 
     return Results.Ok(friends);

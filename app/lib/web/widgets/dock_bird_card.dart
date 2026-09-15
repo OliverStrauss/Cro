@@ -6,6 +6,7 @@ import '../../models/waypoint.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../widgets/avatar_with_fallback.dart';
+import 'hover_lift.dart';
 
 enum BirdDockState { home, flight, away, hub }
 
@@ -75,7 +76,9 @@ class DockBirdView {
       if (name == null) return null;
       final color = destHub != null
           ? CroColors.deliveryAmber
-          : (ownIds.contains(destNest!.id) ? CroColors.waypointBlue : hexToColor(destNest.color!));
+          : (ownIds.contains(destNest!.id)
+                ? CroColors.waypointBlue
+                : hexToColor(destNest.color!));
       return DockBirdView(
         bird: bird,
         state: BirdDockState.flight,
@@ -95,7 +98,9 @@ class DockBirdView {
         bird: bird,
         state: BirdDockState.hub,
         hostName: currentHub.name,
-        hostInitial: currentHub.name.isEmpty ? '?' : currentHub.name[0].toUpperCase(),
+        hostInitial: currentHub.name.isEmpty
+            ? '?'
+            : currentHub.name[0].toUpperCase(),
         hostIsHub: true,
         hostColor: CroColors.deliveryAmber,
         progress: 1,
@@ -109,11 +114,15 @@ class DockBirdView {
         state: isHome ? BirdDockState.home : BirdDockState.away,
         hostName: currentNest.name,
         hostUsername: isHome ? null : currentNest.username,
-        hostInitial: currentNest.name.isEmpty ? '?' : currentNest.name[0].toUpperCase(),
+        hostInitial: currentNest.name.isEmpty
+            ? '?'
+            : currentNest.name[0].toUpperCase(),
         hostIsHub: false,
-        hostColor: isHome ? CroColors.waypointBlue : hexToColor(currentNest.color!),
+        hostColor: isHome
+            ? CroColors.waypointBlue
+            : hexToColor(currentNest.color!),
         progress: 1,
-        metaText: isHome ? 'Rested and ready to send' : 'Not your nest',
+        metaText: isHome ? 'At Nest' : 'Not your nest',
       );
     }
     return null;
@@ -138,13 +147,16 @@ class DockBirdView {
     if (remaining.isNegative) return 'Arriving any moment';
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes.remainder(60);
-    return hours > 0 ? 'Arrives in ${hours}h ${minutes}m' : 'Arrives in ${minutes}m';
+    return hours > 0
+        ? 'Arrives in ${hours}h ${minutes}m'
+        : 'Arrives in ${minutes}m';
   }
 
   String get stateLabel => switch (state) {
     BirdDockState.home => 'Home',
     BirdDockState.flight => 'In flight',
-    BirdDockState.away => hostUsername == null ? 'Away' : "At $hostUsername's nest",
+    BirdDockState.away =>
+      hostUsername == null ? 'Away' : "At $hostUsername's nest",
     BirdDockState.hub => 'At a hub',
   };
 
@@ -177,104 +189,252 @@ class DockBirdView {
 
 /// One card in the "Your birds" dock - every bird in the caller's flock shows here
 /// regardless of state, matching the design's "fixed roster, never a feed" intent.
-class DockBirdCard extends StatelessWidget {
+class DockBirdCard extends StatefulWidget {
   final DockBirdView view;
   final VoidCallback onTap;
   final Widget? trailing;
+  // True for exactly one poll cycle right after this bird flips from traveling to
+  // arrived - see WebShellData.justArrivedBirdIds. Triggers a one-shot amber flash.
+  final bool justArrived;
 
-  const DockBirdCard({super.key, required this.view, required this.onTap, this.trailing});
+  const DockBirdCard({
+    super.key,
+    required this.view,
+    required this.onTap,
+    this.trailing,
+    this.justArrived = false,
+  });
+
+  @override
+  State<DockBirdCard> createState() => _DockBirdCardState();
+}
+
+class _DockBirdCardState extends State<DockBirdCard>
+    with TickerProviderStateMixin {
+  late final AnimationController _flashController;
+  late final AnimationController _pulseController;
+  late final Animation<double> _flashScale;
+  late final Animation<double> _flashGlow;
+
+  @override
+  void initState() {
+    super.initState();
+    _flashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    final flashCurve = CurvedAnimation(
+      parent: _flashController,
+      curve: Curves.easeOut,
+    );
+    _flashScale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.06), weight: 35),
+      TweenSequenceItem(tween: Tween(begin: 1.06, end: 1.0), weight: 65),
+    ]).animate(flashCurve);
+    _flashGlow = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 80),
+    ]).animate(flashCurve);
+    if (widget.justArrived) _flashController.forward(from: 0);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(covariant DockBirdCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.justArrived && !oldWidget.justArrived) {
+      _flashController.forward(from: 0);
+    }
+    _syncPulse();
+  }
+
+  // Same "reduce motion" convention as WebMapScreen._syncBob - both loops are purely
+  // decorative, so they're skipped rather than given a reduced-motion variant.
+  void _syncPulse() {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final shouldPulse =
+        !reduceMotion &&
+        !widget.view.bird.isRead &&
+        widget.view.state != BirdDockState.flight;
+    if (shouldPulse && !_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    } else if (!shouldPulse && _pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _flashController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: view.cardBg,
-      borderRadius: CroBorders.radius,
-      child: InkWell(
-        key: Key('dockCard_${view.bird.id}'),
-        borderRadius: CroBorders.radius,
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 168),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border.all(color: view.cardBorder, width: view.cardBorderWidth),
-            borderRadius: CroBorders.radius,
-          ),
-          child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                AvatarWithFallback(
-                  imageUrl: view.bird.profilePictureUrl,
-                  initialsSource: view.bird.name,
-                  radius: 16,
-                ),
-                const SizedBox(width: 9),
-                Expanded(
+    final view = widget.view;
+    return HoverLift(
+      builder: (context, hovering) => AnimatedBuilder(
+        animation: Listenable.merge([_flashController, _pulseController]),
+        builder: (context, child) {
+          final glow = _flashGlow.value;
+          final borderColor = Color.lerp(
+            view.cardBorder,
+            CroColors.deliveryAmber,
+            glow,
+          )!;
+          final unreadOpacity = _pulseController.isAnimating
+              ? 1.0 - (_pulseController.value * 0.55)
+              : 1.0;
+          return Transform.scale(
+            scale: _flashScale.value,
+            child: Material(
+              color: view.cardBg,
+              elevation: hovering ? 3 : 0,
+              shadowColor: CroColors.ink.withValues(alpha: 0.25),
+              borderRadius: CroBorders.radius,
+              child: InkWell(
+                key: Key('dockCard_${view.bird.id}'),
+                borderRadius: CroBorders.radius,
+                onTap: widget.onTap,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 168),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: borderColor,
+                      width: view.cardBorderWidth + glow * 1.5,
+                    ),
+                    borderRadius: CroBorders.radius,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Row(
+                        children: [
+                          AvatarWithFallback(
+                            imageUrl: view.bird.profilePictureUrl,
+                            initialsSource: view.bird.name,
+                            radius: 16,
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  view.bird.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                                Text(
+                                  view.stateLabel,
+                                  style: CroTextStyles.label(
+                                    size: 10,
+                                    color: view.stateColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (!view.bird.isRead &&
+                              view.state != BirdDockState.flight)
+                            Opacity(
+                              opacity: unreadOpacity,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: CroColors.alertAway,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            width: 18,
+                            height: 18,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: view.hostColor,
+                              borderRadius: BorderRadius.circular(
+                                view.hostIsHub ? 5 : 9,
+                              ),
+                            ),
+                            child: Text(
+                              view.hostInitial,
+                              style: CroTextStyles.label(
+                                size: 9,
+                                color: CroColors.surface,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              view.hostName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: CroBorders.radiusSmall,
+                        child: LinearProgressIndicator(
+                          value: view.progress,
+                          minHeight: 5,
+                          backgroundColor: CroColors.ink.withValues(
+                            alpha: 0.08,
+                          ),
+                          valueColor: AlwaysStoppedAnimation(
+                            Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        view.bird.name,
+                        view.metaText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleSmall?.copyWith(fontSize: 13.5, fontWeight: FontWeight.w700),
+                        style: CroTextStyles.data(size: 11),
                       ),
-                      Text(view.stateLabel, style: CroTextStyles.label(size: 10, color: view.stateColor)),
+                      if (widget.trailing != null) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 6),
+                        ),
+                        widget.trailing!,
+                      ],
                     ],
                   ),
                 ),
-                if (!view.bird.isRead && view.state != BirdDockState.flight)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(color: CroColors.alertAway, shape: BoxShape.circle),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: view.hostColor,
-                    borderRadius: BorderRadius.circular(view.hostIsHub ? 5 : 9),
-                  ),
-                  child: Text(view.hostInitial, style: CroTextStyles.label(size: 9, color: CroColors.surface)),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(view.hostName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: CroBorders.radiusSmall,
-              child: LinearProgressIndicator(
-                value: view.progress,
-                minHeight: 5,
-                backgroundColor: CroColors.ink.withValues(alpha: 0.08),
-                valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(view.metaText, maxLines: 1, overflow: TextOverflow.ellipsis, style: CroTextStyles.data(size: 11)),
-            if (trailing != null) ...[
-              const Padding(padding: EdgeInsets.symmetric(vertical: 6)),
-              trailing!,
-            ],
-          ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }

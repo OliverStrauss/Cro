@@ -544,6 +544,7 @@ class WebShellScreenState extends State<WebShellScreen> {
                     onHide: () => setState(() => _dockHidden = true),
                     onShow: () => setState(() => _dockHidden = false),
                     onBirdTap: _onDockBirdTap,
+                    justArrivedBirdIds: _data.justArrivedBirdIds,
                   ),
                 ),
               ],

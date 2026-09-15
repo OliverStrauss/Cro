@@ -44,6 +44,9 @@ class YourBirdsDock extends StatelessWidget {
   final bool hidden;
   final VoidCallback onHide;
   final VoidCallback onShow;
+  // Bird ids that just flipped from traveling to arrived on the latest poll - see
+  // WebShellData.justArrivedBirdIds. Drives DockBirdCard's one-shot arrival flash.
+  final Set<String> justArrivedBirdIds;
   // Passes the resolved view (not just the raw Bird) so the caller can tell home from
   // away/hub/flight without re-deriving DockBirdView.resolve itself - see WebShellScreen's
   // dock-tap handler, which routes an away/hub bird to the nest/hub panel instead.
@@ -63,6 +66,7 @@ class YourBirdsDock extends StatelessWidget {
     required this.onHide,
     required this.onShow,
     required this.onBirdTap,
+    this.justArrivedBirdIds = const {},
   });
 
   List<DockBirdView> get _views => birds
@@ -204,6 +208,7 @@ class YourBirdsDock extends StatelessWidget {
                       child: DockBirdCard(
                         view: v,
                         onTap: () => onBirdTap(v),
+                        justArrived: justArrivedBirdIds.contains(v.bird.id),
                         trailing: expanded
                             ? Text(
                                 '${v.bird.type} · ${BirdType.description(v.bird.type)}',

@@ -127,7 +127,8 @@ class WebMapScreen extends StatefulWidget {
   State<WebMapScreen> createState() => _WebMapScreenState();
 }
 
-class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMixin {
+class _WebMapScreenState extends State<WebMapScreen>
+    with TickerProviderStateMixin {
   late final AnimationController _bobController;
   late final MapController _mapController;
   AnimationController? _cameraAnimationController;
@@ -139,7 +140,10 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    _bobController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+    _bobController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
     _mapController = widget.mapController ?? MapController();
   }
 
@@ -167,15 +171,19 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
   void _syncCameraFocus(WebMapScreen oldWidget) {
     final forced = widget.focusRequest != oldWidget.focusRequest;
     LatLng? target;
-    if (widget.selectedHubId != null && (forced || widget.selectedHubId != oldWidget.selectedHubId)) {
+    if (widget.selectedHubId != null &&
+        (forced || widget.selectedHubId != oldWidget.selectedHubId)) {
       target = _hubLatLng(widget.selectedHubId!);
-    } else if (widget.selectedNestId != null && (forced || widget.selectedNestId != oldWidget.selectedNestId)) {
+    } else if (widget.selectedNestId != null &&
+        (forced || widget.selectedNestId != oldWidget.selectedNestId)) {
       target = _nestLatLng(widget.selectedNestId!);
-    } else if (widget.selectedBirdId != null && (forced || widget.selectedBirdId != oldWidget.selectedBirdId)) {
+    } else if (widget.selectedBirdId != null &&
+        (forced || widget.selectedBirdId != oldWidget.selectedBirdId)) {
       // Null for a home bird (nothing to follow) or a friend/public bird (their tap path
       // never routes through here) - _animateCameraTo is simply skipped in that case.
       target = _ownBirdLatLng(widget.selectedBirdId!);
-    } else if (widget.searchLocation != null && widget.searchLocation != oldWidget.searchLocation) {
+    } else if (widget.searchLocation != null &&
+        widget.searchLocation != oldWidget.searchLocation) {
       target = widget.searchLocation;
     }
     if (target != null) _animateCameraTo(target);
@@ -200,7 +208,11 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
   LatLng? _ownBirdLatLng(String birdId) {
     for (final bird in widget.birds) {
       if (bird.id != birdId) continue;
-      if (!bird.isTraveling || bird.departedAt == null || bird.estimatedArrivalAt == null) return null;
+      if (!bird.isTraveling ||
+          bird.departedAt == null ||
+          bird.estimatedArrivalAt == null) {
+        return null;
+      }
       final origin = _nestsById[bird.nestFromId];
       final destination = _nestsById[bird.nestToId];
       if (origin == null || destination == null) return null;
@@ -220,9 +232,17 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
     final camera = _mapController.camera;
     final latTween = LatLngTween(begin: camera.center, end: target);
     final zoomTween = Tween<double>(begin: camera.zoom, end: _focusZoom);
-    final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     final curved = CurvedAnimation(parent: controller, curve: Curves.easeInOut);
-    controller.addListener(() => _mapController.move(latTween.evaluate(curved), zoomTween.evaluate(curved)));
+    controller.addListener(
+      () => _mapController.move(
+        latTween.evaluate(curved),
+        zoomTween.evaluate(curved),
+      ),
+    );
     _cameraAnimationController = controller;
     controller.forward();
   }
@@ -231,8 +251,11 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
   // informational, so it's simply skipped rather than given a reduced-motion variant.
   void _syncBob() {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
-    final hasTraveling = !reduceMotion &&
-        (widget.birds.any((b) => b.isTraveling) || widget.friendsBirds.isNotEmpty || widget.publicBirds.isNotEmpty);
+    final hasTraveling =
+        !reduceMotion &&
+        (widget.birds.any((b) => b.isTraveling) ||
+            widget.friendsBirds.isNotEmpty ||
+            widget.publicBirds.isNotEmpty);
     if (hasTraveling && !_bobController.isAnimating) {
       _bobController.repeat(reverse: true);
     } else if (!hasTraveling && _bobController.isAnimating) {
@@ -249,14 +272,22 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
   }
 
   int _ownNestUnreadCount(Waypoint nest) =>
-      (widget.nestResidentsByNestId[nest.id] ?? const []).where((b) => !b.isRead).length;
+      (widget.nestResidentsByNestId[nest.id] ?? const [])
+          .where((b) => !b.isRead)
+          .length;
 
   // Shared by _resolveFlights (drawing) and _ownBirdLatLng (camera focus) so a Hub's
   // Waypoint projection is only ever built in one place.
   Map<String, Waypoint> get _nestsById => {
     for (final n in [...widget.ownNests, ...widget.friendWaypoints]) n.id: n,
     for (final h in widget.hubs)
-      h.id: Waypoint(id: h.id, userId: h.createdByUserId, name: h.name, latitude: h.latitude, longitude: h.longitude),
+      h.id: Waypoint(
+        id: h.id,
+        userId: h.createdByUserId,
+        name: h.name,
+        latitude: h.latitude,
+        longitude: h.longitude,
+      ),
   };
 
   List<_MapFlight> _resolveFlights() {
@@ -264,34 +295,42 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
 
     final result = <_MapFlight>[];
     for (final bird in widget.birds) {
-      if (!bird.isTraveling || bird.departedAt == null || bird.estimatedArrivalAt == null) continue;
+      if (!bird.isTraveling ||
+          bird.departedAt == null ||
+          bird.estimatedArrivalAt == null) {
+        continue;
+      }
       final origin = nestsById[bird.nestFromId];
       final destination = nestsById[bird.nestToId];
       if (origin == null || destination == null) continue;
-      result.add(_MapFlight(
-        id: bird.id,
-        color: Theme.of(context).colorScheme.primary,
-        origin: origin,
-        destination: destination,
-        departedAt: bird.departedAt!,
-        estimatedArrivalAt: bird.estimatedArrivalAt!,
-        ownBird: bird,
-      ));
+      result.add(
+        _MapFlight(
+          id: bird.id,
+          color: Theme.of(context).colorScheme.primary,
+          origin: origin,
+          destination: destination,
+          departedAt: bird.departedAt!,
+          estimatedArrivalAt: bird.estimatedArrivalAt!,
+          ownBird: bird,
+        ),
+      );
     }
     for (final fb in widget.friendsBirds) {
       final origin = nestsById[fb.nestFromId];
       final destination = nestsById[fb.nestToId];
       if (origin == null || destination == null) continue;
-      result.add(_MapFlight(
-        id: fb.id,
-        color: fb.color != null ? hexToColor(fb.color!) : CroColors.fog,
-        origin: origin,
-        destination: destination,
-        departedAt: fb.departedAt,
-        estimatedArrivalAt: fb.estimatedArrivalAt,
-        ownBird: null,
-        friendBird: fb,
-      ));
+      result.add(
+        _MapFlight(
+          id: fb.id,
+          color: fb.color != null ? hexToColor(fb.color!) : CroColors.fog,
+          origin: origin,
+          destination: destination,
+          departedAt: fb.departedAt,
+          estimatedArrivalAt: fb.estimatedArrivalAt,
+          ownBird: null,
+          friendBird: fb,
+        ),
+      );
     }
     return result;
   }
@@ -309,27 +348,37 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
     final initialFocus = widget.selectedHubId != null
         ? _hubLatLng(widget.selectedHubId!)
         : widget.selectedNestId != null
-            ? _nestLatLng(widget.selectedNestId!)
-            : widget.selectedBirdId != null
-                ? _ownBirdLatLng(widget.selectedBirdId!)
-                : null;
+        ? _nestLatLng(widget.selectedNestId!)
+        : widget.selectedBirdId != null
+        ? _ownBirdLatLng(widget.selectedBirdId!)
+        : null;
 
     return Stack(
       children: [
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: initialFocus ??
-                (hasOwnNests ? LatLng(widget.ownNests.first.latitude, widget.ownNests.first.longitude) : _amesCenter),
-            initialZoom: initialFocus != null ? _focusZoom : (hasOwnNests ? 13 : 12),
+            initialCenter:
+                initialFocus ??
+                (hasOwnNests
+                    ? LatLng(
+                        widget.ownNests.first.latitude,
+                        widget.ownNests.first.longitude,
+                      )
+                    : _amesCenter),
+            initialZoom: initialFocus != null
+                ? _focusZoom
+                : (hasOwnNests ? 13 : 12),
             minZoom: 3,
             cameraConstraint: const CameraConstraint.containLatitude(),
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            ),
             onTap: widget.addingNest
                 ? (tapPosition, point) => widget.onPlaceNest?.call(point)
                 : widget.addingHub
-                    ? (tapPosition, point) => widget.onPlaceHub?.call(point)
-                    : null,
+                ? (tapPosition, point) => widget.onPlaceHub?.call(point)
+                : null,
           ),
           children: [
             TileLayer(
@@ -343,16 +392,28 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
               userAgentPackageName: 'com.crotheapp.cro_app',
             ),
             if (flights.isNotEmpty)
-              PolylineLayer(
-                polylines: [
-                  for (final f in flights)
-                    Polyline(
-                      points: curvedFlightPathPoints(origin: f.origin, destination: f.destination),
-                      color: f.color,
-                      strokeWidth: 2.5,
-                      pattern: StrokePattern.dashed(segments: const [8, 6]),
-                    ),
-                ],
+              // Pulses the in-transit trail's opacity using the same controller/condition as
+              // the bird-marker bob below (_bobController only ever runs while something's
+              // traveling, which is exactly when flights is non-empty) - reuses the existing
+              // loop instead of adding a second one just for this.
+              AnimatedBuilder(
+                animation: _bobController,
+                builder: (context, child) => PolylineLayer(
+                  polylines: [
+                    for (final f in flights)
+                      Polyline(
+                        points: curvedFlightPathPoints(
+                          origin: f.origin,
+                          destination: f.destination,
+                        ),
+                        color: f.color.withValues(
+                          alpha: 0.55 + _bobController.value * 0.45,
+                        ),
+                        strokeWidth: 2.5,
+                        pattern: StrokePattern.dashed(segments: const [8, 6]),
+                      ),
+                  ],
+                ),
               ),
             MarkerLayer(
               markers: [
@@ -365,7 +426,11 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                     point: widget.searchLocation!,
                     width: 34,
                     height: 34,
-                    child: const Icon(Icons.location_pin, size: 34, color: CroColors.deliveryAmber),
+                    child: const Icon(
+                      Icons.location_pin,
+                      size: 34,
+                      color: CroColors.deliveryAmber,
+                    ),
                   ),
                 for (final hub in widget.hubs)
                   Marker(
@@ -414,8 +479,14 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                             radius: 15,
                             backgroundColor: CroColors.waypointBlue,
                             child: Text(
-                              nest.name.isEmpty ? '?' : nest.name[0].toUpperCase(),
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.surface),
+                              nest.name.isEmpty
+                                  ? '?'
+                                  : nest.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: CroColors.surface,
+                              ),
                             ),
                           ),
                           if (_ownNestUnreadCount(nest) > 0)
@@ -430,7 +501,8 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                         ],
                       ),
                       name: nest.name,
-                      subtitle: '${widget.birds.where((b) => !b.isTraveling && b.currentNestId == nest.id).length} of yours here',
+                      subtitle:
+                          '${widget.birds.where((b) => !b.isTraveling && b.currentNestId == nest.id).length} of yours here',
                     ),
                   ),
                 for (final fw in widget.friendWaypoints)
@@ -444,13 +516,19 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                       selected: widget.selectedNestId == fw.id,
                       selectionColor: hexToColor(fw.color ?? '#6B7280'),
                       onTap: () => widget.onSelectNest(fw),
-                      hasYourBirds: widget.birds.any((b) => !b.isTraveling && b.currentNestId == fw.id),
+                      hasYourBirds: widget.birds.any(
+                        (b) => !b.isTraveling && b.currentNestId == fw.id,
+                      ),
                       avatar: CircleAvatar(
                         radius: 15,
                         backgroundColor: hexToColor(fw.color ?? '#6B7280'),
                         child: Text(
                           fw.name.isEmpty ? '?' : fw.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CroColors.surface),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: CroColors.surface,
+                          ),
                         ),
                       ),
                       name: fw.name,
@@ -477,19 +555,35 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                           customBorder: const CircleBorder(),
                           onTap: f.ownBird != null
                               ? () => widget.onSelectBird(f.ownBird!)
-                              : (f.isPublicFriendBird ? () => widget.onSelectFriendBird(f.friendBird!) : null),
+                              : (f.isPublicFriendBird
+                                    ? () => widget.onSelectFriendBird(
+                                        f.friendBird!,
+                                      )
+                                    : null),
                           child: AnimatedBuilder(
                             animation: _bobController,
-                            builder: (context, child) => Transform.translate(offset: Offset(0, -4 * _bobController.value), child: child),
+                            builder: (context, child) => Transform.translate(
+                              offset: Offset(0, -4 * _bobController.value),
+                              child: child,
+                            ),
                             child: _BirdMarkerDot(
                               key: Key('webBirdMarkerDot_${f.id}'),
-                              name: f.ownBird?.name ?? f.friendBird?.name ?? 'Bird',
-                              profilePictureUrl: f.ownBird?.profilePictureUrl ?? f.friendBird?.profilePictureUrl,
+                              name:
+                                  f.ownBird?.name ??
+                                  f.friendBird?.name ??
+                                  'Bird',
+                              profilePictureUrl:
+                                  f.ownBird?.profilePictureUrl ??
+                                  f.friendBird?.profilePictureUrl,
                               color: f.color,
                               heading: bearingDegrees(
                                 origin: f.origin,
                                 destination: f.destination,
-                                fraction: elapsedFraction(departedAt: f.departedAt, estimatedArrivalAt: f.estimatedArrivalAt, now: now),
+                                fraction: elapsedFraction(
+                                  departedAt: f.departedAt,
+                                  estimatedArrivalAt: f.estimatedArrivalAt,
+                                  now: now,
+                                ),
                               ),
                               isPublic: f.isPublicFriendBird,
                               hasViewed: f.hasViewed,
@@ -520,7 +614,10 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                           onTap: () => widget.onSelectPublicBird?.call(pb),
                           child: AnimatedBuilder(
                             animation: _bobController,
-                            builder: (context, child) => Transform.translate(offset: Offset(0, -4 * _bobController.value), child: child),
+                            builder: (context, child) => Transform.translate(
+                              offset: Offset(0, -4 * _bobController.value),
+                              child: child,
+                            ),
                             child: _BirdMarkerDot(
                               key: Key('webPublicBirdMarkerDot_${pb.id}'),
                               name: pb.senderUsername,
@@ -541,7 +638,11 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                   ),
               ],
             ),
-            RichAttributionWidget(attributions: [TextSourceAttribution('OpenStreetMap contributors')]),
+            RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution('OpenStreetMap contributors'),
+              ],
+            ),
           ],
         ),
         if (widget.addingNest)
@@ -552,8 +653,14 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
             child: Center(
               child: Container(
                 key: const Key('webAddNestBanner'),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                decoration: BoxDecoration(color: CroColors.ink, borderRadius: CroBorders.radius),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: CroColors.ink,
+                  borderRadius: CroBorders.radius,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -561,7 +668,10 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                       widget.ownNests.isEmpty
                           ? 'Click anywhere on the map to place your new nest'
                           : 'Click anywhere on the map to move your nest',
-                      style: const TextStyle(fontSize: 12.5, color: CroColors.surface),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: CroColors.surface,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Material(
@@ -571,8 +681,17 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                         borderRadius: CroBorders.radiusSmall,
                         onTap: widget.onCancelAddNest,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                          child: Text('Cancel', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: CroTextStyles.label(
+                              size: 11.5,
+                              color: CroColors.skyTint,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -589,8 +708,14 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
             child: Center(
               child: Container(
                 key: const Key('webAddHubBanner'),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                decoration: BoxDecoration(color: CroColors.ink, borderRadius: CroBorders.radius),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: CroColors.ink,
+                  borderRadius: CroBorders.radius,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -598,7 +723,10 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                       widget.isAdmin
                           ? 'Click anywhere on the map to place your new Hub'
                           : 'Click anywhere on the map to suggest a Hub location',
-                      style: const TextStyle(fontSize: 12.5, color: CroColors.surface),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: CroColors.surface,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Material(
@@ -608,8 +736,17 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
                         borderRadius: CroBorders.radiusSmall,
                         onTap: widget.onCancelAddHub,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                          child: Text('Cancel', style: CroTextStyles.label(size: 11.5, color: CroColors.skyTint)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: CroTextStyles.label(
+                              size: 11.5,
+                              color: CroColors.skyTint,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -618,7 +755,11 @@ class _WebMapScreenState extends State<WebMapScreen> with TickerProviderStateMix
               ),
             ),
           ),
-        Positioned(left: 22, bottom: widget.bottomInset + 20, child: _TrailsLegend(friends: widget.friends)),
+        Positioned(
+          left: 22,
+          bottom: widget.bottomInset + 20,
+          child: _TrailsLegend(friends: widget.friends),
+        ),
       ],
     );
   }
@@ -647,7 +788,13 @@ class _TrailsLegend extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
         borderRadius: CroBorders.radius,
         border: Border.all(color: CroColors.hairline),
-        boxShadow: [BoxShadow(color: CroColors.ink.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 3))],
+        boxShadow: [
+          BoxShadow(
+            color: CroColors.ink.withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -660,9 +807,23 @@ class _TrailsLegend extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(width: 18, height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+                Container(
+                  width: 18,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Text(label, style: CroTextStyles.data(size: 12, color: CroColors.ink, weight: FontWeight.w500)),
+                Text(
+                  label,
+                  style: CroTextStyles.data(
+                    size: 12,
+                    color: CroColors.ink,
+                    weight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ],
@@ -712,13 +873,25 @@ class _BirdMarkerDot extends StatelessWidget {
               height: 18,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.9), blurRadius: 14, spreadRadius: 3)],
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.9),
+                    blurRadius: 14,
+                    spreadRadius: 3,
+                  ),
+                ],
               ),
             ),
           Container(
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Color(0x4D2B2F33), blurRadius: 6, offset: Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D2B2F33),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
             child: AvatarWithFallback(
               imageUrl: profilePictureUrl,
@@ -746,7 +919,12 @@ class _BirdMarkerDot extends StatelessWidget {
                 ),
                 child: const Text(
                   '!',
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: CroColors.surface, height: 1),
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: CroColors.surface,
+                    height: 1,
+                  ),
                 ),
               ),
             ),
@@ -777,7 +955,10 @@ class _UnreadCountBadge extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: CroColors.surface, width: 1.5),
       ),
-      child: Text(count > 9 ? '9+' : '$count', style: CroTextStyles.label(size: 9, color: CroColors.surface)),
+      child: Text(
+        count > 9 ? '9+' : '$count',
+        style: CroTextStyles.label(size: 9, color: CroColors.surface),
+      ),
     );
   }
 }
@@ -818,13 +999,25 @@ class _HubMarkerDot extends StatelessWidget {
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: CroColors.deliveryAmber.withValues(alpha: 0.9), blurRadius: 14, spreadRadius: 3)],
+                boxShadow: [
+                  BoxShadow(
+                    color: CroColors.deliveryAmber.withValues(alpha: 0.9),
+                    blurRadius: 14,
+                    spreadRadius: 3,
+                  ),
+                ],
               ),
             ),
           Container(
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Color(0x4D2B2F33), blurRadius: 6, offset: Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D2B2F33),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
             child: AvatarWithFallback(
               imageUrl: profilePictureUrl,
@@ -839,7 +1032,10 @@ class _HubMarkerDot extends StatelessWidget {
             Positioned(
               bottom: 0,
               right: 0,
-              child: _UnreadCountBadge(badgeKey: const Key('webHubUnreadBadge'), count: unreadCount),
+              child: _UnreadCountBadge(
+                badgeKey: const Key('webHubUnreadBadge'),
+                count: unreadCount,
+              ),
             ),
         ],
       ),

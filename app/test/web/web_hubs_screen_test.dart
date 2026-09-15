@@ -37,22 +37,32 @@ class _FakeHubService implements HubService {
   }
 
   @override
-  Future<List<HubPictureSuggestion>> listPictureSuggestions(String token) async => pictureSuggestionsToReturn;
+  Future<List<HubPictureSuggestion>> listPictureSuggestions(
+    String token,
+  ) async => pictureSuggestionsToReturn;
 
   @override
-  Future<Hub> approvePictureSuggestion(String token, String suggestionId) async {
+  Future<Hub> approvePictureSuggestion(
+    String token,
+    String suggestionId,
+  ) async {
     lastApprovedPictureId = suggestionId;
     return hubsToReturn.first;
   }
 
   @override
-  Future<void> rejectPictureSuggestion(String token, String suggestionId) async {
+  Future<void> rejectPictureSuggestion(
+    String token,
+    String suggestionId,
+  ) async {
     lastRejectedPictureId = suggestionId;
   }
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not used by WebHubsScreen');
+      throw UnimplementedError(
+        '${invocation.memberName} is not used by WebHubsScreen',
+      );
 }
 
 class _FakeProfileService implements ProfileService {
@@ -62,12 +72,39 @@ class _FakeProfileService implements ProfileService {
 
   @override
   Future<dynamic> noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not used by WebHubsScreen');
+      throw UnimplementedError(
+        '${invocation.memberName} is not used by WebHubsScreen',
+      );
 }
 
 void main() {
-  final hub = Hub(id: 'h1', name: 'Lighthouse Point', latitude: 42, longitude: -93, status: 'Approved', createdByUserId: 'admin', category: 'Landmark');
-  final suggestion = Hub(id: 's1', name: 'Harbour Steps', latitude: 41, longitude: -94, status: 'Pending', createdByUserId: 'u9', category: 'Landmark');
+  final hub = Hub(
+    id: 'h1',
+    name: 'Lighthouse Point',
+    latitude: 42,
+    longitude: -93,
+    status: 'Approved',
+    createdByUserId: 'admin',
+    category: 'Landmark',
+  );
+  final coffeeHub = Hub(
+    id: 'h2',
+    name: 'Daily Grind',
+    latitude: 42.1,
+    longitude: -93.1,
+    status: 'Approved',
+    createdByUserId: 'admin',
+    category: 'Coffee',
+  );
+  final suggestion = Hub(
+    id: 's1',
+    name: 'Harbour Steps',
+    latitude: 41,
+    longitude: -94,
+    status: 'Pending',
+    createdByUserId: 'u9',
+    category: 'Landmark',
+  );
 
   late _FakeHubService hubService;
   late _FakeProfileService profileService;
@@ -103,7 +140,9 @@ void main() {
     );
   }
 
-  testWidgets('shows an empty state with no hubs, else a card per hub', (tester) async {
+  testWidgets('shows an empty state with no hubs, else a card per hub', (
+    tester,
+  ) async {
     await tester.pumpWidget(build());
     expect(find.byKey(const Key('noHubsMessage')), findsOneWidget);
 
@@ -117,16 +156,19 @@ void main() {
     expect(find.text('Suggested hubs'), findsNothing);
   });
 
-  testWidgets('non-admins see a Suggest a Hub button that calls onStartAddHub', (tester) async {
-    var called = false;
-    await tester.pumpWidget(build(onStartAddHub: () => called = true));
+  testWidgets(
+    'non-admins see a Suggest a Hub button that calls onStartAddHub',
+    (tester) async {
+      var called = false;
+      await tester.pumpWidget(build(onStartAddHub: () => called = true));
 
-    expect(find.text('+ Suggest a Hub'), findsOneWidget);
-    expect(find.text('+ Add a Hub'), findsNothing);
+      expect(find.text('+ Suggest a Hub'), findsOneWidget);
+      expect(find.text('+ Add a Hub'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('webAddHubButton')));
-    expect(called, isTrue);
-  });
+      await tester.tap(find.byKey(const Key('webAddHubButton')));
+      expect(called, isTrue);
+    },
+  );
 
   testWidgets('admins see an Add a Hub button instead', (tester) async {
     await tester.pumpWidget(build(isAdmin: true));
@@ -135,20 +177,27 @@ void main() {
     expect(find.text('+ Suggest a Hub'), findsNothing);
   });
 
-  testWidgets('admins see the suggested-hubs queue with the suggester resolved', (tester) async {
-    hubService.suggestionsToReturn = [suggestion];
-    await tester.pumpWidget(build(isAdmin: true));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'admins see the suggested-hubs queue with the suggester resolved',
+    (tester) async {
+      hubService.suggestionsToReturn = [suggestion];
+      await tester.pumpWidget(build(isAdmin: true));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Suggested hubs'), findsOneWidget);
-    expect(find.byKey(const Key('hubSuggestion_s1')), findsOneWidget);
-    expect(find.textContaining('Suggested by wren_p'), findsOneWidget);
-  });
+      expect(find.text('Suggested hubs'), findsOneWidget);
+      expect(find.byKey(const Key('hubSuggestion_s1')), findsOneWidget);
+      expect(find.textContaining('Suggested by wren_p'), findsOneWidget);
+    },
+  );
 
-  testWidgets('approving a suggestion calls the service and refreshes', (tester) async {
+  testWidgets('approving a suggestion calls the service and refreshes', (
+    tester,
+  ) async {
     hubService.suggestionsToReturn = [suggestion];
     var changed = false;
-    await tester.pumpWidget(build(isAdmin: true, onDataChanged: () => changed = true));
+    await tester.pumpWidget(
+      build(isAdmin: true, onDataChanged: () => changed = true),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('approveSuggestionButton_s1')));
@@ -158,7 +207,64 @@ void main() {
     expect(changed, isTrue);
   });
 
-  testWidgets('rejecting a suggestion requires two taps to confirm', (tester) async {
+  testWidgets('typing in the search field filters the grid by hub name', (
+    tester,
+  ) async {
+    await tester.pumpWidget(build(hubs: [hub, coffeeHub]));
+    expect(find.byKey(const Key('webHubCard_h1')), findsOneWidget);
+    expect(find.byKey(const Key('webHubCard_h2')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('webHubSearchField')), 'grind');
+    await tester.pump();
+
+    expect(find.byKey(const Key('webHubCard_h1')), findsNothing);
+    expect(find.byKey(const Key('webHubCard_h2')), findsOneWidget);
+  });
+
+  testWidgets(
+    'selecting a category chip filters the grid, tapping it again clears it',
+    (tester) async {
+      await tester.pumpWidget(build(hubs: [hub, coffeeHub]));
+
+      // Coffee sits late in HubCategory.all, off the initial view of the chips' horizontally
+      // scrolling row - scroll it into view before tapping, same as any other off-screen
+      // widget in a scrollable.
+      await tester.ensureVisible(
+        find.byKey(const Key('webHubCategoryChip_Coffee')),
+      );
+      await tester.tap(find.byKey(const Key('webHubCategoryChip_Coffee')));
+      await tester.pump();
+
+      expect(find.byKey(const Key('webHubCard_h1')), findsNothing);
+      expect(find.byKey(const Key('webHubCard_h2')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('webHubCategoryChip_Coffee')));
+      await tester.pump();
+
+      expect(find.byKey(const Key('webHubCard_h1')), findsOneWidget);
+      expect(find.byKey(const Key('webHubCard_h2')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'shows a distinct message when hubs exist but none match the filter',
+    (tester) async {
+      await tester.pumpWidget(build(hubs: [hub]));
+
+      await tester.enterText(
+        find.byKey(const Key('webHubSearchField')),
+        'nonexistent',
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('noHubsMessage')), findsOneWidget);
+      expect(find.text('No hubs match your search'), findsOneWidget);
+    },
+  );
+
+  testWidgets('rejecting a suggestion requires two taps to confirm', (
+    tester,
+  ) async {
     hubService.suggestionsToReturn = [suggestion];
     await tester.pumpWidget(build(isAdmin: true));
     await tester.pumpAndSettle();
