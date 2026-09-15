@@ -334,6 +334,29 @@ void main() {
     expect(find.byKey(const Key('webNestLocatorButton')), findsNothing);
   });
 
+  testWidgets('nest onboarding hint shows for a nestless account and dismisses', (tester) async {
+    setDesktopSize(tester);
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webNestOnboardingHint')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('webDismissNestOnboardingHint')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('webNestOnboardingHint')), findsNothing);
+  });
+
+  testWidgets('no nest onboarding hint once the user has an own nest', (tester) async {
+    setDesktopSize(tester);
+    waypointService.waypointsToReturn = [
+      Waypoint(id: 'n1', userId: 'u1', name: 'Home Roost', latitude: 42, longitude: -93),
+    ];
+    await tester.pumpWidget(buildShell());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('webNestOnboardingHint')), findsNothing);
+  });
+
   testWidgets('tapping the nest locator button jumps to the map and opens the own nest panel', (tester) async {
     setDesktopSize(tester);
     waypointService.waypointsToReturn = [
