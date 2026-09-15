@@ -77,6 +77,43 @@ double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
 
 double _toRadians(double degrees) => degrees * pi / 180.0;
 
+// record_web's pcm16bits stream delivers raw 16-bit PCM samples with no container - a
+// standard 44-byte PCM WAV header turns that into a file any player/browser recognizes.
+// Sample rate/channel count match RecordConfig's own defaults (44100Hz, 2ch) used above.
+List<int>? _pcm16ToWav(List<int>? pcm, {int sampleRate = 44100, int numChannels = 2}) {
+  if (pcm == null) return null;
+  const bitsPerSample = 16;
+  final byteRate = sampleRate * numChannels * bitsPerSample ~/ 8;
+  final blockAlign = numChannels * bitsPerSample ~/ 8;
+  final header = ByteData(44)
+    ..setUint8(0, 0x52) // 'R'
+    ..setUint8(1, 0x49) // 'I'
+    ..setUint8(2, 0x46) // 'F'
+    ..setUint8(3, 0x46) // 'F'
+    ..setUint32(4, 36 + pcm.length, Endian.little)
+    ..setUint8(8, 0x57) // 'W'
+    ..setUint8(9, 0x41) // 'A'
+    ..setUint8(10, 0x56) // 'V'
+    ..setUint8(11, 0x45) // 'E'
+    ..setUint8(12, 0x66) // 'f'
+    ..setUint8(13, 0x6D) // 'm'
+    ..setUint8(14, 0x74) // 't'
+    ..setUint8(15, 0x20) // ' '
+    ..setUint32(16, 16, Endian.little)
+    ..setUint16(20, 1, Endian.little) // PCM
+    ..setUint16(22, numChannels, Endian.little)
+    ..setUint32(24, sampleRate, Endian.little)
+    ..setUint32(28, byteRate, Endian.little)
+    ..setUint16(32, blockAlign, Endian.little)
+    ..setUint16(34, bitsPerSample, Endian.little)
+    ..setUint8(36, 0x64) // 'd'
+    ..setUint8(37, 0x61) // 'a'
+    ..setUint8(38, 0x74) // 't'
+    ..setUint8(39, 0x61) // 'a'
+    ..setUint32(40, pcm.length, Endian.little);
+  return [...header.buffer.asUint8List(), ...pcm];
+}
+
 String _travelTimeLabel(double hours) {
   final totalMinutes = (hours * 60).round();
   final h = totalMinutes ~/ 60;
@@ -214,12 +251,24 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
       return;
     }
 
+    // record_web's startStream only ever implements AudioEncoder.pcm16bits - any other
+    // encoder (aacLc, opus, ...) throws 'Stream not supported.' before a single byte is
+    // captured, on every browser. pcm16bits gives raw PCM samples with no container, so
+    // it's wrapped into a WAV file before upload - see the matching 'audio/wav' content
+    // type below. This used to go uncaught, leaving _audioBytes as an empty (non-null)
+    // list - "Clip recorded" showed and Send worked, but the uploaded clip had no audio.
+    Stream<Uint8List> stream;
+    try {
+      stream = await _recorder.startStream(const RecordConfig(encoder: AudioEncoder.pcm16bits));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start recording: $e')),
+        );
+      }
+      return;
+    }
     _audioBytes = [];
-    // RecordConfig's default encoder (aacLc) has no supported MediaRecorder mime type in
-    // Chrome/Firefox on web (record_web's getSupportedMimeType returns null for it there),
-    // so startStream throws before any audio is captured. Opus/webm is the one web browsers
-    // actually support - see the matching 'audio/webm' content type below.
-    final stream = await _recorder.startStream(const RecordConfig(encoder: AudioEncoder.opus));
     _audioSub = stream.listen((chunk) => _audioBytes!.addAll(chunk));
     _amplitudeSub = _recorder
         .onAmplitudeChanged(const Duration(milliseconds: 100))
@@ -411,13 +460,13 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
                                   : _contentController.text.trim(),
                               isPublic: _isPublic,
                               mediaBytes: _wantsAudio
-                                  ? _audioBytes
+                                  ? _pcm16ToWav(_audioBytes)
                                   : (_wantsImage ? _imageBytes : null),
                               mediaContentType: _wantsAudio
-                                  ? 'audio/webm'
+                                  ? 'audio/wav'
                                   : (_wantsImage ? 'image/jpeg' : null),
                               mediaFilename: _wantsAudio
-                                  ? 'clip.webm'
+                                  ? 'clip.wav'
                                   : (_wantsImage
                                         ? (_imageFilename ?? 'photo.jpg')
                                         : null),
