@@ -83,7 +83,7 @@ void main() {
   });
 
   testWidgets(
-    'typing updates results immediately per keystroke, with no debounce delay',
+    'typing updates results after the 250ms debounce delay',
     (tester) async {
       searchService.results = SearchResults(
         places: [
@@ -119,8 +119,11 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byKey(const Key('webSearchField')), 'Ames');
-      // A single pump (no delay) is enough - the search fires on the keystroke itself.
+      // A single pump (no delay) doesn't fire the search yet - it's still debouncing.
       await tester.pump();
+      expect(searchService.lastQuery, isNull);
+
+      await tester.pump(const Duration(milliseconds: 250));
 
       expect(searchService.lastQuery, 'Ames');
       expect(find.text('Ames, Iowa, USA'), findsOneWidget);
@@ -137,10 +140,12 @@ void main() {
       await tester.tap(find.byKey(const Key('webSearchTrigger')));
       await tester.pumpAndSettle();
 
+      // Each keystroke is spaced past the debounce so both actually fire as separate
+      // requests - the point of this test is the response race, not the debounce itself.
       await tester.enterText(find.byKey(const Key('webSearchField')), 'A');
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
       await tester.enterText(find.byKey(const Key('webSearchField')), 'Am');
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
       // The newer request ("Am") resolves first, as it normally would; the older, slower
       // request ("A") resolves after - its stale response must be discarded, not shown.
@@ -206,7 +211,7 @@ void main() {
     await tester.tap(find.byKey(const Key('webSearchTrigger')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('webSearchField')), 'Ames');
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
     await tester.tap(find.byKey(Key('webSearchResultHub_${hub.id}')));
     await tester.pumpAndSettle();
@@ -230,7 +235,7 @@ void main() {
     await tester.tap(find.byKey(const Key('webSearchTrigger')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('webSearchField')), 'Ames');
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
     await tester.tap(find.byKey(Key('webSearchResultNest_${nest.id}')));
     await tester.pumpAndSettle();
@@ -252,7 +257,7 @@ void main() {
     await tester.tap(find.byKey(const Key('webSearchTrigger')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('webSearchField')), 'Ames');
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
     await tester.tap(find.byKey(const Key('webSearchResultPlace_0')));
     await tester.pumpAndSettle();
