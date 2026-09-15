@@ -143,9 +143,16 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
   bool _isPublic = false;
   final _contentController = TextEditingController();
 
+  static const _waveformBarCount = 24;
+
   bool _isRecording = false;
   List<int>? _audioBytes;
   StreamSubscription<Uint8List>? _audioSub;
+  StreamSubscription<Amplitude>? _amplitudeSub;
+  // Index 0 is the most recent sample; new samples push in at the front so the bar the user
+  // is watching (leftmost, key `sendBirdWaveformBar_0`) always reflects what the mic just
+  // picked up, rather than only updating once the whole row has scrolled around to it.
+  List<double> _waveformLevels = List.filled(_waveformBarCount, 0.0);
   List<int>? _imageBytes;
   String? _imageFilename;
 
@@ -175,6 +182,7 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
   void dispose() {
     _contentController.dispose();
     _audioSub?.cancel();
+    _amplitudeSub?.cancel();
     if (widget.recorder == null) {
       _recorder.dispose();
     }
@@ -184,8 +192,12 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
   Future<void> _toggleRecording() async {
     if (_isRecording) {
       await _recorder.stop();
-      await _audioSub?.cancel();
-      setState(() => _isRecording = false);
+      _audioSub?.cancel();
+      _amplitudeSub?.cancel();
+      setState(() {
+        _isRecording = false;
+        _waveformLevels = List.filled(_waveformBarCount, 0.0);
+      });
       return;
     }
 
@@ -209,7 +221,22 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
     // actually support - see the matching 'audio/webm' content type below.
     final stream = await _recorder.startStream(const RecordConfig(encoder: AudioEncoder.opus));
     _audioSub = stream.listen((chunk) => _audioBytes!.addAll(chunk));
+    _amplitudeSub = _recorder
+        .onAmplitudeChanged(const Duration(milliseconds: 100))
+        .listen(_onAmplitude);
     setState(() => _isRecording = true);
+  }
+
+  void _onAmplitude(Amplitude amplitude) {
+    // dBFS silence floor at -50 (below that reads as flat/no signal) up to 0 (max) maps to a
+    // 0-1 bar level.
+    final level = ((amplitude.current + 50) / 50).clamp(0.0, 1.0);
+    setState(() {
+      _waveformLevels = [
+        level,
+        ..._waveformLevels.sublist(0, _waveformLevels.length - 1),
+      ];
+    });
   }
 
   Future<void> _pickImage() async {
@@ -430,16 +457,27 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
               color: _isRecording ? Theme.of(context).colorScheme.error : null,
               onPressed: _toggleRecording,
             ),
-            Text(
-              _isRecording
-                  ? 'Recording...'
-                  : (_audioBytes != null
-                        ? 'Clip recorded'
-                        : 'Tap to record (optional)'),
-            ),
+            if (_isRecording)
+              Expanded(
+                child: _RecordingWaveform(
+                  key: const Key('sendBirdWaveform'),
+                  levels: _waveformLevels,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              )
+            else
+              Text(_audioBytes != null ? 'Clip recorded' : 'Tap to record (optional)'),
           ],
         ),
       );
+      if (_isRecording) {
+        fields.add(
+          const Padding(
+            padding: EdgeInsets.only(left: 48),
+            child: Text('Recording...'),
+          ),
+        );
+      }
     }
     if (_wantsImage) {
       if (fields.isNotEmpty) fields.add(const SizedBox(height: 12));
@@ -457,5 +495,44 @@ class _SendBirdDialogState extends State<SendBirdDialog> {
       );
     }
     return fields;
+  }
+}
+
+// Live proof-of-capture for a Parrot recording - a row of bars driven by the recorder's real
+// mic amplitude (not a decorative/fake animation), so a silent room visibly shows flat bars
+// instead of implying audio is being picked up when it isn't. Waypoint Blue per DESIGN.md's
+// amber-restraint rule: amber marks a confirmed/arrived moment, never an in-progress one.
+class _RecordingWaveform extends StatelessWidget {
+  final List<double> levels;
+  final Color color;
+
+  const _RecordingWaveform({super.key, required this.levels, required this.color});
+
+  static const _maxBarHeight = 28.0;
+  static const _minBarHeight = 4.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _maxBarHeight,
+      child: Row(
+        children: [
+          for (var i = 0; i < levels.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1.5),
+              child: AnimatedContainer(
+                key: Key('sendBirdWaveformBar_$i'),
+                duration: const Duration(milliseconds: 100),
+                width: 3,
+                height: _minBarHeight + levels[i] * (_maxBarHeight - _minBarHeight),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
