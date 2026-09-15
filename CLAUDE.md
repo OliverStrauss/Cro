@@ -142,11 +142,11 @@ dev-only shortcuts" below).
   `https://localhost:8081` connection string will hang/fail to connect (a raw TLS handshake
   against a plain-HTTP port fails in a way that's easy to mistake for "the emulator isn't
   running" — it is, this is just a scheme mismatch).
-- **CI uses a different Cosmos image**: `appsettings.Development.json` sets
-  `CosmosDb:UseEmulator: true`, which makes the API accept any TLS cert unconditionally —
-  needed for CI's *different* emulator image (the classic x64 one, which serves a
-  self-signed HTTPS cert), and harmless here since no TLS handshake ever happens against
-  this image's plain-HTTP port. This flag must never be true against a real endpoint.
+- **`CosmosDb:UseEmulator: true` accepts any TLS cert unconditionally** (set in
+  `appsettings.Development.json`) — a no-op today against both local dev's and CI's emulator,
+  since both now run the plain-HTTP `vnext-preview` image and no TLS handshake ever happens
+  against either. Kept in case either environment ever serves a self-signed HTTPS cert again.
+  This flag must never be true against a real endpoint.
 - **Stale Waypoints container after the partition-key change**: the Waypoints container's
   partition key changed from `/id` to `/userId` (a user can have up to 5 waypoints now, so
   the owning user's id is the partition key instead of the waypoint's own id).
@@ -247,11 +247,15 @@ Two GitHub Actions workflows, each scoped to its own `working-directory`, run on
 `main` and on every pull request:
 
 - `flutter-ci.yml` — `flutter pub get` → `flutter analyze` → `flutter test`, in `/app`
-- `dotnet-ci.yml` — runs a Cosmos emulator service container (the standard x64 image, not the
-  ARM64 `vnext-preview` local dev needs) via the declarative `services:` block, plus Azurite
-  started as a plain `docker run` step (the `services:` block can't pass `--skipApiVersionCheck`
-  through — it always runs an image's default command, no args), waits for both to be ready,
-  then `dotnet restore`/`build`/`test` against `CroApp.Api.Tests`, in `/api`
+- `dotnet-ci.yml` — runs the Cosmos emulator (`vnext-preview`, the same image local dev uses —
+  see "Setup — Cosmos DB Emulator" above) via a manual `docker run` step wrapped in a
+  fresh-container retry loop (up to 3 attempts — a still-possible emulator crash/hang under
+  GitHub Actions' resource constraints can't be recovered by restarting a declarative
+  `services:` container mid-job), plus Azurite started as a plain `docker run` step (its
+  `--skipApiVersionCheck` flag isn't passable through a declarative `services:` block either),
+  waits for both to be ready, then `dotnet restore`/`build`/`test` against `CroApp.Api.Tests`,
+  in `/api`. A `build` failure on a push to `main` also files (or comments on an existing)
+  GitHub issue so it can't go unnoticed.
 
 ## UI theme / color palette
 
