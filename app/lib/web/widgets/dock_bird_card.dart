@@ -122,7 +122,7 @@ class DockBirdView {
             ? CroColors.waypointBlue
             : hexToColor(currentNest.color!),
         progress: 1,
-        metaText: isHome ? 'Rested and ready to send' : 'Not your nest',
+        metaText: isHome ? 'At Nest' : 'Not your nest',
       );
     }
     return null;
