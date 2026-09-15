@@ -608,26 +608,35 @@ public class BirdService(
         var landedHub = await hubRepository.GetAsync(arrived.NestToId ?? string.Empty);
         if (landedHub is not null)
         {
-            try
+            // A resent bird can arrive with nothing to show (see BirdPayloadValidator.
+            // ValidateAllowed - resending onward doesn't require a fresh payload), so skip
+            // the board post rather than littering it with content-free rows.
+            var hasBoardContent = !string.IsNullOrWhiteSpace(arrived.Content)
+                || !string.IsNullOrWhiteSpace(arrived.AudioUrl)
+                || !string.IsNullOrWhiteSpace(arrived.ImageUrl);
+            if (hasBoardContent)
             {
-                var sender = await userRepository.GetByIdAsync(arrived.UserId);
-                await hubMessageRepository.CreateAsync(new HubMessage(
-                    Guid.NewGuid().ToString(),
-                    landedHub.Id,
-                    arrived.Id,
-                    arrived.UserId,
-                    sender?.Username ?? "Unknown",
-                    arrived.Name,
-                    arrived.NestFromName,
-                    arrived.Type,
-                    arrived.Content,
-                    arrived.AudioUrl,
-                    arrived.ImageUrl,
-                    DateTimeOffset.UtcNow));
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to post HubMessage for bird {BirdId} landing at hub {HubId}", arrived.Id, landedHub.Id);
+                try
+                {
+                    var sender = await userRepository.GetByIdAsync(arrived.UserId);
+                    await hubMessageRepository.CreateAsync(new HubMessage(
+                        Guid.NewGuid().ToString(),
+                        landedHub.Id,
+                        arrived.Id,
+                        arrived.UserId,
+                        sender?.Username ?? "Unknown",
+                        arrived.Name,
+                        arrived.NestFromName,
+                        arrived.Type,
+                        arrived.Content,
+                        arrived.AudioUrl,
+                        arrived.ImageUrl,
+                        DateTimeOffset.UtcNow));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to post HubMessage for bird {BirdId} landing at hub {HubId}", arrived.Id, landedHub.Id);
+                }
             }
 
             await eventService.RecordHubPostAsync(arrived, landedHub);

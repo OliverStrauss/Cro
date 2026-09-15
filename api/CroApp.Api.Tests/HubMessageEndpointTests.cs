@@ -226,6 +226,42 @@ public class HubMessageEndpointTests : IClassFixture<WebApplicationFactory<Progr
     }
 
     [Fact]
+    public async Task ResendingBirdOnwardWithNoContent_DoesNotPostToBoard()
+    {
+        var adminToken = await LoginAsync("Admin 1", SeedPassword);
+        var firstHub = await CreateHubAsync(adminToken, $"Silent Plaza {Guid.NewGuid():N}", 42.07, -93.57);
+        var secondHub = await CreateHubAsync(adminToken, $"Silent Plaza 2 {Guid.NewGuid():N}", 10.0, 10.0);
+
+        var username = $"hub-resender-{Guid.NewGuid():N}";
+        var (_, token) = await RegisterAndLoginAsync(username, SeedPassword);
+        var origin = await CreateWaypointAsync(token, "Resender Nest", 42.07, -93.57);
+
+        // Lands at the first Hub with content, so it can be picked up from there and resent.
+        var composeResponse = await ComposeBirdAsync(token, "Silent Bird", origin.Id, firstHub.Id, "on my way");
+        composeResponse.EnsureSuccessStatusCode();
+        var composed = await composeResponse.Content.ReadFromJsonAsync<BirdDto>();
+        await ListOwnBirdsAsync(token); // resolves arrival at the first Hub
+
+        // Resend onward to the second Hub with no content - allowed per BirdPayloadValidator.
+        // ValidateAllowed, and zero distance from that Hub's own coordinates -> instant arrival.
+        var sendRequest = new MultipartFormDataContent
+        {
+            { new StringContent(secondHub.Id), "nestId" },
+        };
+        var sendHttpRequest = new HttpRequestMessage(HttpMethod.Post, $"/birds/{composed!.Id}/send") { Content = sendRequest };
+        sendHttpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        (await _client.SendAsync(sendHttpRequest)).EnsureSuccessStatusCode();
+
+        await ListOwnBirdsAsync(token); // resolves arrival at the second Hub
+
+        var messagesResponse = await _client.SendAsync(AuthedRequest(HttpMethod.Get, $"/hubs/{secondHub.Id}/messages", token));
+        messagesResponse.EnsureSuccessStatusCode();
+        var messages = await messagesResponse.Content.ReadFromJsonAsync<List<HubMessageDto>>();
+
+        Assert.Empty(messages!);
+    }
+
+    [Fact]
     public async Task GetHubMessages_ForNonexistentHub_ReturnsNotFound()
     {
         var username = $"hub-msg-user-{Guid.NewGuid():N}";
