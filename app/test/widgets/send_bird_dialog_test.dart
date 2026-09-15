@@ -14,13 +14,21 @@ import 'package:cro_app/widgets/send_bird_dialog.dart';
 // channels/mic hardware that aren't available under flutter test.
 class _FakeAudioRecorder extends AudioRecorder {
   final _amplitudeCtrl = StreamController<Amplitude>.broadcast();
+  bool startStreamThrows = false;
+  AudioEncoder? lastStreamEncoder;
+  List<int> streamedBytes = const [1, 2, 3, 4];
 
   @override
   Future<bool> hasPermission({bool request = true}) async => true;
 
   @override
-  Future<Stream<Uint8List>> startStream(RecordConfig config) async =>
-      const Stream<Uint8List>.empty();
+  Future<Stream<Uint8List>> startStream(RecordConfig config) async {
+    lastStreamEncoder = config.encoder;
+    if (startStreamThrows) {
+      throw Exception('mic unavailable');
+    }
+    return Stream.value(Uint8List.fromList(streamedBytes));
+  }
 
   @override
   Future<String?> stop() async => null;
@@ -282,5 +290,103 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('sendBirdWaveform')), findsNothing);
     expect(find.text('Clip recorded'), findsOneWidget);
+  });
+
+  testWidgets('a recorded Parrot clip is sent as pcm16bits-streamed audio wrapped in a playable WAV file', (tester) async {
+    // record_web's startStream only actually supports AudioEncoder.pcm16bits on web - any
+    // other encoder throws before a byte is captured (see send_bird_dialog.dart), which
+    // silently produced empty, inaudible clips. This locks in the encoder that must be
+    // requested and that the raw PCM bytes get wrapped in a real WAV file before upload.
+    final fakeRecorder = _FakeAudioRecorder();
+    addTearDown(fakeRecorder.dispose);
+    SendBirdResult? result;
+
+    await tester.pumpWidget(MaterialApp(
+      theme: croTheme,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () async {
+              result = await showDialog<SendBirdResult>(
+                context: context,
+                builder: (_) => SendBirdDialog(
+                  destinations: [nearNest],
+                  originLatitude: 0,
+                  originLongitude: 0,
+                  speedKmh: 60,
+                  birdType: BirdType.parrot,
+                  recorder: fakeRecorder,
+                ),
+              );
+            },
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('sendBirdRecordButton')));
+    await tester.pump();
+    expect(fakeRecorder.lastStreamEncoder, AudioEncoder.pcm16bits);
+
+    await tester.tap(find.byKey(const Key('sendBirdRecordButton')));
+    await tester.pump();
+
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Near Nest').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmSendBirdButton')));
+    await tester.pumpAndSettle();
+
+    expect(result?.mediaContentType, 'audio/wav');
+    expect(result?.mediaFilename, 'clip.wav');
+    final bytes = result!.mediaBytes!;
+    // 44-byte PCM WAV header ('RIFF' ... 'WAVE' ... 'data') followed by the raw PCM chunk.
+    expect(String.fromCharCodes(bytes.sublist(0, 4)), 'RIFF');
+    expect(String.fromCharCodes(bytes.sublist(8, 12)), 'WAVE');
+    expect(bytes.length, 44 + fakeRecorder.streamedBytes.length);
+    expect(bytes.sublist(44), fakeRecorder.streamedBytes);
+  });
+
+  testWidgets('a failure starting the recorder surfaces an error instead of leaving the button inert', (tester) async {
+    final fakeRecorder = _FakeAudioRecorder()..startStreamThrows = true;
+    addTearDown(fakeRecorder.dispose);
+
+    await tester.pumpWidget(MaterialApp(
+      theme: croTheme,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showDialog<SendBirdResult>(
+              context: context,
+              builder: (_) => SendBirdDialog(
+                destinations: [nearNest],
+                originLatitude: 0,
+                originLongitude: 0,
+                speedKmh: 60,
+                birdType: BirdType.parrot,
+                recorder: fakeRecorder,
+              ),
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('sendBirdRecordButton')));
+    await tester.pumpAndSettle();
+
+    // No exception escapes the tap, the button stays in its not-recording state, and the
+    // failure is surfaced to the user instead of silently doing nothing.
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('sendBirdWaveform')), findsNothing);
+    expect(find.text('Tap to record (optional)'), findsOneWidget);
+    expect(find.textContaining('Could not start recording'), findsOneWidget);
   });
 }
