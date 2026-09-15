@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/hub.dart';
@@ -49,12 +51,14 @@ class _SearchTriggerState extends State<SearchTrigger> {
   // Bumped on every keystroke so a slower, older request completing after a newer one
   // can't overwrite the dropdown with stale results - see _search.
   int _requestId = 0;
+  Timer? _debounce;
 
   @override
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();
     _entry?.remove();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -111,6 +115,7 @@ class _SearchTriggerState extends State<SearchTrigger> {
     _entry = null;
     _controller.clear();
     _results = null;
+    _debounce?.cancel();
     // Invalidates any still-in-flight request from before closing, same reason _search
     // checks _requestId before applying a response.
     _requestId++;
@@ -119,13 +124,19 @@ class _SearchTriggerState extends State<SearchTrigger> {
 
   void _onQueryChanged(String query) {
     final trimmed = query.trim();
+    _debounce?.cancel();
     if (trimmed.isEmpty) {
       _requestId++;
       setState(() => _results = null);
       _entry?.markNeedsBuild();
       return;
     }
-    _search(trimmed);
+    // Matches web_profile_screen.dart's friend search: keeps real traffic under
+    // NominatimGeocodingService's ~1req/sec Nominatim cap (see TECH_DEBT.md).
+    _debounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _search(trimmed),
+    );
   }
 
   Future<void> _search(String query) async {

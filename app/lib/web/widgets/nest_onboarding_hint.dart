@@ -29,8 +29,6 @@ class NestOnboardingHint extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.arrow_upward, size: 16, color: CroColors.waypointBlue),
-          const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Search for a place above to place your first nest',
