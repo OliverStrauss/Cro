@@ -48,6 +48,14 @@ class WebMapScreen extends StatefulWidget {
   // Unlike selectedNestId/selectedHubId there's no backing app entity, so this carries the
   // raw point directly instead of an id to look up.
   final LatLng? searchLocation;
+  // Wired only when searchLocation is set - lets the search-result banner place/move a nest
+  // or place/suggest a Hub at that exact point without going through the addingNest/addingHub
+  // click-the-map flow first. WebShellScreenState clears searchLocation itself before running
+  // the actual create/move/suggest logic (the same _placeNest/_placeHub it already uses for
+  // onPlaceNest/onPlaceHub above), so the pin disappears the moment an action is chosen.
+  final VoidCallback? onPlaceNestAtSearchLocation;
+  final VoidCallback? onPlaceHubAtSearchLocation;
+  final VoidCallback? onDismissSearchLocation;
   // Whichever bird's panel is currently open (own or a friend's) - that marker gets a glow
   // on the map so "the bird you're following" reads at a glance among the others in flight.
   final String? selectedBirdId;
@@ -106,6 +114,9 @@ class WebMapScreen extends StatefulWidget {
     required this.selectedNestId,
     required this.selectedHubId,
     this.searchLocation,
+    this.onPlaceNestAtSearchLocation,
+    this.onPlaceHubAtSearchLocation,
+    this.onDismissSearchLocation,
     this.selectedBirdId,
     required this.bottomInset,
     required this.onSelectNest,
@@ -755,12 +766,83 @@ class _WebMapScreenState extends State<WebMapScreen>
               ),
             ),
           ),
+        if (widget.searchLocation != null)
+          Positioned(
+            top: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                key: const Key('webSearchLocationBanner'),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                decoration: BoxDecoration(color: CroColors.ink, borderRadius: CroBorders.radius),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _BannerActionButton(
+                      buttonKey: const Key('webPlaceNestAtSearchLocation'),
+                      label: widget.ownNests.isEmpty ? 'Place a nest here' : 'Move your nest here',
+                      color: CroColors.waypointBlue,
+                      onTap: widget.onPlaceNestAtSearchLocation,
+                    ),
+                    const SizedBox(width: 14),
+                    _BannerActionButton(
+                      buttonKey: const Key('webPlaceHubAtSearchLocation'),
+                      label: widget.isAdmin ? 'Place a Hub here' : 'Suggest a Hub here',
+                      color: CroColors.deliveryAmber,
+                      onTap: widget.onPlaceHubAtSearchLocation,
+                    ),
+                    const SizedBox(width: 14),
+                    _BannerActionButton(
+                      buttonKey: const Key('webDismissSearchLocation'),
+                      label: 'Cancel',
+                      color: CroColors.skyTint,
+                      onTap: widget.onDismissSearchLocation,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         Positioned(
           left: 22,
           bottom: widget.bottomInset + 20,
           child: _TrailsLegend(friends: widget.friends),
         ),
       ],
+    );
+  }
+}
+
+/// One action in the search-result banner - same InkWell+Text language as the addingNest/
+/// addingHub banners' own Cancel button, just color-coded per action instead of always
+/// CroColors.skyTint.
+class _BannerActionButton extends StatelessWidget {
+  final Key buttonKey;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _BannerActionButton({
+    required this.buttonKey,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        key: buttonKey,
+        borderRadius: CroBorders.radiusSmall,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Text(label, style: CroTextStyles.label(size: 11.5, color: color)),
+        ),
+      ),
     );
   }
 }

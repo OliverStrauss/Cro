@@ -26,6 +26,7 @@ import '../widgets/dock_bird_card.dart';
 import '../widgets/floating_actions_cluster.dart';
 import '../widgets/icon_rail.dart';
 import '../widgets/nest_locator_button.dart';
+import '../widgets/nest_onboarding_hint.dart';
 import '../widgets/search_trigger.dart';
 import '../widgets/your_birds_dock.dart';
 import 'web_hubs_screen.dart';
@@ -105,6 +106,9 @@ class WebShellScreenState extends State<WebShellScreen> {
   bool _dockHidden = false;
   bool _addingNest = false;
   bool _addingHub = false;
+  // Session-only dismissal for NestOnboardingHint - see that widget's doc comment for why
+  // "no own nest yet" is the trigger instead of a real "freshly signed up" flag.
+  bool _nestOnboardingDismissed = false;
   // Bumped to force WebMapScreen to re-center on the currently selected target, even when
   // that target's id hasn't changed - see WebMapScreen.focusRequest.
   int _focusRequest = 0;
@@ -421,6 +425,27 @@ class WebShellScreenState extends State<WebShellScreen> {
     }
   }
 
+  // The search-result banner's two actions and its Cancel - each clears the pin itself before
+  // doing anything else, so it's gone the instant an action is chosen rather than lingering
+  // through the create/move/suggest dialog (see WebMapScreen.onPlaceNestAtSearchLocation).
+  void _dismissSearchLocation() => setState(() => _selectedSearchLocation = null);
+
+  Future<void> _placeNestAtSearchLocation() async {
+    final point = _selectedSearchLocation;
+    if (point == null) return;
+    setState(() => _selectedSearchLocation = null);
+    await _placeNest(point);
+  }
+
+  Future<void> _placeHubAtSearchLocation() async {
+    final point = _selectedSearchLocation;
+    if (point == null) return;
+    setState(() => _selectedSearchLocation = null);
+    await _placeHub(point);
+  }
+
+  void _dismissNestOnboardingHint() => setState(() => _nestOnboardingDismissed = true);
+
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -499,6 +524,20 @@ class WebShellScreenState extends State<WebShellScreen> {
                     ],
                   ),
                 ),
+                // Only on the Map tab (where the search bar this points at actually lives),
+                // only until they've placed a nest or dismissed it, and not while the context
+                // panel is open (it renders in roughly the same spot, top: 90 - see below) -
+                // see NestOnboardingHint's doc comment for why "no own nest yet" stands in for
+                // "freshly signed up".
+                if (_selectedNav == WebNavItem.map &&
+                    _data.ownNests.isEmpty &&
+                    !_nestOnboardingDismissed &&
+                    _panelMode == null)
+                  Positioned(
+                    top: 68,
+                    right: 22,
+                    child: NestOnboardingHint(onDismiss: _dismissNestOnboardingHint),
+                  ),
                 // Floats directly over the map instead of sitting in its own Row column, so
                 // the map stays visible around/behind it rather than a grey Scaffold body
                 // showing through below a content-hugged panel - and only on the Map tab
@@ -585,6 +624,9 @@ class WebShellScreenState extends State<WebShellScreen> {
           selectedNestId: _selectedNest?.id,
           selectedHubId: _selectedHub?.id,
           searchLocation: _selectedSearchLocation,
+          onPlaceNestAtSearchLocation: _placeNestAtSearchLocation,
+          onPlaceHubAtSearchLocation: _placeHubAtSearchLocation,
+          onDismissSearchLocation: _dismissSearchLocation,
           selectedBirdId: _selectedBird?.id ?? _selectedFriendBird?.id ?? _selectedPublicBird?.id,
           focusRequest: _focusRequest,
           bottomInset: _dockHeight,

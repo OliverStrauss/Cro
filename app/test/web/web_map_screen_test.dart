@@ -49,6 +49,7 @@ void main() {
   );
 
   Widget buildMap({
+    List<Waypoint>? ownNests,
     List<Bird> birds = const [],
     List<FriendBird> friendsBirds = const [],
     List<PublicBird> publicBirds = const [],
@@ -67,13 +68,17 @@ void main() {
     ValueChanged<Hub>? onSelectHub,
     MapController? mapController,
     int focusRequest = 0,
+    LatLng? searchLocation,
+    VoidCallback? onPlaceNestAtSearchLocation,
+    VoidCallback? onPlaceHubAtSearchLocation,
+    VoidCallback? onDismissSearchLocation,
   }) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
         body: WebMapScreen(
           mapController: mapController,
-          ownNests: [ownNest],
+          ownNests: ownNests ?? [ownNest],
           friendWaypoints: [friendNest],
           birds: birds,
           friendsBirds: friendsBirds,
@@ -95,6 +100,10 @@ void main() {
           addingHub: addingHub,
           onCancelAddHub: onCancelAddHub,
           focusRequest: focusRequest,
+          searchLocation: searchLocation,
+          onPlaceNestAtSearchLocation: onPlaceNestAtSearchLocation,
+          onPlaceHubAtSearchLocation: onPlaceHubAtSearchLocation,
+          onDismissSearchLocation: onDismissSearchLocation,
         ),
       ),
     );
@@ -227,6 +236,60 @@ void main() {
 
     await tester.tap(find.byKey(const Key('webCancelAddHub')));
     expect(cancelled, isTrue);
+  });
+
+  group('search-result banner', () {
+    const point = LatLng(3.0, 4.0);
+
+    testWidgets('no banner when there is no search location', (tester) async {
+      await tester.pumpWidget(buildMap());
+      expect(find.byKey(const Key('webSearchLocationBanner')), findsNothing);
+    });
+
+    testWidgets('nest action reads "place" with no own nest and "move" with one', (tester) async {
+      await tester.pumpWidget(buildMap(searchLocation: point, ownNests: const []));
+      expect(find.text('Place a nest here'), findsOneWidget);
+
+      await tester.pumpWidget(buildMap(searchLocation: point));
+      expect(find.text('Move your nest here'), findsOneWidget);
+    });
+
+    testWidgets('hub action reads "place" for an admin and "suggest" otherwise', (tester) async {
+      await tester.pumpWidget(buildMap(searchLocation: point, isAdmin: true));
+      expect(find.text('Place a Hub here'), findsOneWidget);
+
+      await tester.pumpWidget(buildMap(searchLocation: point, isAdmin: false));
+      expect(find.text('Suggest a Hub here'), findsOneWidget);
+    });
+
+    testWidgets('tapping either action calls its own callback', (tester) async {
+      var nestTapped = false;
+      var hubTapped = false;
+      await tester.pumpWidget(
+        buildMap(
+          searchLocation: point,
+          onPlaceNestAtSearchLocation: () => nestTapped = true,
+          onPlaceHubAtSearchLocation: () => hubTapped = true,
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('webPlaceNestAtSearchLocation')));
+      expect(nestTapped, isTrue);
+      expect(hubTapped, isFalse);
+
+      await tester.tap(find.byKey(const Key('webPlaceHubAtSearchLocation')));
+      expect(hubTapped, isTrue);
+    });
+
+    testWidgets('cancelling calls onDismissSearchLocation', (tester) async {
+      var dismissed = false;
+      await tester.pumpWidget(
+        buildMap(searchLocation: point, onDismissSearchLocation: () => dismissed = true),
+      );
+
+      await tester.tap(find.byKey(const Key('webDismissSearchLocation')));
+      expect(dismissed, isTrue);
+    });
   });
 
   testWidgets('Trails legend lists your trails, each friend, then Hubs', (tester) async {
