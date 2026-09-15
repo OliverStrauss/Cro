@@ -1,8 +1,40 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:record/record.dart';
 
+import 'package:cro_app/models/bird.dart';
 import 'package:cro_app/theme.dart';
 import 'package:cro_app/widgets/send_bird_dialog.dart';
+
+// Stands in for the platform-backed AudioRecorder in tests - startStream/stop are no-ops and
+// onAmplitudeChanged is driven manually via emit(), since the real plugin talks to platform
+// channels/mic hardware that aren't available under flutter test.
+class _FakeAudioRecorder extends AudioRecorder {
+  final _amplitudeCtrl = StreamController<Amplitude>.broadcast();
+
+  @override
+  Future<bool> hasPermission({bool request = true}) async => true;
+
+  @override
+  Future<Stream<Uint8List>> startStream(RecordConfig config) async =>
+      const Stream<Uint8List>.empty();
+
+  @override
+  Future<String?> stop() async => null;
+
+  @override
+  Stream<Amplitude> onAmplitudeChanged(Duration interval) =>
+      _amplitudeCtrl.stream;
+
+  @override
+  Future<void> dispose() async => _amplitudeCtrl.close();
+
+  void emit(double dBFS) =>
+      _amplitudeCtrl.add(Amplitude(current: dBFS, max: dBFS));
+}
 
 void main() {
   // Origin at (0, 0); same-longitude destinations reduce the haversine formula to a plain
@@ -193,5 +225,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(result?.isPublic, isFalse);
+  });
+
+  testWidgets('recording a Parrot clip shows a live waveform driven by mic amplitude, which clears on stop', (tester) async {
+    final fakeRecorder = _FakeAudioRecorder();
+    addTearDown(fakeRecorder.dispose);
+
+    await tester.pumpWidget(MaterialApp(
+      theme: croTheme,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showDialog<SendBirdResult>(
+              context: context,
+              builder: (_) => SendBirdDialog(
+                destinations: [nearNest],
+                originLatitude: 0,
+                originLongitude: 0,
+                speedKmh: 60,
+                birdType: BirdType.parrot,
+                recorder: fakeRecorder,
+              ),
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sendBirdWaveform')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('sendBirdRecordButton')));
+    await tester.pump();
+    expect(find.text('Recording...'), findsOneWidget);
+    expect(find.byKey(const Key('sendBirdWaveform')), findsOneWidget);
+
+    fakeRecorder.emit(-10);
+    await tester.pump();
+    final loudHeight = tester
+        .widget<AnimatedContainer>(find.byKey(const Key('sendBirdWaveformBar_0')))
+        .constraints!
+        .maxHeight;
+
+    fakeRecorder.emit(-55);
+    await tester.pump();
+    final quietHeight = tester
+        .widget<AnimatedContainer>(find.byKey(const Key('sendBirdWaveformBar_0')))
+        .constraints!
+        .maxHeight;
+
+    expect(loudHeight, greaterThan(quietHeight));
+
+    await tester.tap(find.byKey(const Key('sendBirdRecordButton')));
+    await tester.pump();
+    expect(find.byKey(const Key('sendBirdWaveform')), findsNothing);
+    expect(find.text('Clip recorded'), findsOneWidget);
   });
 }
