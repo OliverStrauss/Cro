@@ -65,32 +65,28 @@ jobs:
       # fails the job - this only masks transient infra flakiness, not real bugs.
       - name: Run tests against the Cosmos emulator, retrying on emulator crashes
         run: |
-          # GitHub-hosted runners are x64, so the standard emulator image works here even
-          # though local Apple Silicon dev needs the vnext-preview ARM64 image instead.
+          # vnext-preview - the same image local Apple Silicon dev already runs (see
+          # CLAUDE.md's "Setup - Cosmos DB Emulator") - is GA and documented to support both
+          # amd64 (what this runner uses) and ARM64. Replaces the classic x64 image, whose own
+          # documented crash bug under GitHub Actions' resource constraints (a fatal error in
+          # its Windows-compat layer) is why this retry loop existed - see TECH_DEBT.md for the
+          # two prior fix attempts (provisioning dedup, retry-with-backoff) that didn't resolve
+          # it because neither addressed the emulator image itself.
           max_attempts=3
           for attempt in $(seq 1 "$max_attempts"); do
             echo "=== Attempt $attempt/$max_attempts: starting Cosmos emulator ==="
             docker rm -f cosmosdb-emulator >/dev/null 2>&1 || true
             docker run -d --name cosmosdb-emulator \
-              --shm-size=1g \
-              -p 8081:8081 -p 10251-10254:10251-10254 \
-              -e AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10 \
-              -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false \
-              mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+              -p 8081:8081 -p 1234:1234 \
+              mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
 
-            # Swapping the probe to the account root (previous attempt at this fix) was wrong:
-            # every real Cosmos Gateway path, root included, requires a signed Authorization
-            # header - an unauthenticated GET to `/` 401s even once the emulator is fully up,
-            # and `-f` treats that 401 as failure same as any other error, so that check could
-            # never succeed regardless of how long it waited (both retries timed out at
-            # essentially the full budget, not "sometimes early" - the tell). `_explorer/emulator.pem`
-            # is the one static, auth-free file the Explorer serves, which is why the original
-            # script checked it - its actual bug was only ever the missing `-f` (a non-2xx
-            # there was still misread as ready). `--max-time` bounds each curl call so one
-            # stalled attempt can't silently eat the retry budget.
+            # vnext-preview serves plain HTTP, not HTTPS - no self-signed cert to handshake
+            # against, so this is the same plain-HTTP probe CLAUDE.md already documents for
+            # local dev ("poll http://localhost:8081/ (200 once ready)"), not the classic
+            # image's auth-free-static-file workaround this replaces.
             ready=false
             for i in $(seq 1 150); do
-              curl -sk -f --max-time 5 https://localhost:8081/_explorer/emulator.pem -o /dev/null && { ready=true; break; }
+              curl -sf --max-time 5 http://localhost:8081/ -o /dev/null && { ready=true; break; }
               sleep 2
             done
             if [ "$ready" != "true" ]; then
@@ -108,7 +104,7 @@ jobs:
           echo "All $max_attempts attempts failed."
           exit 1
         env:
-          CosmosDb__ConnectionString: "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+          CosmosDb__ConnectionString: "AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
           BlobStorage__ConnectionString: "UseDevelopmentStorage=true"
 
   # Deploys to the cro-api App Service (cro-prod resource group) only after tests pass
@@ -129,3 +125,42 @@ jobs:
           app-name: cro-api
           package: api/publish-out
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+
+  # Auto-files (or comments on an existing open) GitHub issue when `build` fails on a push to
+  # main, so a red main build can't silently go unnoticed the way it did for two days before
+  # this job existed - see TECH_DEBT.md. Runs on the workflow's built-in GITHUB_TOKEN, no new
+  # secrets. Looks up existing issues by title rather than a label, so it has no dependency on
+  # a label existing in the repo first.
+  notify-on-failure:
+    needs: build
+    if: failure() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '.NET CI failing on main';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+            });
+            const existing = openIssues.find((i) => i.title === title && !i.pull_request);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `.NET CI failed again on \`main\`: ${runUrl}`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: `The \`build\` job failed on a push to \`main\`, which blocks \`deploy\` from running.\n\nFailed run: ${runUrl}\n\nClose this issue once \`build\` is green again on \`main\`.`,
+              });
+            }
