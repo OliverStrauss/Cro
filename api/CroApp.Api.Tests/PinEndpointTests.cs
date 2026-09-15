@@ -177,6 +177,32 @@ public class PinEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task PinBird_CapturesDestinationWaypointId()
+    {
+        var senderUsername = $"pin-wp-sender-{Guid.NewGuid():N}";
+        var receiverUsername = $"pin-wp-receiver-{Guid.NewGuid():N}";
+        var (senderId, senderToken) = await RegisterAndLoginAsync(senderUsername, SeedPassword);
+        var (_, receiverToken) = await RegisterAndLoginAsync(receiverUsername, SeedPassword);
+
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, "/friends/requests", senderToken, new { Username = receiverUsername }));
+        await _client.SendAsync(AuthedRequest(HttpMethod.Post, $"/friends/requests/{senderId}/accept", receiverToken));
+
+        var origin = await CreateWaypointAsync(senderToken, "WP Sender Nest", 42.0, -91.0);
+        var destination = await CreateWaypointAsync(receiverToken, "WP Receiver Nest", 42.0, -91.0);
+
+        var composeResponse = await ComposeBirdAsync(senderToken, "Waypoint Note", origin.Id, destination.Id, "where did I land");
+        composeResponse.EnsureSuccessStatusCode();
+        var composed = (await composeResponse.Content.ReadFromJsonAsync<BirdDto>())!;
+        (await ListOwnBirdsAsync(senderToken)).EnsureSuccessStatusCode();
+
+        var pinResponse = await PinAsync(receiverToken, composed.Id);
+        pinResponse.EnsureSuccessStatusCode();
+        var pin = (await pinResponse.Content.ReadFromJsonAsync<PinnedBirdDto>())!;
+
+        Assert.Equal(destination.Id, pin.WaypointId);
+    }
+
+    [Fact]
     public async Task PinningTheSameDelivery_Twice_IsIdempotent()
     {
         var (_, birdId, _, receiverToken) = await DeliverBirdAsync("Repeat Note", "hi again", isPublic: false);
@@ -309,6 +335,7 @@ public class PinEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         string BirdId,
         string BirdName,
         string? OriginNestName,
+        string? WaypointId,
         string Type,
         string? Content,
         string? AudioUrl,

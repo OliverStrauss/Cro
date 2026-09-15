@@ -10,6 +10,9 @@ class PinnedBird {
   final String birdId;
   final String birdName;
   final String? originNestName;
+  // The nest the bird landed on, captured at pin time - null for pins made before this field
+  // existed, in which case there's simply no nest to jump to. See api/Models/PinnedBird.cs.
+  final String? waypointId;
   final String type;
   final String? content;
   final String? audioUrl;
@@ -25,6 +28,7 @@ class PinnedBird {
     required this.birdId,
     required this.birdName,
     this.originNestName,
+    this.waypointId,
     required this.type,
     this.content,
     this.audioUrl,
@@ -41,6 +45,7 @@ class PinnedBird {
         birdId: json['birdId'] as String,
         birdName: json['birdName'] as String,
         originNestName: json['originNestName'] as String?,
+        waypointId: json['waypointId'] as String?,
         type: json['type'] as String,
         content: json['content'] as String?,
         audioUrl: json['audioUrl'] as String?,

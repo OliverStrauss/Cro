@@ -44,6 +44,7 @@ public class PinService(
             bird.Id,
             bird.Name,
             bird.NestFromName,
+            nest.Id,
             bird.Type,
             bird.Content,
             bird.AudioUrl,

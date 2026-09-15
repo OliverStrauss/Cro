@@ -62,7 +62,7 @@ String _fakeJwtFor(String userId) {
   return '${segment({'alg': 'HS256'})}.${segment({'sub': userId})}.sig';
 }
 
-PinnedBird _pin(String id, {String? imageUrl}) => PinnedBird(
+PinnedBird _pin(String id, {String? imageUrl, String? waypointId}) => PinnedBird(
   id: id,
   receiverId: 'u1',
   senderId: 'u2',
@@ -70,6 +70,7 @@ PinnedBird _pin(String id, {String? imageUrl}) => PinnedBird(
   birdId: 'b1',
   birdName: 'Robin',
   originNestName: 'Ames',
+  waypointId: waypointId,
   type: 'text',
   imageUrl: imageUrl,
   isPublic: false,
@@ -87,11 +88,16 @@ void main() {
     authState = AuthState()..login(_fakeJwtFor('u1'));
   });
 
-  Widget build() {
+  Widget build({ValueChanged<String>? onOpenNest}) {
     return MaterialApp(
       theme: croTheme,
       home: Scaffold(
-        body: WebPinnedScreen(authState: authState, pinService: pinService, friendsService: friendsService),
+        body: WebPinnedScreen(
+          authState: authState,
+          pinService: pinService,
+          friendsService: friendsService,
+          onOpenNest: onOpenNest ?? (_) {},
+        ),
       ),
     );
   }
@@ -112,5 +118,25 @@ void main() {
 
     final cardWidth = tester.getSize(find.byKey(const Key('pinnedMessageCard_p1'))).width;
     expect(cardWidth, lessThanOrEqualTo(720));
+  });
+
+  testWidgets('tapping a pin card with a waypoint navigates to that nest', (tester) async {
+    pinService.mineToReturn = [_pin('p1', waypointId: 'w1')];
+    final opened = <String>[];
+    await tester.pumpWidget(build(onOpenNest: opened.add));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('pinnedMessageNestTap_p1')));
+    await tester.pumpAndSettle();
+
+    expect(opened, ['w1']);
+  });
+
+  testWidgets('a pin card with no waypoint has no nest link', (tester) async {
+    pinService.mineToReturn = [_pin('p1')];
+    await tester.pumpWidget(build());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('pinnedMessageNestTap_p1')), findsNothing);
   });
 }

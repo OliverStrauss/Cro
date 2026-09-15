@@ -19,6 +19,9 @@ class PinnedMessageCard extends StatefulWidget {
   final FriendsService friendsService;
   final String? removeTooltip;
   final Future<void> Function()? onRemove;
+  // Called with pin.waypointId when the card's nest link is tapped - only rendered when
+  // waypointId is non-null (see PinnedBird.waypointId for why it can be absent).
+  final ValueChanged<String>? onOpenNest;
 
   const PinnedMessageCard({
     super.key,
@@ -28,6 +31,7 @@ class PinnedMessageCard extends StatefulWidget {
     required this.friendsService,
     this.removeTooltip,
     this.onRemove,
+    this.onOpenNest,
   });
 
   @override
@@ -83,7 +87,8 @@ class _PinnedMessageCardState extends State<PinnedMessageCard> {
   @override
   Widget build(BuildContext context) {
     final pin = widget.pin;
-    return Card(
+    final waypointId = pin.waypointId;
+    final card = Card(
       key: Key('pinnedMessageCard_${pin.id}'),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -144,6 +149,14 @@ class _PinnedMessageCardState extends State<PinnedMessageCard> {
           ],
         ),
       ),
+    );
+
+    final onOpenNest = widget.onOpenNest;
+    if (waypointId == null || onOpenNest == null) return card;
+    return InkWell(
+      key: Key('pinnedMessageNestTap_${pin.id}'),
+      onTap: () => onOpenNest(waypointId),
+      child: card,
     );
   }
 }
