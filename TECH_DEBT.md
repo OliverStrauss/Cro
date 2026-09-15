@@ -61,6 +61,50 @@ resource is idempotent by design (already true of the original dedup fix). Verif
 186/186 tests pass against the ARM64 emulator. Not yet verified against GitHub Actions' actual
 resource-constrained runner - watch the next `main` push's `build` job.
 
+**Retry fix (#210) also did not fix it, confirmed 2026-09-14.** The merge run for #210 still
+showed `Failed: 186, Passed: 0` on all three of the workflow's own fresh-emulator retry
+attempts - one attempt alone ran 26 minutes before failing completely, which reads as the
+Cosmos emulator container going into sustained distress for that stretch, not a short transient
+blip a request-level retry can ride out. Live re-check confirmed `cro-api` still stuck pre-#179
+(`curl POST /birds/{id}/shoo` still an empty-body, routing-miss `404`). This was the second
+consecutive merged fix (dedup in #193, retry in #210) that failed to resolve the same underlying
+503 on GitHub Actions' actual runner - with test-level concurrency already fully eliminated
+(xunit's collection/assembly parallelism has been off since `3895bd0`, 2026-08-07), the
+remaining explanation was that the classic `azure-cosmos-emulator:latest` image itself doesn't
+run reliably under this runner's resource constraints (a fatal error in its Windows-compat
+layer under load, already flagged in `dotnet-ci.yml`'s own comments) rather than a
+request-level 503 a retry can smooth over.
+
+**CI overhaul PR opened 2026-09-14 (`fix/ci-cosmos-vnext-emulator`), replacing the emulator
+image itself instead of tuning around it.** Swapped the classic image for `vnext-preview` -
+the same image local Apple Silicon dev already runs reliably, confirmed via Microsoft's
+current docs to support amd64 (what GitHub-hosted runners use) and GA, not ARM64-only preview
+(see the design spec at `docs/superpowers/specs/2026-09-14-ci-cosmos-emulator-overhaul-design.md`)
+- removing the classic image's own documented crash bug entirely rather than continuing to
+tune retry/backoff parameters around it. Also added a `notify-on-failure` job so a red
+push-triggered `main` build can't go unnoticed again (closes the blind spot flagged twice
+above). **Verified**: the PR's own `pull_request`-triggered run passed on the first attempt in
+3m25s, no retries needed - a dramatic change from every prior run's 100% failure (see
+[PR #212](https://github.com/OliverStrauss/Cro/pull/212)). Pending: merge, then confirm
+`deploy` actually runs and a live `curl -i -X POST
+https://cro-api.azurewebsites.net/birds/{id}/shoo` returns a proper JSON `{"error": "..."}`
+404 instead of the routing-miss 404 this investigation found - only then is this entry fully
+resolved.
+
+## Integration tests depend entirely on a live Cosmos/Blob emulator - no fake/in-memory repository tier
+
+All ~26 `CroApp.Api.Tests` classes spin up a full `WebApplicationFactory<Program>` against a
+real Cosmos emulator and Azurite, with no lighter-weight tier for tests that don't actually
+need real Cosmos semantics (partition routing, unique constraints, etc.). This is why CI's
+reliability has always been bottlenecked on the emulator's own resource behavior rather than
+the test suite's logic - see the CI entry above for the 2026-09-14 emulator-image swap that
+addressed the immediate symptom. A fake/in-memory repository implementation for tests that
+don't need real Cosmos semantics, reserving the live emulator for a small, deliberately-curated
+integration subset, would remove this bottleneck close to entirely rather than depending on
+whichever emulator image happens to behave under CI's resource constraints. Sized as a real
+test-architecture project, not a CI-config tweak - not undertaken as part of the 2026-09-14
+overhaul.
+
 ## Radio Log redesign (`redesign/radio-log-visual-overhaul`) has no visual comp and no browser QA pass
 
 The whole-web-app visual overhaul (theme, typography, hairline card/button language - see
