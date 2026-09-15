@@ -1,4 +1,3 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/bird.dart';
@@ -415,10 +414,8 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
                             BirdPayloadView(
                               content: bird.content,
                               imageUrl: bird.imageUrl,
-                              audioUrl: bird.type == BirdType.parrot ? null : bird.audioUrl,
+                              audioUrl: bird.audioUrl,
                             ),
-                            if (bird.type == BirdType.parrot && bird.audioUrl != null)
-                              _ParrotWaveform(audioUrl: bird.audioUrl!, color: Theme.of(context).colorScheme.primary),
                           ],
                         ),
                       ),
@@ -541,119 +538,6 @@ class _BirdPanelContentState extends State<BirdPanelContent> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// A Parrot payload's audio row: a play button plus a 24-bar waveform. The bars are a fixed
-/// decorative pattern (not real audio analysis - the backend doesn't provide amplitude
-/// data), matching the design reference's own formula exactly so it isn't just a generic
-/// player. The duration starts as a placeholder and fills in once the player reports one.
-class _ParrotWaveform extends StatefulWidget {
-  final String audioUrl;
-  final Color color;
-
-  const _ParrotWaveform({required this.audioUrl, required this.color});
-
-  @override
-  State<_ParrotWaveform> createState() => _ParrotWaveformState();
-}
-
-class _ParrotWaveformState extends State<_ParrotWaveform> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlaying = false;
-  Duration? _duration;
-
-  @override
-  void initState() {
-    super.initState();
-    _audioPlayer.onPlayerComplete.listen((_) {
-      if (mounted) setState(() => _isPlaying = false);
-    });
-    _audioPlayer.onDurationChanged.listen((d) {
-      if (mounted) setState(() => _duration = d);
-    });
-  }
-
-  Future<void> _toggle() async {
-    if (_isPlaying) {
-      await _audioPlayer.pause();
-    } else {
-      await _audioPlayer.play(UrlSource(widget.audioUrl));
-    }
-    if (!mounted) return;
-    setState(() => _isPlaying = !_isPlaying);
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
-  String get _durationText {
-    final d = _duration;
-    if (d == null) return '--:--';
-    final minutes = d.inMinutes;
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 11),
-      child: Row(
-        children: [
-          Tooltip(
-            message: _isPlaying ? 'Pause' : 'Play',
-            child: Material(
-              color: widget.color,
-              shape: const CircleBorder(),
-              child: InkWell(
-                key: const Key('birdPanelWaveformPlay'),
-                customBorder: const CircleBorder(),
-                onTap: _toggle,
-                child: SizedBox(
-                  width: 34,
-                  height: 34,
-                  child: Center(
-                    child: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 18, color: CroColors.surface),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: SizedBox(
-              height: 26,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (var i = 0; i < 24; i++) ...[
-                    if (i > 0) const SizedBox(width: 2),
-                    Expanded(
-                      child: FractionallySizedBox(
-                        heightFactor: (30 + (i * 37) % 70) / 100,
-                        alignment: Alignment.bottomCenter,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: CroColors.deepWaypoint.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(1),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 11),
-          Text(_durationText, style: CroTextStyles.data(size: 11)),
-        ],
       ),
     );
   }
