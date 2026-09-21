@@ -89,74 +89,76 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AuthTextField(
-              fieldKey: const Key('emailField'),
-              controller: _emailController,
-              label: 'Email',
-              icon: Icons.alternate_email,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
-              autocorrect: false,
-              validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
-            ),
-            if (_codeSent) ...[
-              const SizedBox(height: 14),
+      child: AutofillGroup(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               AuthTextField(
-                fieldKey: const Key('codeField'),
-                controller: _codeController,
-                label: '6-digit code',
-                icon: Icons.pin_outlined,
-                keyboardType: TextInputType.number,
+                fieldKey: const Key('emailField'),
+                controller: _emailController,
+                label: 'Email',
+                icon: Icons.alternate_email,
+                keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
-                validator: (v) => (v == null || v.trim().length != 6) ? 'Enter the 6-digit code' : null,
-              ),
-              const SizedBox(height: 14),
-              AuthTextField(
-                fieldKey: const Key('newPasswordField'),
-                controller: _newPasswordController,
-                label: 'New password',
-                icon: Icons.lock_outline,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.newPassword],
+                autofillHints: const [AutofillHints.email],
                 autocorrect: false,
-                enableSuggestions: false,
-                validator: (v) => (v == null || v.isEmpty) ? 'Choose a new password' : null,
-                onSubmitted: (_) => _isLoading ? null : _resetPassword(),
+                validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
               ),
-            ],
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
-              AuthErrorBanner(message: _errorMessage!),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                key: const Key('submitButton'),
-                onPressed: _isLoading ? null : (_codeSent ? _resetPassword : _requestCode),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: CroColors.waypointBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
+              if (_codeSent) ...[
+                const SizedBox(height: 14),
+                AuthTextField(
+                  fieldKey: const Key('codeField'),
+                  controller: _codeController,
+                  label: '6-digit code',
+                  icon: Icons.pin_outlined,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  validator: (v) => (v == null || v.trim().length != 6) ? 'Enter the 6-digit code' : null,
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : Text(_codeSent ? 'Reset password' : 'Send code', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 14),
+                AuthTextField(
+                  fieldKey: const Key('newPasswordField'),
+                  controller: _newPasswordController,
+                  label: 'New password',
+                  icon: Icons.lock_outline,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.newPassword],
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  validator: (v) => (v == null || v.isEmpty) ? 'Choose a new password' : null,
+                  onSubmitted: (_) => _isLoading ? null : _resetPassword(),
+                ),
+              ],
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 16),
+                AuthErrorBanner(message: _errorMessage!),
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  key: const Key('submitButton'),
+                  onPressed: _isLoading ? null : (_codeSent ? _resetPassword : _requestCode),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CroColors.waypointBlue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(_codeSent ? 'Reset password' : 'Send code', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -80,72 +80,74 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AuthTextField(
-              fieldKey: const Key('usernameField'),
-              controller: _usernameController,
-              label: 'Username',
-              icon: Icons.person_outline,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.newUsername],
-              autocorrect: false,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Choose a username' : null,
-            ),
-            const SizedBox(height: 14),
-            AuthTextField(
-              fieldKey: const Key('emailField'),
-              controller: _emailController,
-              label: 'Email',
-              icon: Icons.alternate_email,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
-              autocorrect: false,
-              validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
-            ),
-            const SizedBox(height: 14),
-            AuthTextField(
-              fieldKey: const Key('passwordField'),
-              controller: _passwordController,
-              label: 'Password',
-              icon: Icons.lock_outline,
-              obscureText: true,
-              textInputAction: TextInputAction.done,
-              autofillHints: const [AutofillHints.newPassword],
-              autocorrect: false,
-              enableSuggestions: false,
-              validator: (v) => (v == null || v.isEmpty) ? 'Choose a password' : null,
-              onSubmitted: (_) => _isLoading ? null : _submit(),
-            ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
-              AuthErrorBanner(message: _errorMessage!),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: CroColors.waypointBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Sign up', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+      child: AutofillGroup(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AuthTextField(
+                fieldKey: const Key('usernameField'),
+                controller: _usernameController,
+                label: 'Username',
+                icon: Icons.person_outline,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.newUsername],
+                autocorrect: false,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Choose a username' : null,
               ),
-            ),
-          ],
+              const SizedBox(height: 14),
+              AuthTextField(
+                fieldKey: const Key('emailField'),
+                controller: _emailController,
+                label: 'Email',
+                icon: Icons.alternate_email,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                autocorrect: false,
+                validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+              ),
+              const SizedBox(height: 14),
+              AuthTextField(
+                fieldKey: const Key('passwordField'),
+                controller: _passwordController,
+                label: 'Password',
+                icon: Icons.lock_outline,
+                obscureText: true,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.newPassword],
+                autocorrect: false,
+                enableSuggestions: false,
+                validator: (v) => (v == null || v.isEmpty) ? 'Choose a password' : null,
+                onSubmitted: (_) => _isLoading ? null : _submit(),
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 16),
+                AuthErrorBanner(message: _errorMessage!),
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CroColors.waypointBlue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Sign up', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
