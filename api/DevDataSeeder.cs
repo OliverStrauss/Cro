@@ -138,7 +138,8 @@ public static class DevDataSeeder
                 // "Admin" gets the same IsAdmin: true treatment Program.cs's own dev seed gives
                 // "Admin 1", so it can place Hubs via the map's "Add Hub" button.
                 IsAdmin: username == "Admin",
-                IsBot: botUsernames.Contains(username));
+                IsBot: botUsernames.Contains(username),
+                IsEmailVerified: true);
             return user with { PasswordHash = hasher.HashPassword(user, Password) };
         });
 

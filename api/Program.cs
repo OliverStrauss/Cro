@@ -336,7 +336,8 @@ await StartupProvisioning.RunOnceAsync(app.Environment.EnvironmentName, async ()
                     DateTimeOffset.UtcNow,
                     PasswordHash: "",
                     Friends: [],
-                    IsAdmin: isAdmin);
+                    IsAdmin: isAdmin,
+                    IsEmailVerified: true);
                 seedUser = seedUser with { PasswordHash = seedHasher.HashPassword(seedUser, "correct-horse-battery-staple") };
                 await userRepoForSeed.CreateAsync(seedUser);
             }

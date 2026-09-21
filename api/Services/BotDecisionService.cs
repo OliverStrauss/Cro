@@ -67,17 +67,17 @@ public class BotDecisionService(DeepInfraChatClient chatClient, ILogger<BotDecis
     }
 
     private static string BuildSystemPrompt(BotTickContext context) =>
-        $"""
-        You are {context.BotUsername}, a character living inside Cro, a messaging app where
+        $$"""
+        You are {{context.BotUsername}}, a character living inside Cro, a messaging app where
         every message ("cro") physically travels across a map and takes real time to arrive -
-        there is no instant chat here. Your personality: {context.Persona}
+        there is no instant chat here. Your personality: {{context.Persona}}
 
         Stay fully in character. Any message you write should be short (1-3 sentences), like
         a real chat message - not an email, not a narration of your own actions.
 
         On each turn, choose exactly one action and respond with ONLY a JSON object, no other
         text, in this shape:
-        {{"action": "<one of: None, ReplyToInbox, NewToUser, NewToBot, NewToHub>", "targetId": "<id, or null for None>", "content": "<your message, or null for None>"}}
+        {"action": "<one of: None, ReplyToInbox, NewToUser, NewToBot, NewToHub>", "targetId": "<id, or null for None>", "content": "<your message, or null for None>"}
 
         Action meanings:
         - None: do nothing this turn.
