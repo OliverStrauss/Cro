@@ -29,6 +29,7 @@ public class BotOrchestratorService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = TimeSpan.FromSeconds(Math.Max(options.Value.TickIntervalSeconds, 15));
+        logger.LogInformation("BOT_ORCHESTRATOR started: sweep every {IntervalSeconds}s, per-bot cooldown {CooldownMinutes}m.", interval.TotalSeconds, Math.Max(options.Value.TickCooldownMinutes, 1));
         using var timer = new PeriodicTimer(interval);
         do
         {
@@ -50,27 +51,42 @@ public class BotOrchestratorService(
         var enabled = await botProfileRepository.ListEnabledAsync();
         var cooldown = TimeSpan.FromMinutes(Math.Max(options.Value.TickCooldownMinutes, 1));
         var now = DateTimeOffset.UtcNow;
+        var ticked = 0;
+        var sent = 0;
+
+        if (enabled.Count == 0)
+        {
+            logger.LogWarning("BOT_SWEEP no enabled bots found - nothing will ever be sent (was BotSeeder run / is BotProfile.IsEnabled set?).");
+        }
 
         foreach (var profile in enabled)
         {
             if (cancellationToken.IsCancellationRequested) return;
             if (profile.LastTickAt is not null && now - profile.LastTickAt < cooldown) continue;
+            ticked++;
 
             // Each bot gets its own DI scope (not just the sweep as a whole), so one bot's
             // failure can't leave a scoped repository/service in a bad state for the next.
             using var botScope = scopeFactory.CreateScope();
             try
             {
-                await TickBotAsync(botScope.ServiceProvider, profile, cancellationToken);
+                if (await TickBotAsync(botScope.ServiceProvider, profile, cancellationToken)) sent++;
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Tick failed for bot {UserId}; will retry next sweep.", profile.UserId);
+                logger.LogWarning(ex, "BOT_TICK bot={UserId} outcome=Failed reason=exception; will retry next sweep.", profile.UserId);
             }
         }
+
+        // Quiet sweeps (every bot still cooling down) stay at Debug so a 60s timer doesn't
+        // write ~1,400 lines a day; any sweep that actually ticked a bot is Information.
+        logger.Log(ticked > 0 ? LogLevel.Information : LogLevel.Debug,
+            "BOT_SWEEP enabled={Enabled} ticked={Ticked} sent={Sent} cooling_down={CoolingDown}",
+            enabled.Count, ticked, sent, enabled.Count - ticked);
     }
 
-    private async Task TickBotAsync(IServiceProvider services, BotProfile profile, CancellationToken cancellationToken)
+    // Returns true iff this tick actually sent a cro. Every exit logs exactly one BOT_TICK line.
+    private async Task<bool> TickBotAsync(IServiceProvider services, BotProfile profile, CancellationToken cancellationToken)
     {
         var userRepository = services.GetRequiredService<CosmosUserRepository>();
         var waypointRepository = services.GetRequiredService<CosmosWaypointRepository>();
@@ -82,8 +98,8 @@ public class BotOrchestratorService(
         var bot = await userRepository.GetByIdAsync(profile.UserId);
         if (bot is null || !bot.IsBot)
         {
-            logger.LogWarning("BotProfile {UserId} has no matching bot User; skipping.", profile.UserId);
-            return;
+            logger.LogWarning("BOT_TICK bot={UserId} outcome=Skipped reason=no matching bot User for this BotProfile", profile.UserId);
+            return false;
         }
 
         // A bot only ever acts from its own home nest - it doesn't chase down birds it
@@ -92,7 +108,8 @@ public class BotOrchestratorService(
         var homeNest = (await waypointRepository.ListByUserIdAsync(bot.Id)).FirstOrDefault(w => !w.IsPublic);
         if (homeNest is null)
         {
-            return; // no nest yet to act from
+            logger.LogWarning("BOT_TICK bot={Bot} outcome=Skipped reason=no private home nest", bot.Username);
+            return false;
         }
 
         var residents = await birdService.GetNestResidentsAsync(bot.Id, homeNest.Id);
@@ -144,8 +161,11 @@ public class BotOrchestratorService(
 
         if (decision.Action == BotActionKind.None)
         {
+            // Also what a failed/unparseable LLM call falls back to - BotDecisionService
+            // logs that as its own warning just above this line.
+            logger.LogInformation("BOT_TICK bot={Bot} outcome=NoAction reason=LLM chose None (inbox={Inbox}, humanFriends={HumanFriends}, botFriends={BotFriends}, hubs={Hubs})", bot.Username, inbox.Count, humanFriends.Count, botFriends.Count, watchedHubs.Count);
             await botProfileRepository.UpdateAsync(tickedProfile);
-            return;
+            return false;
         }
 
         // Every send action needs one of the bot's own idle, text-capable birds - a Parrot
@@ -158,8 +178,9 @@ public class BotOrchestratorService(
         {
             // Nothing free to send with this tick (every bird traveling, or only
             // media-only types idle) - stand down rather than force a mismatched send.
+            logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} reason=no idle Cro/Raven to send with", bot.Username, decision.Action);
             await botProfileRepository.UpdateAsync(tickedProfile);
-            return;
+            return false;
         }
 
         var replyTarget = decision.Action == BotActionKind.ReplyToInbox
@@ -176,8 +197,9 @@ public class BotOrchestratorService(
         };
         if (destinationNestId is null)
         {
+            logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} target={Target} reason=destination nest not found", bot.Username, decision.Action, decision.TargetId);
             await botProfileRepository.UpdateAsync(tickedProfile);
-            return;
+            return false;
         }
 
         // Which bot (if any) this turn's action is aimed at - used only to update the
@@ -202,10 +224,12 @@ public class BotOrchestratorService(
             // The world moved between context-build and here (destination nest deleted, the
             // chosen bird started traveling from a concurrent tick, etc.) - log and skip this
             // turn, same best-effort posture as every other secondary write in this codebase.
-            logger.LogWarning(ex, "Bot {UserId} action {Action} failed: {Message}", bot.Id, decision.Action, ex.Message);
+            logger.LogWarning(ex, "BOT_TICK bot={Bot} outcome=Failed action={Action} target={Target} reason={Message}", bot.Username, decision.Action, decision.TargetId, ex.Message);
             await botProfileRepository.UpdateAsync(tickedProfile);
-            return;
+            return false;
         }
+
+        logger.LogInformation("BOT_TICK bot={Bot} outcome=Sent action={Action} target={Target} bird={BirdType} chars={Chars}", bot.Username, decision.Action, decision.TargetId, outgoingBird.Type, decision.Content?.Length ?? 0);
 
         var consecutiveBotReplies = new Dictionary<string, int>(profile.ConsecutiveBotReplies);
         if (botTargetUserId is not null)
@@ -221,5 +245,6 @@ public class BotOrchestratorService(
         }
 
         await botProfileRepository.UpdateAsync(tickedProfile with { ConsecutiveBotReplies = consecutiveBotReplies });
+        return true;
     }
 }
