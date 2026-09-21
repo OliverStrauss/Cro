@@ -41,6 +41,12 @@ public static class BotActionPlanner
         context.BotFriends.Any(b => b.UserId == senderUserId)
         && context.ConsecutiveBotReplies.GetValueOrDefault(senderUserId) >= context.MaxConsecutiveBotReplies;
 
+    // A reply that fails with a 404 (sender's nest gone/unreachable) can never succeed on a
+    // retry, so the orchestrator marks it read rather than re-picking it forever. Any other
+    // failure may be transient and stays retryable.
+    public static bool ShouldAbandonReply(BotPlan plan, int statusCode) =>
+        plan.Action == BotActionKind.ReplyToInbox && statusCode == 404;
+
     // Replies always win and skip the dice: someone is waiting on an answer. Otherwise roll
     // ActChance, then pick among whichever actions currently have a valid target, weighted.
     public static BotPlan? Plan(BotTickContext context, BotOrchestratorOptions options, Random rng)

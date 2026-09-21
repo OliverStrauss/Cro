@@ -109,4 +109,15 @@ public class BotActionPlannerTests
     {
         Assert.Equal(expected, BotMessageWriter.Clean(raw, max));
     }
+
+    [Theory]
+    [InlineData(BotActionKind.ReplyToInbox, 404, true)]
+    [InlineData(BotActionKind.ReplyToInbox, 400, false)]
+    [InlineData(BotActionKind.ReplyToInbox, 500, false)]
+    [InlineData(BotActionKind.NewToUser, 404, false)]
+    [InlineData(BotActionKind.NewToHub, 404, false)]
+    public void ShouldAbandonReply_OnlyForA404OnAReply(string action, int statusCode, bool expected)
+    {
+        Assert.Equal(expected, BotActionPlanner.ShouldAbandonReply(new BotPlan(action, "t", "label", false), statusCode));
+    }
 }

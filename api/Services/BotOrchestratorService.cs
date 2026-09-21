@@ -271,6 +271,22 @@ public class BotOrchestratorService(
             // chosen bird started traveling from a concurrent tick, etc.) - log and skip this
             // turn, same best-effort posture as every other secondary write in this codebase.
             logger.LogWarning(ex, "BOT_TICK bot={Bot} outcome=Failed action={Action} target={Target} reason={Message}", bot.Username, plan.Action, plan.TargetId, ex.Message);
+            if (BotActionPlanner.ShouldAbandonReply(plan, ex.StatusCode))
+            {
+                // The planner always picks a reply first, so an unanswerable one (its sender's
+                // nest is gone/unreachable) would be re-picked and re-fail every tick, freezing
+                // the bot. Mark it read so the next tick moves on; being read, it's also shooed
+                // after ShooAfterHours.
+                try
+                {
+                    await birdService.MarkReadAsync(bot.Id, plan.TargetId);
+                    logger.LogWarning("BOT_TICK bot={Bot} abandoned unanswerable reply to bird={Target}, marked read.", bot.Username, plan.TargetId);
+                }
+                catch (ServiceException markEx)
+                {
+                    logger.LogWarning(markEx, "Bot {UserId} failed to mark bird {BirdId} read after abandoning its reply: {Message}", bot.Id, plan.TargetId, markEx.Message);
+                }
+            }
             await botProfileRepository.UpdateAsync(tickedProfile);
             return false;
         }
