@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CroApp.Api.Models;
+using CroApp.Api.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CroApp.Api.Tests;
 
@@ -16,6 +19,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
     private const string SeedPassword = "correct-horse-battery-staple";
 
     private readonly HttpClient _client;
+    private readonly IServiceProvider _services;
 
     public FriendshipEndpointTests(WebApplicationFactory<Program> factory)
     {
@@ -29,6 +33,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
         });
 
         _client = configuredFactory.CreateClient();
+        _services = configuredFactory.Services;
     }
 
     private async Task<(string UserId, string Token)> RegisterAndLoginAsync(string username, string password)
@@ -130,6 +135,24 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
 
         Assert.NotNull(bAsSeenByA.Color);
         Assert.NotNull(aAsSeenByB.Color);
+    }
+
+    [Fact]
+    public async Task SendRequest_ToBot_IsAutoAccepted()
+    {
+        var botUsername = $"friend-bot-{Guid.NewGuid():N}";
+        var bot = new User(Guid.NewGuid().ToString(), botUsername, $"{botUsername}@bots.invalid", DateTimeOffset.UtcNow, "", [], IsBot: true);
+        using (var scope = _services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<CosmosUserRepository>().CreateAsync(bot);
+        }
+        var (_, token) = await RegisterAndLoginAsync($"friend-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
+
+        await SendRequestAsync(token, botUsername);
+
+        // GET /friends lists Accepted friends only, so presence alone proves the auto-accept.
+        var entry = Assert.Single(await GetFriendsAsync(token), f => f.Id == bot.Id);
+        Assert.NotNull(entry.Color);
     }
 
     [Fact]
