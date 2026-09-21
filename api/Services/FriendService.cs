@@ -47,6 +47,15 @@ public class FriendService(CosmosUserRepository userRepository, EventService eve
 
         await userRepository.UpdateAsync(updatedRequester);
         await userRepository.UpdateAsync(updatedTarget);
+
+        // A bot has no human to click Accept, so it accepts instantly - and skips the
+        // "request received" Event, which would notify nobody.
+        if (target.IsBot)
+        {
+            await AcceptAsync(target.Id, requester.Id);
+            return;
+        }
+
         await eventService.RecordFriendRequestReceivedAsync(target, requester);
     }
 

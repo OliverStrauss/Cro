@@ -217,34 +217,11 @@ public static class DevDataSeeder
         // seeded directly at their new Roost rather than left for lazy GET /birds provisioning -
         // a dev user's first bird-touching request wouldn't otherwise be the lazy-provisioning
         // codepath, since the account and nest already exist by the time anyone logs in.
-        var rosterNow = DateTimeOffset.UtcNow;
         foreach (var username in usernames)
         {
             var user = users[username];
             var nest = nestsByUsername[username];
-            foreach (var (type, count) in BirdTypeCatalog.StarterRoster)
-            {
-                for (var i = 1; i <= count; i++)
-                {
-                    var name = count > 1 ? $"{username}'s {type} {i}" : $"{username}'s {type}";
-                    var bird = new Bird(
-                        Guid.NewGuid().ToString(),
-                        user.Id,
-                        name,
-                        CurrentNestId: nest.Id,
-                        IsTraveling: false,
-                        NestFromId: null,
-                        NestToId: null,
-                        Speed: null,
-                        Content: null,
-                        Type: type,
-                        DepartedAt: null,
-                        EstimatedArrivalAt: null,
-                        IsRead: true,
-                        UpdatedAt: rosterNow);
-                    await birdsContainer.CreateItemAsync(bird, new PartitionKey(bird.UserId));
-                }
-            }
+            await SeedStarterRosterAsync(birdsContainer, user, nest);
             Console.WriteLine($"  + {username}'s starter roster (2 Cro, 1 Raven, 1 Pigeon, 1 Parrot) at {nest.Name}");
         }
 
@@ -281,11 +258,40 @@ public static class DevDataSeeder
     // steadily growing radius) - the standard trick for scattering N points with no
     // clustering and no manual placement, so BotPersonaCatalog.Seeded can grow or shrink
     // freely without anyone hand-picking a new landmark the way humanHomeBases needs.
-    private static (double Latitude, double Longitude) AmesSpiralPoint(int index, int total)
+    internal static (double Latitude, double Longitude) AmesSpiralPoint(int index, int total)
     {
         const double goldenAngleDegrees = 137.5077640500378;
         var angleRadians = index * goldenAngleDegrees * Math.PI / 180.0;
         var radius = AmesSpiralRadiusDegrees * Math.Sqrt((index + 1.0) / Math.Max(total, 1));
         return (AmesCenterLatitude + radius * Math.Sin(angleRadians), AmesCenterLongitude + radius * Math.Cos(angleRadians));
+    }
+
+    // Shared with BotSeeder - the fixed BirdTypeCatalog.StarterRoster, sitting home at `nest`.
+    internal static async Task SeedStarterRosterAsync(Container birdsContainer, User user, Waypoint nest)
+    {
+        var rosterNow = DateTimeOffset.UtcNow;
+        foreach (var (type, count) in BirdTypeCatalog.StarterRoster)
+        {
+            for (var i = 1; i <= count; i++)
+            {
+                var name = count > 1 ? $"{user.Username}'s {type} {i}" : $"{user.Username}'s {type}";
+                var bird = new Bird(
+                    Guid.NewGuid().ToString(),
+                    user.Id,
+                    name,
+                    CurrentNestId: nest.Id,
+                    IsTraveling: false,
+                    NestFromId: null,
+                    NestToId: null,
+                    Speed: null,
+                    Content: null,
+                    Type: type,
+                    DepartedAt: null,
+                    EstimatedArrivalAt: null,
+                    IsRead: true,
+                    UpdatedAt: rosterNow);
+                await birdsContainer.CreateItemAsync(bird, new PartitionKey(bird.UserId));
+            }
+        }
     }
 }

@@ -286,6 +286,14 @@ and their seeded `BotProfile` rows still exist, they just never tick. There's no
 for managing bots (enabling/disabling, editing a persona, pointing one at a Hub) — see
 `TECH_DEBT.md`'s bot-layer entry for that and every other known gap here.
 
+**Prod**: `BotSeeder.EnsureBotsAsync` (`api/Services/BotSeeder.cs`) runs on startup in every
+environment once `DeepInfra:ApiKey` is set (`az webapp config appsettings set -g cro-prod -n cro-api
+--settings DeepInfra__ApiKey=<key>`) — additive and idempotent by username, never wipes, unlike the
+dev seed. A friend request sent to an `IsBot` user is auto-accepted (`FriendService.SendRequestAsync`).
+To seed bots and befriend a user immediately against a real account, run
+`COSMOS_CONNECTION_STRING=<conn> dotnet run --project Tools/SeedBots -- <Username>` from `/api`
+(username is case-sensitive).
+
 To add, remove, or retune a bot, edit `BotPersonaCatalog.Seeded` (`api/Services/BotPersonaCatalog.cs`)
 — that's the one list `DevDataSeeder` reads, so changing its length changes how many bots get
 seeded on the next `dotnet run`/`SeedDevUsers`, and changing an entry's `Persona`/`Model`

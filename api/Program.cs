@@ -346,6 +346,14 @@ await StartupProvisioning.RunOnceAsync(app.Environment.EnvironmentName, async ()
         }
     }
 
+    // Additive and idempotent, unlike the dev wipe above, so it runs in every environment -
+    // but only once a DeepInfra key exists, since a bot with no orchestrator is just a dead
+    // friend. Lets prod get its bots (see BotSeeder) with no manual data step.
+    if (!string.IsNullOrEmpty(builder.Configuration["DeepInfra:ApiKey"]))
+    {
+        await BotSeeder.EnsureBotsAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.BotProfilesContainerName);
+    }
+
     var blobClient = scope.ServiceProvider.GetRequiredService<BlobServiceClient>();
     var blobOpts = scope.ServiceProvider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
     // PublicAccessType.Blob (public read for blobs, no container listing) keeps uploaded
