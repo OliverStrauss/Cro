@@ -424,6 +424,20 @@ multi-nest cap (and every "the user's one nest" assumption sprinkled across `Bir
 `PinService`/`DeleteAsync` needs revisiting), or `CLAUDE.md` just needs its stale "up to 5"
 phrase corrected to "one."
 
+## `CosmosUserRepository.GetByUsernameAsync` is case-sensitive; `GetByEmailAsync` isn't
+
+Found 2026-09-21 while debugging a "login just rejects Oliver/1" report locally: `/login`
+looks a user up by `GetByUsernameAsync` (`WHERE c.username = @username`, exact match, no
+case-folding), while `GetByEmailAsync` explicitly wraps both sides in `LOWER(...)`. Neither
+the Flutter login screen (`app/lib/services/auth_service.dart`) nor the API normalizes
+username case before the lookup. Net effect: `Oliver`/`1` (the exact capitalization
+`DevDataSeeder` seeds) logs in fine, but `oliver`/`1` silently 401s with no distinguishing
+error - reads exactly like "login is broken" from the UI. Not fixed here since a real fix
+(mirroring `GetByEmailAsync`'s `LOWER()` pattern) also touches sign-up's duplicate-username
+check (`POST /users`) and `FriendService`'s username-based friend lookup - worth deciding
+deliberately (does "Oliver" and "oliver" become the same account, retroactively, for
+existing seeded/prod users?) rather than as a drive-by fix.
+
 ## LLM bot layer (`BotOrchestratorService`) has no admin UI, and is the first thing in `/api` that runs unprompted
 
 Added to give the app a couple of LLM-driven bot personas (`BotProfile`/`BotOrchestratorService`/
