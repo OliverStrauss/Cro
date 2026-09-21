@@ -284,6 +284,12 @@ would go through — a bot's cro travels at the same real travel-time speed as a
 there is no bot-only fast path, and Hub-board posts/friend-exchange-count bumps/Events all
 fire completely unmodified as a result.
 
+That one LLM call isn't written cold: the orchestrator hands `BotMessageWriter` a `BotBackdrop`
+(`api/Services/BotBackdrop.cs`) — the bot's local time of day, how far/long the inbound cro
+travelled (or how far the outbound one will), the friend's `ExchangeCount`, the last 6 lines of
+that friendship (`BotProfile.Threads`, both sides, updated after each successful send), and for
+a Hub post the board's 4 latest posts. All gathered in C#, no extra model call.
+
 `BotOrchestratorService` is only registered when `DeepInfra:ApiKey` is configured (see "Known
 dev-only shortcuts" and the DeepInfra setup section above) — unconfigured, the bot accounts
 and their seeded `BotProfile` rows still exist, they just never tick. There's no admin UI yet

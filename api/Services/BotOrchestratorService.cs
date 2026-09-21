@@ -190,7 +190,8 @@ public class BotOrchestratorService(
             (friend.IsBot ? botFriends : humanFriends).Add(new BotTickContact(friend.Id, friend.Username));
         }
 
-        var hubs = (await hubRepository.ListApprovedAsync()).Select(h => new BotTickHub(h.Id, h.Name)).ToList();
+        var approvedHubs = await hubRepository.ListApprovedAsync();
+        var hubs = approvedHubs.Select(h => new BotTickHub(h.Id, h.Name)).ToList();
 
         var context = new BotTickContext(
             bot.Id,
@@ -242,11 +243,20 @@ public class BotOrchestratorService(
             ? inbox.First(i => i.BirdId == plan.TargetId)
             : null;
 
+        // Fetched (rather than just its id) so the backdrop can say how far the cro travels. A
+        // reply keeps NestFromId as its destination even if this lookup comes back null, so a
+        // deleted sender nest still hits the 404 abandon path below instead of skipping here.
+        var destinationNest = plan.Action switch
+        {
+            BotActionKind.ReplyToInbox => await waypointRepository.GetAsync(replyTarget!.SenderUserId, replyTarget.NestFromId),
+            BotActionKind.NewToUser or BotActionKind.NewToBot =>
+                (await waypointRepository.ListByUserIdAsync(plan.TargetId)).FirstOrDefault(w => !w.IsPublic),
+            _ => null,
+        };
         var destinationNestId = plan.Action switch
         {
             BotActionKind.ReplyToInbox => replyTarget!.NestFromId,
-            BotActionKind.NewToUser or BotActionKind.NewToBot =>
-                (await waypointRepository.ListByUserIdAsync(plan.TargetId)).FirstOrDefault(w => !w.IsPublic)?.Id,
+            BotActionKind.NewToUser or BotActionKind.NewToBot => destinationNest?.Id,
             BotActionKind.NewToHub => plan.TargetId,
             _ => null,
         };
@@ -257,7 +267,39 @@ public class BotOrchestratorService(
             return false;
         }
 
-        var content = await writer.WriteAsync(context, plan, cancellationToken);
+        // The friend this action is a conversation with (Hub posts have none) - keys both the
+        // remembered thread read below and the one written after a successful send.
+        var threadKey = plan.Action switch
+        {
+            BotActionKind.ReplyToInbox => replyTarget!.SenderUserId,
+            BotActionKind.NewToUser or BotActionKind.NewToBot => plan.TargetId,
+            _ => null,
+        };
+
+        var hub = plan.Action == BotActionKind.NewToHub ? approvedHubs.FirstOrDefault(h => h.Id == plan.TargetId) : null;
+        var destLat = destinationNest?.Latitude ?? hub?.Latitude;
+        var destLng = destinationNest?.Longitude ?? hub?.Longitude;
+        double? km = destLat is { } lat && destLng is { } lng
+            ? GeoDistance.HaversineKm(homeNest.Latitude, homeNest.Longitude, lat, lng)
+            : null;
+
+        var inboundBird = replyTarget is null ? null : residents.FirstOrDefault(b => b.Id == replyTarget.BirdId);
+        TimeSpan? took = inboundBird?.DepartedAt is { } departed && inboundBird.EstimatedArrivalAt is { } arrived ? arrived - departed : null;
+
+        var boardTail = plan.Action == BotActionKind.NewToHub
+            ? await BuildBoardTailAsync(services.GetRequiredService<CosmosHubMessageRepository>(), plan.TargetId)
+            : [];
+
+        var backdrop = new BotBackdrop(
+            BotBackdropFacts.LocalTime(DateTimeOffset.UtcNow, homeNest.Longitude),
+            bot.Friends?.FirstOrDefault(f => f.Id == threadKey)?.ExchangeCount ?? 0,
+            plan.Action == BotActionKind.ReplyToInbox
+                ? BotBackdropFacts.ReplyNote(plan.TargetLabel, km, took)
+                : BotBackdropFacts.OutboundNote(plan.TargetLabel, km),
+            threadKey is not null && profile.Threads?.GetValueOrDefault(threadKey) is { } remembered ? remembered : [],
+            boardTail);
+
+        var content = await writer.WriteAsync(context, plan, backdrop, cancellationToken);
         if (content is null)
         {
             logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} target={Target} reason=LLM produced no message", bot.Username, plan.Action, plan.TargetId);
@@ -323,7 +365,31 @@ public class BotOrchestratorService(
             consecutiveBotReplies.Clear();
         }
 
-        await botProfileRepository.UpdateAsync(tickedProfile with { ConsecutiveBotReplies = consecutiveBotReplies });
+        // Remember this exchange (what they said, if this was a reply, then what the bot said)
+        // so the next message to/from this friend is written with the thread in view.
+        var threads = profile.Threads;
+        if (threadKey is not null)
+        {
+            var lines = new List<BotThreadLine>();
+            if (replyTarget?.Content is { } inbound) lines.Add(new BotThreadLine(false, inbound));
+            lines.Add(new BotThreadLine(true, content));
+            threads = new Dictionary<string, List<BotThreadLine>>(profile.Threads ?? [])
+            {
+                [threadKey] = BotBackdropFacts.AppendThread(profile.Threads?.GetValueOrDefault(threadKey), lines),
+            };
+        }
+
+        await botProfileRepository.UpdateAsync(tickedProfile with { ConsecutiveBotReplies = consecutiveBotReplies, Threads = threads });
         return true;
     }
+
+    // ponytail: ListByHubIdAsync reads the whole board (7-day TTL, so small) and takes the tail
+    // in memory - swap for a TOP query on the repository if boards ever get busy.
+    private static async Task<List<string>> BuildBoardTailAsync(CosmosHubMessageRepository hubMessageRepository, string hubId) =>
+        (await hubMessageRepository.ListByHubIdAsync(hubId))
+            .Where(m => !string.IsNullOrWhiteSpace(m.Content))
+            .Take(BotBackdropFacts.BoardTailSize)
+            .Reverse()
+            .Select(m => $"{m.SenderUsername}: {m.Content}")
+            .ToList();
 }
