@@ -2,7 +2,7 @@ namespace CroApp.Api.Services;
 
 // The bot roster DevDataSeeder seeds locally - the one place to touch to add, remove, or
 // retune a bot persona. Persona is the LLM system-prompt text that drives a bot's voice (see
-// BotDecisionService.BuildSystemPrompt); Model is the DeepInfra model id that bot's ticks call
+// BotMessageWriter.BuildSystemPrompt); Model is the DeepInfra model id that bot's ticks call
 // (per-bot, not a single shared constant, so one persona can be moved to a stronger/cheaper
 // model independently of the others). DevDataSeeder places each bot's Roost nest
 // automatically, scattered around Ames (see DevDataSeeder.AmesSpiralPoint) - there's no

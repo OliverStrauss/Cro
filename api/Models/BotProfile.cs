@@ -11,10 +11,7 @@ namespace CroApp.Api.Models;
 // point read instead of a query, and UserId is still the partition key for consistency with
 // Waypoint/Bird/Event's single-partition-per-owner shape.
 //
-// WatchedHubIds is the fixed set of Hubs this bot is willing to post to (BotOrchestratorService
-// never lets a bot discover/post to a Hub outside this list - an admin-curated allowlist, not
-// "every approved Hub", so a bot's presence on the map stays intentional). ConsecutiveBotReplies
-// counts, per other-bot-userId, how many times in a row this bot has chosen to message that
+// ConsecutiveBotReplies counts, per other-bot-userId, how many times in a row this bot has chosen to message that
 // specific bot without an intervening human interaction - BotOrchestratorService reads it to
 // cap back-and-forth bot chatter (see BotOrchestratorOptions.MaxConsecutiveBotReplies) and
 // resets the *whole* dictionary to empty the moment the bot messages or replies to a human,
@@ -28,7 +25,6 @@ public record BotProfile(
     string Persona,
     string Model,
     bool IsEnabled,
-    List<string> WatchedHubIds,
     Dictionary<string, int> ConsecutiveBotReplies,
     DateTimeOffset? LastTickAt,
     DateTimeOffset UpdatedAt);

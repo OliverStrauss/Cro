@@ -118,9 +118,6 @@ public static class DevDataSeeder
         // BotOrchestratorService has something to act on locally without needing a real
         // DeepInfra key configured just to see bots exist in the seeded data (IsEnabled: true
         // either way; the tick loop itself simply never runs unconfigured - see Program.cs).
-        // WatchedHubIds starts empty: there's no admin UI yet for pointing a bot at specific
-        // Hubs, so wiring one up is a one-time manual edit via the emulator's Data Explorer
-        // (see TECH_DEBT.md).
         var botPersonas = BotPersonaCatalog.Seeded;
         var botUsernames = botPersonas.Select(b => b.Username).ToHashSet();
         string[] usernames = [.. humanUsernames, .. botUsernames];
@@ -235,12 +232,11 @@ public static class DevDataSeeder
                 persona,
                 model,
                 IsEnabled: true,
-                WatchedHubIds: [],
                 ConsecutiveBotReplies: [],
                 LastTickAt: null,
                 UpdatedAt: botProfileNow);
             await botProfilesContainer.CreateItemAsync(profile, new PartitionKey(profile.UserId));
-            Console.WriteLine($"  + BotProfile for {botUsername} (enabled, watching no Hubs yet)");
+            Console.WriteLine($"  + BotProfile for {botUsername} (enabled)");
         }
 
         Console.WriteLine($"Done - all {usernames.Length} users ({humanUsernames.Length} human, {botUsernames.Count} bot) are friends with each other, each with a uniquely-named Roost nest around Ames and a full starter roster of 5 birds.");

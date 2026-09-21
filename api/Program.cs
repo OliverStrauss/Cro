@@ -146,7 +146,7 @@ builder.Services.AddHttpClient<IGeocodingService, NominatimGeocodingService>(cli
 });
 
 builder.Services.AddScoped<CosmosBotProfileRepository>();
-builder.Services.AddScoped<BotDecisionService>();
+builder.Services.AddScoped<BotMessageWriter>();
 // (IServiceProvider, HttpClient) overload, not the plain Action<HttpClient> one above -
 // DeepInfraOptions (specifically its ApiKey) only exists once configuration has resolved,
 // which needs the container to fetch it from.

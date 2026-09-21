@@ -11,8 +11,9 @@ namespace CroApp.Api.Services;
 // The one background loop in this API - before this, nothing here ran on a timer; every
 // other delayed effect (Bird arrival, most notably) is lazy-on-read instead (see
 // BirdService.ResolveArrivalIfDueAsync). Sweeps every enabled BotProfile on a fixed interval
-// and, for any bot whose own per-bot cooldown has elapsed, builds a BotTickContext, asks
-// BotDecisionService for one action, and executes it through the exact same BirdService
+// and, for any bot whose own per-bot cooldown has elapsed, builds a BotTickContext, lets
+// BotActionPlanner pick an action (dice roll, no LLM), has BotMessageWriter write just the
+// text, and executes it through the exact same BirdService
 // codepath a human player's request would go through - a bot's cro travels at the same real
 // travel-time speed as anyone else's (BirdService.SendAsync), there is no bot-only fast path,
 // and every arrival still posts to Hub boards / bumps friend exchange counts / fires Events
@@ -93,7 +94,8 @@ public class BotOrchestratorService(
         var hubRepository = services.GetRequiredService<CosmosHubRepository>();
         var botProfileRepository = services.GetRequiredService<CosmosBotProfileRepository>();
         var birdService = services.GetRequiredService<BirdService>();
-        var decisionService = services.GetRequiredService<BotDecisionService>();
+        var pinService = services.GetRequiredService<PinService>();
+        var writer = services.GetRequiredService<BotMessageWriter>();
 
         var bot = await userRepository.GetByIdAsync(profile.UserId);
         if (bot is null || !bot.IsBot)
@@ -116,12 +118,50 @@ public class BotOrchestratorService(
         var idleOwnBirds = residents.Where(b => b.UserId == bot.Id && !b.IsTraveling).ToList();
         var inboundUnread = residents.Where(b => b.UserId != bot.Id && !b.IsRead).ToList();
 
+        // Rule-based, no LLM: someone else's bird that's been read (i.e. answered or
+        // deliberately ignored) and has rested here past ShooAfterHours gets sent home.
+        // EstimatedArrivalAt is left in place after landing, so it doubles as the arrival
+        // time - UpdatedAt can't, since reading/pinning/renaming a bird bumps it too. Runs on
+        // the per-bot cooldown cadence, which is fine for an hours-scale rule.
+        var shooCutoff = DateTimeOffset.UtcNow.AddHours(-Math.Max(options.Value.ShooAfterHours, 1));
+        foreach (var stale in residents.Where(b => b.UserId != bot.Id && !b.IsTraveling && b.IsRead && b.EstimatedArrivalAt <= shooCutoff))
+        {
+            try
+            {
+                await birdService.ShooAsync(bot.Id, stale.Id);
+            }
+            catch (ServiceException ex)
+            {
+                logger.LogWarning(ex, "Bot {UserId} failed to shoo bird {BirdId}: {Message}", bot.Id, stale.Id, ex.Message);
+            }
+        }
+
         var inbox = new List<BotTickInboxItem>();
         foreach (var bird in inboundUnread)
         {
             var sender = await userRepository.GetByIdAsync(bird.UserId);
             if (sender is null || bird.NestFromId is null) continue;
             inbox.Add(new BotTickInboxItem(bird.Id, sender.Id, sender.Username, bird.Content, bird.NestFromId));
+        }
+
+        // Pin each inbound cro before anything reads or shoos it - a pin is the durable
+        // conversation log (a bird's own Content gets overwritten on its next journey).
+        // Reading a bird bumps UpdatedAt, which changes the pin id, so this only ever pins
+        // still-unread birds and skips one already pinned for its current delivery (a bird the
+        // bot couldn't answer this tick would otherwise re-pin, and re-notify its sender, every tick).
+        foreach (var item in inbox.Where(_ => Random.Shared.NextDouble() < options.Value.PinChance))
+        {
+            try
+            {
+                if (await pinService.GetForCurrentDeliveryAsync(bot.Id, item.BirdId) is null)
+                {
+                    await pinService.PinAsync(bot.Id, item.BirdId);
+                }
+            }
+            catch (ServiceException ex)
+            {
+                logger.LogWarning(ex, "Bot {UserId} failed to pin bird {BirdId}: {Message}", bot.Id, item.BirdId, ex.Message);
+            }
         }
 
         var humanFriends = new List<BotTickContact>();
@@ -133,15 +173,7 @@ public class BotOrchestratorService(
             (friend.IsBot ? botFriends : humanFriends).Add(new BotTickContact(friend.Id, friend.Username));
         }
 
-        var watchedHubs = new List<BotTickHub>();
-        foreach (var hubId in profile.WatchedHubIds)
-        {
-            var hub = await hubRepository.GetAsync(hubId);
-            if (hub is not null)
-            {
-                watchedHubs.Add(new BotTickHub(hub.Id, hub.Name));
-            }
-        }
+        var hubs = (await hubRepository.ListApprovedAsync()).Select(h => new BotTickHub(h.Id, h.Name)).ToList();
 
         var context = new BotTickContext(
             bot.Id,
@@ -151,19 +183,24 @@ public class BotOrchestratorService(
             inbox,
             humanFriends,
             botFriends,
-            watchedHubs,
+            hubs,
             profile.ConsecutiveBotReplies,
             options.Value.MaxConsecutiveBotReplies,
             options.Value.MaxReplyContentLength);
 
-        var decision = await decisionService.DecideAsync(context, cancellationToken);
         var tickedProfile = profile with { LastTickAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow };
 
-        if (decision.Action == BotActionKind.None)
+        // A bot-to-bot volley already at its cap is never answered - mark it read instead so
+        // it doesn't sit unread forever, and (being read) gets shooed after ShooAfterHours.
+        foreach (var capped in inbox.Where(i => BotActionPlanner.IsCappedBot(context, i.SenderUserId)))
         {
-            // Also what a failed/unparseable LLM call falls back to - BotDecisionService
-            // logs that as its own warning just above this line.
-            logger.LogInformation("BOT_TICK bot={Bot} outcome=NoAction reason=LLM chose None (inbox={Inbox}, humanFriends={HumanFriends}, botFriends={BotFriends}, hubs={Hubs})", bot.Username, inbox.Count, humanFriends.Count, botFriends.Count, watchedHubs.Count);
+            await birdService.MarkReadAsync(bot.Id, capped.BirdId);
+        }
+
+        var plan = BotActionPlanner.Plan(context, options.Value, Random.Shared);
+        if (plan is null)
+        {
+            logger.LogInformation("BOT_TICK bot={Bot} outcome=NoAction reason=planner rolled no action (inbox={Inbox}, humanFriends={HumanFriends}, botFriends={BotFriends})", bot.Username, inbox.Count, humanFriends.Count, botFriends.Count);
             await botProfileRepository.UpdateAsync(tickedProfile);
             return false;
         }
@@ -171,52 +208,61 @@ public class BotOrchestratorService(
         // Every send action needs one of the bot's own idle, text-capable birds - a Parrot
         // (audio-only) or Pigeon (image-only) can't carry the LLM's text reply (see
         // BirdPayloadValidator.ValidateAllowed), so those are deliberately excluded rather
-        // than sending an empty-payload leg.
+        // than sending an empty-payload leg. Checked before the LLM call so a send that can't
+        // happen never costs tokens.
         var outgoingBird = idleOwnBirds.FirstOrDefault(b => b.Type == BirdTypeCatalog.Cro)
             ?? idleOwnBirds.FirstOrDefault(b => b.Type == BirdTypeCatalog.Raven);
         if (outgoingBird is null)
         {
             // Nothing free to send with this tick (every bird traveling, or only
             // media-only types idle) - stand down rather than force a mismatched send.
-            logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} reason=no idle Cro/Raven to send with", bot.Username, decision.Action);
+            logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} reason=no idle Cro/Raven to send with", bot.Username, plan.Action);
             await botProfileRepository.UpdateAsync(tickedProfile);
             return false;
         }
 
-        var replyTarget = decision.Action == BotActionKind.ReplyToInbox
-            ? inbox.FirstOrDefault(i => i.BirdId == decision.TargetId)
+        var replyTarget = plan.Action == BotActionKind.ReplyToInbox
+            ? inbox.First(i => i.BirdId == plan.TargetId)
             : null;
 
-        var destinationNestId = decision.Action switch
+        var destinationNestId = plan.Action switch
         {
-            BotActionKind.ReplyToInbox => replyTarget?.NestFromId,
+            BotActionKind.ReplyToInbox => replyTarget!.NestFromId,
             BotActionKind.NewToUser or BotActionKind.NewToBot =>
-                (await waypointRepository.ListByUserIdAsync(decision.TargetId!)).FirstOrDefault(w => !w.IsPublic)?.Id,
-            BotActionKind.NewToHub => decision.TargetId,
+                (await waypointRepository.ListByUserIdAsync(plan.TargetId)).FirstOrDefault(w => !w.IsPublic)?.Id,
+            BotActionKind.NewToHub => plan.TargetId,
             _ => null,
         };
         if (destinationNestId is null)
         {
-            logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} target={Target} reason=destination nest not found", bot.Username, decision.Action, decision.TargetId);
+            logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} target={Target} reason=destination nest not found", bot.Username, plan.Action, plan.TargetId);
+            await botProfileRepository.UpdateAsync(tickedProfile);
+            return false;
+        }
+
+        var content = await writer.WriteAsync(context, plan, cancellationToken);
+        if (content is null)
+        {
+            logger.LogInformation("BOT_TICK bot={Bot} outcome=Skipped action={Action} target={Target} reason=LLM produced no message", bot.Username, plan.Action, plan.TargetId);
             await botProfileRepository.UpdateAsync(tickedProfile);
             return false;
         }
 
         // Which bot (if any) this turn's action is aimed at - used only to update the
         // consecutive-bot-reply tally below, never to change what gets sent.
-        var botTargetUserId = decision.Action switch
+        var botTargetUserId = plan.Action switch
         {
-            BotActionKind.NewToBot => decision.TargetId,
-            BotActionKind.ReplyToInbox when replyTarget is not null && botFriends.Any(f => f.UserId == replyTarget.SenderUserId) => replyTarget.SenderUserId,
+            BotActionKind.NewToBot => plan.TargetId,
+            BotActionKind.ReplyToInbox when botFriends.Any(f => f.UserId == replyTarget!.SenderUserId) => replyTarget!.SenderUserId,
             _ => null,
         };
 
         try
         {
-            await birdService.SendAsync(bot.Id, outgoingBird.Id, destinationNestId, decision.Content, isPublic: false, null, null, 0);
-            if (decision.Action == BotActionKind.ReplyToInbox)
+            await birdService.SendAsync(bot.Id, outgoingBird.Id, destinationNestId, content, plan.IsPublic, null, null, 0);
+            if (plan.Action == BotActionKind.ReplyToInbox)
             {
-                await birdService.MarkReadAsync(bot.Id, decision.TargetId!);
+                await birdService.MarkReadAsync(bot.Id, plan.TargetId);
             }
         }
         catch (ServiceException ex)
@@ -224,12 +270,12 @@ public class BotOrchestratorService(
             // The world moved between context-build and here (destination nest deleted, the
             // chosen bird started traveling from a concurrent tick, etc.) - log and skip this
             // turn, same best-effort posture as every other secondary write in this codebase.
-            logger.LogWarning(ex, "BOT_TICK bot={Bot} outcome=Failed action={Action} target={Target} reason={Message}", bot.Username, decision.Action, decision.TargetId, ex.Message);
+            logger.LogWarning(ex, "BOT_TICK bot={Bot} outcome=Failed action={Action} target={Target} reason={Message}", bot.Username, plan.Action, plan.TargetId, ex.Message);
             await botProfileRepository.UpdateAsync(tickedProfile);
             return false;
         }
 
-        logger.LogInformation("BOT_TICK bot={Bot} outcome=Sent action={Action} target={Target} bird={BirdType} chars={Chars}", bot.Username, decision.Action, decision.TargetId, outgoingBird.Type, decision.Content?.Length ?? 0);
+        logger.LogInformation("BOT_TICK bot={Bot} outcome=Sent action={Action} target={Target} bird={BirdType} chars={Chars}", bot.Username, plan.Action, plan.TargetId, outgoingBird.Type, content.Length);
 
         var consecutiveBotReplies = new Dictionary<string, int>(profile.ConsecutiveBotReplies);
         if (botTargetUserId is not null)

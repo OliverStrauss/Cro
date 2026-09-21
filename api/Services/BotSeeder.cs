@@ -50,7 +50,7 @@ public static class BotSeeder
             await waypoints.CreateItemAsync(nest, new PartitionKey(nest.UserId));
             await DevDataSeeder.SeedStarterRosterAsync(birds, user, nest);
 
-            var profile = new BotProfile(user.Id, user.Id, persona, model, IsEnabled: true, WatchedHubIds: [], ConsecutiveBotReplies: [], LastTickAt: null, UpdatedAt: DateTimeOffset.UtcNow);
+            var profile = new BotProfile(user.Id, user.Id, persona, model, IsEnabled: true, ConsecutiveBotReplies: [], LastTickAt: null, UpdatedAt: DateTimeOffset.UtcNow);
             await botProfiles.CreateItemAsync(profile, new PartitionKey(profile.UserId));
             Console.WriteLine($"Seeded bot {username} (id: {user.Id})");
         }

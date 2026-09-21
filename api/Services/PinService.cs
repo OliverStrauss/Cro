@@ -53,7 +53,12 @@ public class PinService(
             DateTimeOffset.UtcNow);
 
         var saved = await pinRepository.UpsertAsync(pin);
-        await eventService.RecordBirdPinnedAsync(saved, receiver?.Username ?? "Someone");
+        // A bot's pins are its conversation log, not a gesture - don't tell a human "Pixel
+        // pinned your message" on every single message they send it.
+        if (receiver?.IsBot != true)
+        {
+            await eventService.RecordBirdPinnedAsync(saved, receiver?.Username ?? "Someone");
+        }
         return saved;
     }
 
