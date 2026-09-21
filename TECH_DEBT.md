@@ -502,3 +502,15 @@ rather than fixing silently:
   Also: `FriendColorPalette.BotColor` is duplicated as the UI's `#6B7280` "no color" fallback, and
   bot friendships stored before #242 keep a palette color in Cosmos (read-time `Resolve` masks
   it, but those legacy entries still occupy a human palette slot).
+
+- **Bot "world context" is shallow by design (#254).** Each LLM call now gets a `BotBackdrop`
+  (`BotBackdrop.cs`): solar-time-of-day (longitude/15h - no tz database, nests carry no timezone),
+  km distance + travel duration for the cro being answered/sent, the friend's `ExchangeCount`, the
+  last 6 lines of that friendship (`BotProfile.Threads`, both sides), and for Hub posts the latest
+  4 board posts. Known ceilings: `Threads` only records exchanges the bot actually replied to or
+  sent (a capped bot-volley inbound is marked read, not remembered); it lives on the `BotProfile`
+  doc (bounded by friends x 6 lines) rather than a dedicated container, so a bot with hundreds of
+  friends would want one; `BuildBoardTailAsync` reads the whole (7-day TTL) board and takes the tail
+  in memory; the backdrop adds roughly 100-500 prompt tokens per call, so watch DeepInfra spend once
+  a real key runs. No test drives `TickBotAsync` end to end - only the pure prompt/backdrop helpers
+  are unit-tested (no DeepInfra fake exists yet).

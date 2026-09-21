@@ -18,7 +18,11 @@ namespace CroApp.Api.Models;
 // modeling "got distracted by a person, dropped the bot thread" rather than tracking each
 // pairing's cooldown independently. LastTickAt is null until the bot's first tick;
 // BotOrchestratorService compares it against BotOrchestratorOptions.TickCooldownMinutes to
-// keep a bot from acting on literally every orchestrator sweep.
+// keep a bot from acting on literally every orchestrator sweep. Threads is the bot's memory:
+// per friend user id, the last few lines of its conversation with that friend (both sides), so
+// a reply isn't written cold - see BotBackdrop. Kept here rather than derived from pins because
+// pins only ever hold inbound messages and a bot's own sends have no other durable copy (a
+// bird's Content is overwritten on its next journey). Null on profiles that predate it.
 public record BotProfile(
     [property: JsonPropertyName("id")] string Id,
     string UserId,
@@ -27,4 +31,9 @@ public record BotProfile(
     bool IsEnabled,
     Dictionary<string, int> ConsecutiveBotReplies,
     DateTimeOffset? LastTickAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    Dictionary<string, List<BotThreadLine>>? Threads = null);
+
+// One line of a bot's remembered conversation with a friend - FromMe is true for what the bot
+// itself sent, false for what the friend sent it.
+public record BotThreadLine(bool FromMe, string Text);
