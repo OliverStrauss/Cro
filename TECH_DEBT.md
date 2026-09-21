@@ -481,3 +481,12 @@ rather than fixing silently:
   unconfigured environment (every test fixture, a fresh checkout) never spins up the tick
   loop at all. A real deployment needs a real DeepInfra API key set via `dotnet user-secrets`
   locally or an App Service setting in prod, same as `Acs:ConnectionString`.
+- **Bot badge (#242) doesn't cover every surface a bot's name appears.** It's on the friends
+  list card, Hub message board cards, public-bird panel, and friend-bird panel. Not yet on:
+  pinned messages (`PinnedMessageCard`/`PinnedBird`), the "Add Friends" search dropdown
+  (`GET /users/search`, so a user can't tell a bot *before* befriending it), and map nest
+  markers. Each needs `isBot` threaded through its own DTO/model (Hub board and pins snapshot
+  sender fields, so pins would need a live lookup like `SenderIsBot` on `GET /hubs/{id}/messages`).
+  Also: `FriendColorPalette.BotColor` is duplicated as the UI's `#6B7280` "no color" fallback, and
+  bot friendships stored before #242 keep a palette color in Cosmos (read-time `Resolve` masks
+  it, but those legacy entries still occupy a human palette slot).

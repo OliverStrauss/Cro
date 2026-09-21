@@ -5,6 +5,7 @@ import '../services/friends_service.dart';
 import '../theme.dart';
 import 'avatar_with_fallback.dart';
 import 'bird_payload_view.dart';
+import 'bot_badge.dart';
 
 // One card on a Hub's message board. showAddFriend is decided by the caller (self,
 // already-friend, and already-pending senders are excluded) rather than by this widget,
@@ -82,9 +83,17 @@ class _HubMessageCardState extends State<HubMessageCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        message.senderUsername,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CroColors.ink),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              message.senderUsername,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: CroColors.ink),
+                            ),
+                          ),
+                          if (message.senderIsBot) ...[const SizedBox(width: 6), const BotBadge()],
+                        ],
                       ),
                       Text(
                         '${message.birdName} · from ${message.originNestName ?? 'somewhere'} · $_relativeTime',
