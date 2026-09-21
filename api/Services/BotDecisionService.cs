@@ -54,7 +54,7 @@ public class BotDecisionService(DeepInfraChatClient chatClient, ILogger<BotDecis
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "DeepInfra call failed for bot {BotUserId}; defaulting to no action.", context.BotUserId);
+            logger.LogWarning(ex, "BOT_LLM call failed for bot {BotUserId}; defaulting to no action.", context.BotUserId);
             return BotDecision.None;
         }
 
