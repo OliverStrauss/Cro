@@ -78,6 +78,7 @@ public class BotOrchestratorService(
         var hubRepository = services.GetRequiredService<CosmosHubRepository>();
         var botProfileRepository = services.GetRequiredService<CosmosBotProfileRepository>();
         var birdService = services.GetRequiredService<BirdService>();
+        var pinService = services.GetRequiredService<PinService>();
         var writer = services.GetRequiredService<BotMessageWriter>();
 
         var bot = await userRepository.GetByIdAsync(profile.UserId);
@@ -124,6 +125,26 @@ public class BotOrchestratorService(
             var sender = await userRepository.GetByIdAsync(bird.UserId);
             if (sender is null || bird.NestFromId is null) continue;
             inbox.Add(new BotTickInboxItem(bird.Id, sender.Id, sender.Username, bird.Content, bird.NestFromId));
+        }
+
+        // Pin each inbound cro before anything reads or shoos it - a pin is the durable
+        // conversation log (a bird's own Content gets overwritten on its next journey).
+        // Reading a bird bumps UpdatedAt, which changes the pin id, so this only ever pins
+        // still-unread birds and skips one already pinned for its current delivery (a bird the
+        // bot couldn't answer this tick would otherwise re-pin, and re-notify its sender, every tick).
+        foreach (var item in inbox.Where(_ => Random.Shared.NextDouble() < options.Value.PinChance))
+        {
+            try
+            {
+                if (await pinService.GetForCurrentDeliveryAsync(bot.Id, item.BirdId) is null)
+                {
+                    await pinService.PinAsync(bot.Id, item.BirdId);
+                }
+            }
+            catch (ServiceException ex)
+            {
+                logger.LogWarning(ex, "Bot {UserId} failed to pin bird {BirdId}: {Message}", bot.Id, item.BirdId, ex.Message);
+            }
         }
 
         var humanFriends = new List<BotTickContact>();
