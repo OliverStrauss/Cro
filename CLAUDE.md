@@ -298,6 +298,14 @@ To seed bots and befriend a user immediately against a real account, run
 `COSMOS_CONNECTION_STRING=<conn> dotnet run --project Tools/SeedBots -- <Username>` from `/api`
 (username is case-sensitive).
 
+**Is a bot sending right now?** Every tick logs exactly one greppable `BOT_TICK` line —
+`outcome=Sent|NoAction|Skipped|Failed` with the action, target and reason — plus a `BOT_SWEEP`
+summary (enabled/ticked/sent/cooling_down; Debug when nothing ticked) and a `BOT_ORCHESTRATOR`
+line at startup. LLM/DeepInfra failures are tagged `BOT_LLM`. In prod:
+`az webapp log tail -g cro-prod -n cro-api | grep BOT_`. No `BOT_ORCHESTRATOR` line at all means
+the DeepInfra key isn't set (the service isn't registered); `BOT_SWEEP no enabled bots` means
+no seeded `BotProfile`.
+
 To add, remove, or retune a bot, edit `BotPersonaCatalog.Seeded` (`api/Services/BotPersonaCatalog.cs`)
 — that's the one list `DevDataSeeder` reads, so changing its length changes how many bots get
 seeded on the next `dotnet run`/`SeedDevUsers`, and changing an entry's `Persona`/`Model`

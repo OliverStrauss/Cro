@@ -10,6 +10,7 @@ import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../widgets/bird_payload_view.dart';
+import '../../widgets/bot_badge.dart';
 import 'panel_header.dart';
 
 // Must match BirdReactionEmoji.Allowed on the server (api/Models/BirdReaction.cs), and
@@ -148,6 +149,7 @@ class _FriendBirdPanelContentState extends State<FriendBirdPanelContent> {
           ),
           title: bird.name,
           subtitle: '${bird.type} · ${BirdType.description(bird.type)} · sent by ${bird.username}',
+          chip: bird.isBot ? const Align(alignment: Alignment.centerLeft, child: BotBadge()) : null,
           onClose: widget.onClose,
         ),
         Flexible(

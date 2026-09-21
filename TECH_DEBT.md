@@ -493,3 +493,12 @@ rather than fixing silently:
   humans aren't notified per message; a public bird's pin still surfaces in `GET /pins/public`.
   Dial `PinChance` down once the logs have served their purpose. No integration test: the tick
   loop needs the emulators and has none today, and no test seeds a bot as a pin receiver.
+- **Bot badge (#242) doesn't cover every surface a bot's name appears.** It's on the friends
+  list card, Hub message board cards, public-bird panel, and friend-bird panel. Not yet on:
+  pinned messages (`PinnedMessageCard`/`PinnedBird`), the "Add Friends" search dropdown
+  (`GET /users/search`, so a user can't tell a bot *before* befriending it), and map nest
+  markers. Each needs `isBot` threaded through its own DTO/model (Hub board and pins snapshot
+  sender fields, so pins would need a live lookup like `SenderIsBot` on `GET /hubs/{id}/messages`).
+  Also: `FriendColorPalette.BotColor` is duplicated as the UI's `#6B7280` "no color" fallback, and
+  bot friendships stored before #242 keep a palette color in Cosmos (read-time `Resolve` masks
+  it, but those legacy entries still occupy a human palette slot).

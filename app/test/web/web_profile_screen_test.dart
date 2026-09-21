@@ -175,6 +175,24 @@ void main() {
     expect(find.byKey(const Key('webFriendCard_u2')), findsOneWidget);
   });
 
+  testWidgets('shows a BOT badge on a bot friend only', (tester) async {
+    friendsService.friends = [
+      Friend(userId: 'u2', username: 'mia', color: '#E53935'),
+      Friend(userId: 'u3', username: 'pixel', color: '#6B7280', isBot: true),
+    ];
+    await tester.pumpWidget(build());
+    await tester.pump();
+
+    expect(find.byKey(const Key('botBadge')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('webFriendCard_u3')),
+        matching: find.text('BOT'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets("hides a friend's exchange count when it's zero", (tester) async {
     friendsService.friends = [
       Friend(userId: 'u2', username: 'mia', color: '#E53935'),

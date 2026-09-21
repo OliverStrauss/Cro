@@ -33,7 +33,7 @@ public class DeepInfraChatClient(HttpClient httpClient, ILogger<DeepInfraChatCli
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            logger.LogWarning("DeepInfra chat completion failed ({StatusCode}): {Body}", (int)response.StatusCode, body);
+            logger.LogWarning("BOT_LLM DeepInfra chat completion failed ({StatusCode}): {Body}", (int)response.StatusCode, body);
             return null;
         }
 

@@ -76,10 +76,10 @@ public class FriendService(CosmosUserRepository userRepository, EventService eve
             throw new ServiceException(400, "No pending friend request from this user.");
         }
 
-        var userColor = FriendColorPalette.PickNext(userFriends
+        var userColor = FriendColorPalette.PickFor(requester.IsBot, userFriends
             .Where(f => f.Color is not null)
             .Select(f => f.Color!));
-        var requesterColor = FriendColorPalette.PickNext(requesterFriends
+        var requesterColor = FriendColorPalette.PickFor(user.IsBot, requesterFriends
             .Where(f => f.Color is not null)
             .Select(f => f.Color!));
 
@@ -171,6 +171,11 @@ public class FriendService(CosmosUserRepository userRepository, EventService eve
         if (entry is null)
         {
             throw new ServiceException(404, "Not a current friend.");
+        }
+
+        if ((await userRepository.GetByIdAsync(friendId))?.IsBot == true)
+        {
+            throw new ServiceException(400, "Bots always use the bot color.");
         }
 
         var updatedFriends = friends

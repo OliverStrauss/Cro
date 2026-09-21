@@ -17,7 +17,7 @@ public class BotMessageWriter(DeepInfraChatClient chatClient, ILogger<BotMessage
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "DeepInfra call failed for bot {BotUserId}; skipping this turn.", context.BotUserId);
+            logger.LogWarning(ex, "BOT_LLM call failed for bot {BotUserId}; skipping this turn.", context.BotUserId);
             return null;
         }
     }

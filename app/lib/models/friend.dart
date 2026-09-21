@@ -4,6 +4,7 @@ class Friend {
   final String? color;
   final String? profilePictureUrl;
   final bool isAdmin;
+  final bool isBot;
   // Cro's actually delivered between the caller and this friend - see
   // api/Models/FriendEntry.cs's ExchangeCount and BirdService.ResolveArrivalIfDueAsync.
   final int exchangeCount;
@@ -14,6 +15,7 @@ class Friend {
     this.color,
     this.profilePictureUrl,
     this.isAdmin = false,
+    this.isBot = false,
     this.exchangeCount = 0,
   });
 
@@ -23,6 +25,7 @@ class Friend {
     color: json['color'] as String?,
     profilePictureUrl: json['profilePictureUrl'] as String?,
     isAdmin: json['isAdmin'] as bool? ?? false,
+    isBot: json['isBot'] as bool? ?? false,
     exchangeCount: json['exchangeCount'] as int? ?? 0,
   );
 }

@@ -5,6 +5,7 @@ class HubMessage {
   final String id;
   final String senderId;
   final String senderUsername;
+  final bool senderIsBot;
   final String? senderProfilePictureUrl;
   final String birdName;
   final String? originNestName;
@@ -18,6 +19,7 @@ class HubMessage {
     required this.id,
     required this.senderId,
     required this.senderUsername,
+    this.senderIsBot = false,
     this.senderProfilePictureUrl,
     required this.birdName,
     this.originNestName,
@@ -32,6 +34,7 @@ class HubMessage {
         id: json['id'] as String,
         senderId: json['senderId'] as String,
         senderUsername: json['senderUsername'] as String,
+        senderIsBot: json['senderIsBot'] as bool? ?? false,
         senderProfilePictureUrl: json['senderProfilePictureUrl'] as String?,
         birdName: json['birdName'] as String,
         originNestName: json['originNestName'] as String?,

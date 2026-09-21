@@ -1036,6 +1036,7 @@ app.MapGet("/hubs/{id}/messages", async (string id, ClaimsPrincipal principal, C
             message.ImageUrl,
             message.CreatedAt,
             SenderProfilePictureUrl = sender?.ProfilePictureUrl,
+            SenderIsBot = sender?.IsBot ?? false,
         });
     }
     return Results.Ok(results);
@@ -1701,7 +1702,8 @@ app.MapGet("/friends", async (ClaimsPrincipal principal, CosmosUserRepository us
     foreach (var friend in acceptedFriends)
     {
         var friendUser = await userRepo.GetByIdAsync(friend.Id);
-        friends.Add(new { friend.Id, friend.Username, friend.Color, friendUser?.ProfilePictureUrl, IsAdmin = friendUser?.IsAdmin ?? false, friend.ExchangeCount });
+        var isBot = friendUser?.IsBot ?? false;
+        friends.Add(new { friend.Id, friend.Username, Color = FriendColorPalette.Resolve(friend.Color, isBot), friendUser?.ProfilePictureUrl, IsAdmin = friendUser?.IsAdmin ?? false, IsBot = isBot, friend.ExchangeCount });
     }
 
     return Results.Ok(friends);
@@ -1748,7 +1750,7 @@ app.MapGet("/friends/waypoints", async (ClaimsPrincipal principal, CosmosUserRep
             waypoint.Id,
             UserId = friend.Id,
             friend.Username,
-            friend.Color,
+            Color = FriendColorPalette.Resolve(friend.Color, friendUser?.IsBot ?? false),
             waypoint.Name,
             waypoint.Latitude,
             waypoint.Longitude,
@@ -1842,15 +1844,23 @@ app.MapGet("/friends/birds", async (ClaimsPrincipal principal, CosmosUserReposit
     // assigned color, same field GetFriendsWaypoints uses for their nest pins.
     var friendsById = acceptedFriends.ToDictionary(f => f.Id);
     var travelingBirds = await birdService.ListTravelingForUsersAsync(friendsById.Keys);
+    // One point read per distinct sender to learn who's a bot - same accepted N+1 tradeoff as GET /friends.
+    var botSenderIds = new HashSet<string>();
+    foreach (var senderId in travelingBirds.Select(b => b.UserId).Distinct())
+    {
+        if ((await userRepo.GetByIdAsync(senderId))?.IsBot == true) botSenderIds.Add(senderId);
+    }
     var results = travelingBirds.Select(bird =>
     {
         var friend = friendsById[bird.UserId];
+        var isBot = botSenderIds.Contains(friend.Id);
         return new
         {
             bird.Id,
             UserId = friend.Id,
             friend.Username,
-            friend.Color,
+            IsBot = isBot,
+            Color = FriendColorPalette.Resolve(friend.Color, isBot),
             bird.Name,
             bird.ProfilePictureUrl,
             bird.Type,
