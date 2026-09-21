@@ -441,18 +441,17 @@ existing seeded/prod users?) rather than as a drive-by fix.
 ## LLM bot layer (`BotOrchestratorService`) has no admin UI, and is the first thing in `/api` that runs unprompted
 
 Added to give the app a couple of LLM-driven bot personas (`BotProfile`/`BotOrchestratorService`/
-`BotDecisionService`/`DeepInfraChatClient`) that message users and each other and post to Hubs,
+`BotActionPlanner`/`BotMessageWriter`/`DeepInfraChatClient`) that message users and each other and post to Hubs,
 using DeepInfra's OpenAI-compatible endpoint to call cheap open-weight models rather than a
 frontier hosted one (see the cost discussion that led here). A few things worth flagging
 rather than fixing silently:
 
-- **No admin UI to manage bots.** Enabling/disabling a bot, editing its persona/model, or
-  changing which Hubs it watches (`BotProfile.WatchedHubIds`) all require a direct edit via
+- **No admin UI to manage bots.** Enabling/disabling a bot or editing its persona/model
+  requires a direct edit via
   the Cosmos emulator's Data Explorer (or the real `cro-app-cosmos` account's own data
   explorer in prod) - there's no `PUT /bots/{id}` endpoint, unlike every other admin-adjacent
-  action in this app (Hub approval, etc.). `DevDataSeeder` seeds two bots (Pixel, Doomcro)
-  with `WatchedHubIds: []` for exactly this reason - there's no seed-time way to know which
-  Hubs will exist in a given environment.
+  action in this app (Hub approval, etc.). Bots post to every approved Hub (no per-bot
+  allowlist since #240), so there's no Hub wiring left to do by hand.
 - **This is the first background/timer-driven code in `/api`.** Every other delayed effect
   (Bird arrival, most notably - see `BirdService.ResolveArrivalIfDueAsync`) is lazy-on-read;
   nothing before this ran unprompted by an incoming request. `BotOrchestratorService` is a
@@ -463,7 +462,7 @@ rather than fixing silently:
   cooldown window. Not a concern at today's single-instance deployment; would need a real
   distributed-lock or single-owner-worker story before scaling out.
 - **No content-length cap anywhere else in `BirdService`.** `BotOrchestratorOptions.MaxReplyContentLength`
-  (default 500 chars) is enforced only on bot-authored content, in `BotDecisionService.ParseAndValidate`
+  (default 500 chars) is enforced only on bot-authored content, in `BotMessageWriter.Clean`
   - a defensive backstop against a runaway LLM completion, not a general product decision. A
   human-authored Cro's `Content` has no length limit today; worth deciding whether one belongs
   there too rather than leaving bots as the only capped sender.
@@ -481,3 +480,11 @@ rather than fixing silently:
   unconfigured environment (every test fixture, a fresh checkout) never spins up the tick
   loop at all. A real deployment needs a real DeepInfra API key set via `dotnet user-secrets`
   locally or an App Service setting in prod, same as `Acs:ConnectionString`.
+
+- **Bot activity knobs are untuned guesses (#240).** `ActChance` 0.5, the friend/public/bot/Hub
+  weights (35/20/15/30) and `ShooAfterHours` 24 are first-pass defaults in `BotOrchestratorOptions`.
+  Nothing caps how often one bot posts to the *same* Hub (only a bot's idle-bird availability
+  throttles it), and `ListApprovedAsync` is re-queried every bot tick - fine for a handful of
+  Hubs, worth caching if the Hub count grows. Shoo timing piggybacks on the per-bot tick cooldown
+  (up to `TickCooldownMinutes` late), and uses `Bird.EstimatedArrivalAt` (left in place after
+  landing) as the arrival time since `UpdatedAt` is bumped by reads.

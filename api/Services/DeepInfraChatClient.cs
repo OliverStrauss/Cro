@@ -7,18 +7,18 @@ namespace CroApp.Api.Services;
 // Thin wrapper around DeepInfra's OpenAI-compatible /chat/completions endpoint - the same
 // server-side-only-HTTP-call shape as NominatimGeocodingService (BaseAddress + auth header
 // set once at typed-HttpClient registration in Program.cs, see the AddHttpClient call).
-// Returns the assistant's raw text; BotDecisionService owns parsing/validating it as the
-// bot-action JSON contract, not this class - this class only knows how to talk to DeepInfra.
+// Returns the assistant's raw text; BotMessageWriter owns cleaning it up, not this class -
+// this class only knows how to talk to DeepInfra.
 public class DeepInfraChatClient(HttpClient httpClient, ILogger<DeepInfraChatClient> logger)
 {
-    // Asks for JSON-mode output and caps max_tokens - a bot's reply is a short chat message,
-    // not an essay, and an unbounded completion would be pure wasted spend for no product
-    // benefit (BotOrchestratorOptions.MaxReplyContentLength trims further on the way in, but
-    // that's a defensive backstop, not the primary cost control).
-    private const int MaxTokens = 400;
+    // Caps max_tokens - a bot's reply is a short chat message, not an essay, and an unbounded
+    // completion would be pure wasted spend for no product benefit
+    // (BotOrchestratorOptions.MaxReplyContentLength trims further on the way in, but that's a
+    // defensive backstop, not the primary cost control).
+    private const int MaxTokens = 120;
     private const double Temperature = 0.9;
 
-    public async Task<string?> CompleteJsonAsync(string model, string systemPrompt, string userPrompt, CancellationToken cancellationToken)
+    public async Task<string?> CompleteAsync(string model, string systemPrompt, string userPrompt, CancellationToken cancellationToken)
     {
         var request = new ChatCompletionRequest(
             model,
@@ -26,7 +26,6 @@ public class DeepInfraChatClient(HttpClient httpClient, ILogger<DeepInfraChatCli
                 new ChatMessage("system", systemPrompt),
                 new ChatMessage("user", userPrompt),
             ],
-            new ResponseFormat("json_object"),
             MaxTokens,
             Temperature);
 
@@ -53,15 +52,12 @@ public class DeepInfraChatClient(HttpClient httpClient, ILogger<DeepInfraChatCli
     private record ChatCompletionRequest(
         [property: JsonPropertyName("model")] string Model,
         [property: JsonPropertyName("messages")] List<ChatMessage> Messages,
-        [property: JsonPropertyName("response_format")] ResponseFormat ResponseFormat,
         [property: JsonPropertyName("max_tokens")] int MaxTokens,
         [property: JsonPropertyName("temperature")] double Temperature);
 
     private record ChatMessage(
         [property: JsonPropertyName("role")] string Role,
         [property: JsonPropertyName("content")] string Content);
-
-    private record ResponseFormat([property: JsonPropertyName("type")] string Type);
 
     private record ChatCompletionResponse([property: JsonPropertyName("choices")] List<ChatCompletionChoice> Choices);
 

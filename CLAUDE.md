@@ -242,8 +242,7 @@ That wipes the entire `Users` container and replaces it with five fixed human ac
 shortcuts" above), plus two bot accounts — `Pixel` and `Doomcro` (see "LLM bot layer" below)
 — all seven mutually Accepted-friends with each other with auto-assigned colors, plus
 one private nest apiece around Ames. `Admin` is seeded with `IsAdmin: true`; `Pixel` and
-`Doomcro` are seeded with `IsBot: true` plus an enabled `BotProfile` apiece (no Hubs watched
-yet — see the bot layer section for why). It leaves Hubs,
+`Doomcro` are seeded with `IsBot: true` plus an enabled `BotProfile` apiece. It leaves Hubs,
 Waypoints, Birds, and Reactions untouched, but does clear every Hub's message board
 (`HubMessages`) — a `HubMessage` snapshots its sender's user id, so a row left behind after a
 Users wipe would point at a since-deleted user; the web UI's Hub board uses that id to decide
@@ -268,13 +267,18 @@ dotnet run --project Tools/SeedDevUsers/SeedDevUsers.csproj
 
 A couple of LLM-driven bot personas (`Pixel`, `Doomcro` in the dev seed) live in the app as
 ordinary `User` accounts with `IsBot: true`, each carrying a `BotProfile` document (persona
-system prompt, which model to use, enabled/disabled, which Hubs it watches, a guardrail
+system prompt, which model to use, enabled/disabled, a guardrail
 counter against runaway bot-to-bot chatter). `BotOrchestratorService` (`api/Services/`) is a
 `BackgroundService` — the first background/timer-driven code in `/api`; everything else here
 is lazy-on-read instead (see `BirdService.ResolveArrivalIfDueAsync`) — that sweeps every
-enabled bot on an interval and, once a bot's own per-bot cooldown has elapsed, asks
-`BotDecisionService` to pick one of five actions (do nothing, reply to something unread in its
-inbox, or start a new cro to a friend/bot-friend/watched Hub) via a DeepInfra chat completion,
+enabled bot on an interval and, once a bot's own per-bot cooldown has elapsed, decides what it
+does in plain C# (`BotActionPlanner`): reply to anything unread in its inbox (always), otherwise
+roll `ActChance` (50%) and pick a weighted action — private cro to a human friend, public cro to a
+human friend, cro to a bot friend, or a public post to a random approved Hub (bots may post to
+*every* approved Hub). Only then does `BotMessageWriter` make one small DeepInfra call (plain text,
+`max_tokens` 120) to write the message — a failed roll costs zero tokens. Separately, each tick
+shoos home any bird someone else owns that has been read and has rested at the bot's home nest
+`ShooAfterHours` (24h) — rule-based, no LLM. It sends
 then executes it through the exact same `BirdService.SendAsync` codepath a human's request
 would go through — a bot's cro travels at the same real travel-time speed as anyone else's,
 there is no bot-only fast path, and Hub-board posts/friend-exchange-count bumps/Events all
@@ -283,7 +287,7 @@ fire completely unmodified as a result.
 `BotOrchestratorService` is only registered when `DeepInfra:ApiKey` is configured (see "Known
 dev-only shortcuts" and the DeepInfra setup section above) — unconfigured, the bot accounts
 and their seeded `BotProfile` rows still exist, they just never tick. There's no admin UI yet
-for managing bots (enabling/disabling, editing a persona, pointing one at a Hub) — see
+for managing bots (enabling/disabling, editing a persona) — see
 `TECH_DEBT.md`'s bot-layer entry for that and every other known gap here.
 
 **Prod**: `BotSeeder.EnsureBotsAsync` (`api/Services/BotSeeder.cs`) runs on startup in every
