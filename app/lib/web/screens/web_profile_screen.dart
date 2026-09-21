@@ -13,6 +13,7 @@ import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../../utils/color_utils.dart';
 import '../../widgets/avatar_with_fallback.dart';
+import '../../widgets/bot_badge.dart';
 
 /// The Profile screen: a top card (avatar upload, admin badge, sign out) followed by the
 /// friends view (auto-assigned trail color friend cards, live username search excluding
@@ -588,6 +589,7 @@ class _WebProfileScreenState extends State<WebProfileScreen> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
           ),
+          if (friend.isBot) ...[const SizedBox(height: 4), const BotBadge()],
           const SizedBox(height: 2),
           SizedBox(
             height: 14,

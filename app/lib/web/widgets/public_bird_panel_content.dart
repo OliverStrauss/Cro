@@ -6,6 +6,7 @@ import '../../state/auth_state.dart';
 import '../../theme.dart';
 import '../../widgets/avatar_with_fallback.dart';
 import '../../widgets/bird_payload_view.dart';
+import '../../widgets/bot_badge.dart';
 import 'panel_header.dart';
 
 /// Read-only detail view for a stranger's public bird - opened by tapping a public bird
@@ -69,6 +70,7 @@ class _PublicBirdPanelContentState extends State<PublicBirdPanelContent> {
           ),
           title: bird.senderUsername,
           subtitle: '${bird.type} · sent this publicly',
+          chip: bird.senderIsBot ? const Align(alignment: Alignment.centerLeft, child: BotBadge()) : null,
           onClose: widget.onClose,
         ),
         Flexible(

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CroApp.Api.Models;
 using CroApp.Api.Repositories;
+using CroApp.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -152,7 +153,26 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
 
         // GET /friends lists Accepted friends only, so presence alone proves the auto-accept.
         var entry = Assert.Single(await GetFriendsAsync(token), f => f.Id == bot.Id);
-        Assert.NotNull(entry.Color);
+        Assert.Equal(FriendColorPalette.BotColor, entry.Color);
+        Assert.True(entry.IsBot);
+    }
+
+    [Fact]
+    public async Task SetColor_ForBot_ReturnsBadRequest()
+    {
+        var botUsername = $"friend-bot-{Guid.NewGuid():N}";
+        var bot = new User(Guid.NewGuid().ToString(), botUsername, $"{botUsername}@bots.invalid", DateTimeOffset.UtcNow, "", [], IsBot: true);
+        using (var scope = _services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<CosmosUserRepository>().CreateAsync(bot);
+        }
+        var (_, token) = await RegisterAndLoginAsync($"friend-user-{Guid.NewGuid():N}", "correct-horse-battery-staple");
+        await SendRequestAsync(token, botUsername);
+
+        var response = await _client.SendAsync(AuthedRequest(HttpMethod.Put, $"/friends/{bot.Id}/color", token,
+            new { Color = "#E53935" }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -633,7 +653,7 @@ public class FriendshipEndpointTests : IClassFixture<WebApplicationFactory<Progr
 
     private record UserResponseDto(string Id, string Username, string Email, DateTimeOffset CreatedAt);
     private record LoginResponseDto(string Token, DateTimeOffset ExpiresAt);
-    private record FriendDto(string Id, string Username, string? Color);
+    private record FriendDto(string Id, string Username, string? Color, bool IsBot = false);
     private record FriendRequestDto(string Id, string Username);
     private record FriendWaypointDto(string Id, string UserId, string Username, string? Color, double Latitude, double Longitude);
     private record WaypointDto(string Id, string UserId, string Name, double Latitude, double Longitude);

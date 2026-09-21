@@ -4,6 +4,7 @@ class FriendBird {
   final String id;
   final String userId;
   final String username;
+  final bool isBot;
   final String? color;
   final String name;
   final String? profilePictureUrl;
@@ -27,6 +28,7 @@ class FriendBird {
     required this.id,
     required this.userId,
     required this.username,
+    this.isBot = false,
     this.color,
     required this.name,
     this.profilePictureUrl,
@@ -46,6 +48,7 @@ class FriendBird {
         id: json['id'] as String,
         userId: json['userId'] as String,
         username: json['username'] as String,
+        isBot: json['isBot'] as bool? ?? false,
         color: json['color'] as String?,
         name: json['name'] as String,
         profilePictureUrl: json['profilePictureUrl'] as String?,

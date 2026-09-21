@@ -7,6 +7,7 @@ class PublicBird {
   final String id;
   final String senderUserId;
   final String senderUsername;
+  final bool senderIsBot;
   final String? senderProfilePictureUrl;
   final String type;
   final String? content;
@@ -19,6 +20,7 @@ class PublicBird {
     required this.id,
     required this.senderUserId,
     required this.senderUsername,
+    this.senderIsBot = false,
     this.senderProfilePictureUrl,
     required this.type,
     this.content,
@@ -32,6 +34,7 @@ class PublicBird {
         id: json['id'] as String,
         senderUserId: json['senderUserId'] as String,
         senderUsername: json['senderUsername'] as String,
+        senderIsBot: json['senderIsBot'] as bool? ?? false,
         senderProfilePictureUrl: json['senderProfilePictureUrl'] as String?,
         type: json['type'] as String,
         content: json['content'] as String?,
