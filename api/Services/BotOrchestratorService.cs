@@ -104,9 +104,8 @@ public class BotOrchestratorService(
             return false;
         }
 
-        // A bot only ever acts from its own home nest - it doesn't chase down birds it
-        // previously sent elsewhere and left idle at a friend's nest or a Hub. Simple and
-        // matches how the inbox it's reacting to always arrives there too.
+        // A bot only ever acts from its own home nest - birds it sent elsewhere are only
+        // recalled home (RecallAfterHours below), never sent onward from where they sit.
         var homeNest = (await waypointRepository.ListByUserIdAsync(bot.Id)).FirstOrDefault(w => !w.IsPublic);
         if (homeNest is null)
         {
@@ -133,6 +132,24 @@ public class BotOrchestratorService(
             catch (ServiceException ex)
             {
                 logger.LogWarning(ex, "Bot {UserId} failed to shoo bird {BirdId}: {Message}", bot.Id, stale.Id, ex.Message);
+            }
+        }
+
+        // Rule-based, no LLM: the bot's own bird that's been resting away from home (a friend's
+        // nest or a Hub) past RecallAfterHours gets sent back to the home nest - the same resend
+        // a human does. Payload-less, like any leg with nothing new to say. Arrival time is
+        // EstimatedArrivalAt, same reasoning as the shoo cutoff above.
+        var recallCutoff = DateTimeOffset.UtcNow.AddHours(-Math.Max(options.Value.RecallAfterHours, 1));
+        var ownBirds = await birdService.ListAsync(bot.Id);
+        foreach (var away in ownBirds.Where(b => !b.IsTraveling && b.CurrentNestId is not null && b.CurrentNestId != homeNest.Id && b.EstimatedArrivalAt <= recallCutoff))
+        {
+            try
+            {
+                await birdService.SendAsync(bot.Id, away.Id, homeNest.Id, null, false, null, null, 0);
+            }
+            catch (ServiceException ex)
+            {
+                logger.LogWarning(ex, "Bot {UserId} failed to recall bird {BirdId}: {Message}", bot.Id, away.Id, ex.Message);
             }
         }
 
