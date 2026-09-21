@@ -36,7 +36,7 @@ jobs:
 
   # Deploys to the cro-web Static Web App (cro-prod resource group) only after tests
   # pass on main - never on a PR. Needs the AZURE_STATIC_WEB_APPS_API_TOKEN secret (see
-  # `az staticwebapp secrets list -n cro-web`) and MAPTILER_API_KEY. cro-api's hostname
+  # `az staticwebapp secrets list -n cro-web`) and MAP_TILE_API_KEY. cro-api's hostname
   # is stable (Azure App Service names don't change), so it's fine hardcoded here rather
   # than as its own secret.
   deploy:
@@ -55,7 +55,7 @@ jobs:
       - run: |
           flutter build web --release \
             --dart-define=API_BASE_URL=https://cro-api.azurewebsites.net \
-            --dart-define=MAPTILER_API_KEY=${{ secrets.MAPTILER_API_KEY }}
+            --dart-define=MAP_TILE_API_KEY=${{ secrets.MAP_TILE_API_KEY }}
       - uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}

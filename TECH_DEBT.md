@@ -398,7 +398,7 @@ and a fix in its own right - out of scope here.
 
 `NominatimGeocodingService` calls `nominatim.openstreetmap.org` directly - no API key, no
 billing, chosen specifically because it pairs naturally with the map's existing OSM tiles
-(flutter_map + MapTiler/raw-OSM tiles) rather than pulling in an unrelated paid provider like
+(flutter_map + Stadia Maps/raw-OSM tiles) rather than pulling in an unrelated paid provider like
 Google Places. Its usage policy caps free use at roughly 1 request/second and expects a real
 identifying `User-Agent` (set at registration in `Program.cs`); the web shell's 250ms search
 debounce keeps real traffic well under that cap at this app's current scale, and a transient
