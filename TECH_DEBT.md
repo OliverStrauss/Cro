@@ -488,3 +488,8 @@ rather than fixing silently:
   Hubs, worth caching if the Hub count grows. Shoo timing piggybacks on the per-bot tick cooldown
   (up to `TickCooldownMinutes` late), and uses `Bird.EstimatedArrivalAt` (left in place after
   landing) as the arrival time since `UpdatedAt` is bumped by reads.
+- **Bots pin every inbound cro (#243) as their conversation log.** `BotOrchestratorOptions.PinChance`
+  is 1.0 for now, so each pin also fires a `BirdPinned` Event to the sender ("X pinned your
+  message") - noisy for a human chatting with a bot, and a public bird's pin surfaces in
+  `GET /pins/public`. Dial `PinChance` down (or stop pinning bot-to-bot) once the logs have served
+  their purpose. No integration test: the tick loop needs the emulators and has none today.

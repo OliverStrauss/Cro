@@ -17,7 +17,8 @@ namespace CroApp.Api.Data;
 // friend, PublicWeight = public cro to a human friend, BotWeight = cro to a bot friend,
 // HubWeight = post to a random approved Hub; an action with no valid target is dropped from
 // the draw. ShooAfterHours is how long someone else's already-read bird may rest at a
-// bot's home nest before the bot shoos it back home.
+// bot's home nest before the bot shoos it back home. PinChance (0-1) is the odds a bot pins
+// each unread inbound cro before answering it - 1.0 for now so every conversation is logged.
 public class BotOrchestratorOptions
 {
     public int TickIntervalSeconds { get; set; } = 60;
@@ -30,4 +31,5 @@ public class BotOrchestratorOptions
     public int BotWeight { get; set; } = 15;
     public int HubWeight { get; set; } = 30;
     public int ShooAfterHours { get; set; } = 24;
+    public double PinChance { get; set; } = 1.0;
 }
