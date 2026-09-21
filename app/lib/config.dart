@@ -3,4 +3,4 @@ const String _apiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
 String get apiBaseUrl =>
     _apiBaseUrlOverride.isNotEmpty ? _apiBaseUrlOverride : 'http://localhost:5287';
 
-const String mapTilerApiKey = String.fromEnvironment('MAPTILER_API_KEY');
+const String mapTileApiKey = String.fromEnvironment('MAP_TILE_API_KEY');

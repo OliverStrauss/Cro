@@ -393,12 +393,12 @@ class _WebMapScreenState extends State<WebMapScreen>
           ),
           children: [
             TileLayer(
-              // MapTiler when a key is configured (required for production - see the OSM
+              // Stadia Maps when a key is configured (required for production - see the OSM
               // tile usage policy, tile.openstreetmap.org isn't for production app traffic).
-              // Falls back to raw OSM tiles for local dev so nobody needs a MapTiler key
+              // Falls back to raw OSM tiles for local dev so nobody needs a Stadia key
               // just to run the app.
-              urlTemplate: mapTilerApiKey.isNotEmpty
-                  ? 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=$mapTilerApiKey'
+              urlTemplate: mapTileApiKey.isNotEmpty
+                  ? 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png?api_key=$mapTileApiKey'
                   : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.crotheapp.cro_app',
             ),
@@ -651,6 +651,8 @@ class _WebMapScreenState extends State<WebMapScreen>
             ),
             RichAttributionWidget(
               attributions: [
+                TextSourceAttribution('Stadia Maps'),
+                TextSourceAttribution('OpenMapTiles'),
                 TextSourceAttribution('OpenStreetMap contributors'),
               ],
             ),
