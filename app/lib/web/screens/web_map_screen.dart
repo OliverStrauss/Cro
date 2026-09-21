@@ -333,7 +333,7 @@ class _WebMapScreenState extends State<WebMapScreen>
       result.add(
         _MapFlight(
           id: fb.id,
-          color: fb.color != null ? hexToColor(fb.color!) : CroColors.fog,
+          color: fb.color != null && !fb.isBot ? hexToColor(fb.color!) : CroColors.fog,
           origin: origin,
           destination: destination,
           departedAt: fb.departedAt,
@@ -860,7 +860,8 @@ class _TrailsLegend extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = [
       (Theme.of(context).colorScheme.primary, 'Your trails'),
-      for (final f in friends) (hexToColor(f.color ?? '#6B7280'), f.username),
+      for (final f in friends.where((f) => !f.isBot)) (hexToColor(f.color ?? '#6B7280'), f.username),
+      if (friends.any((f) => f.isBot)) (CroColors.fog, 'Bots'),
       (CroColors.deliveryAmber, 'Hubs'),
     ];
     return Container(
