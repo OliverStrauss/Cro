@@ -93,103 +93,105 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AuthTextField(
-              fieldKey: const Key('usernameField'),
-              controller: _usernameController,
-              label: 'Username',
-              icon: Icons.person_outline,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.username],
-              autocorrect: false,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your username' : null,
-            ),
-            const SizedBox(height: 14),
-            AuthTextField(
-              fieldKey: const Key('passwordField'),
-              controller: _passwordController,
-              label: 'Password',
-              icon: Icons.lock_outline,
-              obscureText: true,
-              textInputAction: TextInputAction.done,
-              autofillHints: const [AutofillHints.password],
-              autocorrect: false,
-              enableSuggestions: false,
-              validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
-              onSubmitted: (_) => _isLoading ? null : _submit(),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                key: const Key('forgotPasswordButton'),
-                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 0), minimumSize: Size.zero),
-                onPressed: () async {
-                  final reset = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
-                  );
-                  if (reset == true && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Your password has been reset. Log in below.')),
-                    );
-                  }
-                },
-                child: const Text('Forgot password?', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+      child: AutofillGroup(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AuthTextField(
+                fieldKey: const Key('usernameField'),
+                controller: _usernameController,
+                label: 'Username',
+                icon: Icons.person_outline,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.username],
+                autocorrect: false,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your username' : null,
               ),
-            ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
-              AuthErrorBanner(message: _errorMessage!),
-              if (_emailNotVerified) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    key: const Key('verifyEmailNowButton'),
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                    onPressed: () async {
-                      final verified = await Navigator.of(context).push<bool>(
-                        MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
+              const SizedBox(height: 14),
+              AuthTextField(
+                fieldKey: const Key('passwordField'),
+                controller: _passwordController,
+                label: 'Password',
+                icon: Icons.lock_outline,
+                obscureText: true,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                autocorrect: false,
+                enableSuggestions: false,
+                validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
+                onSubmitted: (_) => _isLoading ? null : _submit(),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('forgotPasswordButton'),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 0), minimumSize: Size.zero),
+                  onPressed: () async {
+                    final reset = await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                    );
+                    if (reset == true && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Your password has been reset. Log in below.')),
                       );
-                      if (verified == true && mounted) {
-                        setState(() {
-                          _errorMessage = null;
-                          _emailNotVerified = false;
-                        });
-                      }
-                    },
-                    child: const Text(
-                      'Verify your email now',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint),
+                    }
+                  },
+                  child: const Text('Forgot password?', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+                ),
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 16),
+                AuthErrorBanner(message: _errorMessage!),
+                if (_emailNotVerified) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      key: const Key('verifyEmailNowButton'),
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                      onPressed: () async {
+                        final verified = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
+                        );
+                        if (verified == true && mounted) {
+                          setState(() {
+                            _errorMessage = null;
+                            _emailNotVerified = false;
+                          });
+                        }
+                      },
+                      child: const Text(
+                        'Verify your email now',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: CroColors.waypointBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CroColors.waypointBlue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Log in', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Log in', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

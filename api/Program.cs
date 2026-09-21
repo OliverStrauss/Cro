@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -73,6 +74,8 @@ builder.Services.Configure<CosmosDbOptions>(builder.Configuration.GetSection("Co
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<BlobStorageOptions>(builder.Configuration.GetSection("BlobStorage"));
 builder.Services.Configure<BirdTravelOptions>(builder.Configuration.GetSection("BirdTravel"));
+builder.Services.Configure<DeepInfraOptions>(builder.Configuration.GetSection("DeepInfra"));
+builder.Services.Configure<BotOrchestratorOptions>(builder.Configuration.GetSection("BotOrchestrator"));
 
 builder.Services.AddSingleton(sp =>
 {
@@ -141,6 +144,30 @@ builder.Services.AddHttpClient<IGeocodingService, NominatimGeocodingService>(cli
     // Flutter web (see NominatimGeocodingService).
     client.DefaultRequestHeaders.UserAgent.ParseAdd("CroApp/1.0");
 });
+
+builder.Services.AddScoped<CosmosBotProfileRepository>();
+builder.Services.AddScoped<BotDecisionService>();
+// (IServiceProvider, HttpClient) overload, not the plain Action<HttpClient> one above -
+// DeepInfraOptions (specifically its ApiKey) only exists once configuration has resolved,
+// which needs the container to fetch it from.
+builder.Services.AddHttpClient<DeepInfraChatClient>((sp, client) =>
+{
+    var opts = sp.GetRequiredService<IOptions<DeepInfraOptions>>().Value;
+    client.BaseAddress = new Uri(opts.BaseUrl);
+    if (!string.IsNullOrEmpty(opts.ApiKey))
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", opts.ApiKey);
+    }
+});
+
+// BotOrchestratorService is only registered when a DeepInfra key is actually configured -
+// same "real sending only wired up once configured" shape as IEmailSender/AcsEmailOptions
+// above. Unconfigured (every test fixture, a fresh checkout) means no background tick loop
+// at all, rather than one that starts and can only ever no-op.
+if (!string.IsNullOrEmpty(builder.Configuration["DeepInfra:ApiKey"]))
+{
+    builder.Services.AddHostedService<BotOrchestratorService>();
+}
 
 // Real sending (via Azure Communication Services' Email API - see AcsEmailSender for why not
 // SMTP) is only wired up once Acs:ConnectionString is actually configured; until then,
@@ -270,6 +297,10 @@ await StartupProvisioning.RunOnceAsync(app.Environment.EnvironmentName, async ()
     // container, same shape as GET /birds/public against Birds. No TTL - a pin is meant to
     // outlive the bird that carried it, same "deliberately permanent" choice as Events.
     await database.Database.CreateContainerIfNotExistsAsync(opts.PinsContainerName, "/receiverId");
+    // /userId - exactly one profile per bot, same single-partition-per-owner reasoning as
+    // Waypoints/Birds/Events above (see BotProfile.cs). No TTL - a bot's persona/cooldown
+    // state is meant to persist indefinitely, same as Events/Pins.
+    await database.Database.CreateContainerIfNotExistsAsync(opts.BotProfilesContainerName, "/userId");
 
     // Dev-only data seeding stays gated to Development - unlike the container creation above,
     // this is destructive (wipes/reseeds Users) and must never run against a real deployment.
@@ -280,7 +311,7 @@ await StartupProvisioning.RunOnceAsync(app.Environment.EnvironmentName, async ()
             // Always-on-launch reset to the same fixed dev dataset Tools/SeedDevUsers seeds
             // manually - wipes Users and reseeds Admin/Test1/Test2/Oliver/Annie (all friends,
             // one Roost nest each, a few Cro's already in flight) every time the API starts.
-            await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.HubMessagesContainerName, opts.PinsContainerName);
+            await DevDataSeeder.SeedFixedDevUsersAsync(database.Database, opts.UsersContainerName, opts.WaypointsContainerName, opts.BirdsContainerName, opts.HubMessagesContainerName, opts.PinsContainerName, opts.BotProfilesContainerName);
         }
         else
         {
@@ -305,7 +336,8 @@ await StartupProvisioning.RunOnceAsync(app.Environment.EnvironmentName, async ()
                     DateTimeOffset.UtcNow,
                     PasswordHash: "",
                     Friends: [],
-                    IsAdmin: isAdmin);
+                    IsAdmin: isAdmin,
+                    IsEmailVerified: true);
                 seedUser = seedUser with { PasswordHash = seedHasher.HashPassword(seedUser, "correct-horse-battery-staple") };
                 await userRepoForSeed.CreateAsync(seedUser);
             }

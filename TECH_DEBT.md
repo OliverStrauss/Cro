@@ -423,3 +423,61 @@ here since it's unclear which one is the intended design - either `WaypointServi
 multi-nest cap (and every "the user's one nest" assumption sprinkled across `BirdService`/
 `PinService`/`DeleteAsync` needs revisiting), or `CLAUDE.md` just needs its stale "up to 5"
 phrase corrected to "one."
+
+## `CosmosUserRepository.GetByUsernameAsync` is case-sensitive; `GetByEmailAsync` isn't
+
+Found 2026-09-21 while debugging a "login just rejects Oliver/1" report locally: `/login`
+looks a user up by `GetByUsernameAsync` (`WHERE c.username = @username`, exact match, no
+case-folding), while `GetByEmailAsync` explicitly wraps both sides in `LOWER(...)`. Neither
+the Flutter login screen (`app/lib/services/auth_service.dart`) nor the API normalizes
+username case before the lookup. Net effect: `Oliver`/`1` (the exact capitalization
+`DevDataSeeder` seeds) logs in fine, but `oliver`/`1` silently 401s with no distinguishing
+error - reads exactly like "login is broken" from the UI. Not fixed here since a real fix
+(mirroring `GetByEmailAsync`'s `LOWER()` pattern) also touches sign-up's duplicate-username
+check (`POST /users`) and `FriendService`'s username-based friend lookup - worth deciding
+deliberately (does "Oliver" and "oliver" become the same account, retroactively, for
+existing seeded/prod users?) rather than as a drive-by fix.
+
+## LLM bot layer (`BotOrchestratorService`) has no admin UI, and is the first thing in `/api` that runs unprompted
+
+Added to give the app a couple of LLM-driven bot personas (`BotProfile`/`BotOrchestratorService`/
+`BotDecisionService`/`DeepInfraChatClient`) that message users and each other and post to Hubs,
+using DeepInfra's OpenAI-compatible endpoint to call cheap open-weight models rather than a
+frontier hosted one (see the cost discussion that led here). A few things worth flagging
+rather than fixing silently:
+
+- **No admin UI to manage bots.** Enabling/disabling a bot, editing its persona/model, or
+  changing which Hubs it watches (`BotProfile.WatchedHubIds`) all require a direct edit via
+  the Cosmos emulator's Data Explorer (or the real `cro-app-cosmos` account's own data
+  explorer in prod) - there's no `PUT /bots/{id}` endpoint, unlike every other admin-adjacent
+  action in this app (Hub approval, etc.). `DevDataSeeder` seeds two bots (Pixel, Doomcro)
+  with `WatchedHubIds: []` for exactly this reason - there's no seed-time way to know which
+  Hubs will exist in a given environment.
+- **This is the first background/timer-driven code in `/api`.** Every other delayed effect
+  (Bird arrival, most notably - see `BirdService.ResolveArrivalIfDueAsync`) is lazy-on-read;
+  nothing before this ran unprompted by an incoming request. `BotOrchestratorService` is a
+  single in-process `BackgroundService` with a `PeriodicTimer` - fine for one API instance,
+  but if `cro-api` is ever scaled to multiple instances, every instance would run its own
+  independent sweep against the same `BotProfiles` container with no leader election or
+  locking, meaning a bot could tick (and send a cro) from more than one instance in the same
+  cooldown window. Not a concern at today's single-instance deployment; would need a real
+  distributed-lock or single-owner-worker story before scaling out.
+- **No content-length cap anywhere else in `BirdService`.** `BotOrchestratorOptions.MaxReplyContentLength`
+  (default 500 chars) is enforced only on bot-authored content, in `BotDecisionService.ParseAndValidate`
+  - a defensive backstop against a runaway LLM completion, not a general product decision. A
+  human-authored Cro's `Content` has no length limit today; worth deciding whether one belongs
+  there too rather than leaving bots as the only capped sender.
+- **Guardrail against runaway bot-to-bot chatter is a simple counter, not real conversation
+  tracking.** `BotProfile.ConsecutiveBotReplies` counts how many times in a row a bot has
+  chosen to message one specific other bot, resetting to empty the moment it messages or
+  replies to a human - see the doc comment on that field. This caps infinite two-bot loops
+  (`BotOrchestratorOptions.MaxConsecutiveBotReplies`, default 3) but doesn't model anything
+  more sophisticated (e.g. a three-bot cycle, or a bot getting bored of a specific *topic*
+  rather than a specific *partner*). Revisit if a real DeepInfra key in use surfaces a loop
+  shape this doesn't catch.
+- **`DeepInfra:ApiKey` is unset by default** (`appsettings.json`), same "known dev-only
+  shortcut" category as the Cosmos/Azurite connection strings - `BotOrchestratorService` is
+  only registered as a hosted service when it's configured (see `Program.cs`), so an
+  unconfigured environment (every test fixture, a fresh checkout) never spins up the tick
+  loop at all. A real deployment needs a real DeepInfra API key set via `dotnet user-secrets`
+  locally or an App Service setting in prod, same as `Acs:ConnectionString`.

@@ -29,13 +29,14 @@ public static class DevDataSeeder
 {
     private const string Password = "1";
 
-    public static async Task SeedFixedDevUsersAsync(Database database, string usersContainerName, string waypointsContainerName, string birdsContainerName, string hubMessagesContainerName, string pinsContainerName)
+    public static async Task SeedFixedDevUsersAsync(Database database, string usersContainerName, string waypointsContainerName, string birdsContainerName, string hubMessagesContainerName, string pinsContainerName, string botProfilesContainerName)
     {
         var usersContainer = database.GetContainer(usersContainerName);
         var waypointsContainer = database.GetContainer(waypointsContainerName);
         var birdsContainer = database.GetContainer(birdsContainerName);
         var hubMessagesContainer = database.GetContainer(hubMessagesContainerName);
         var pinsContainer = database.GetContainer(pinsContainerName);
+        var botProfilesContainer = database.GetContainer(botProfilesContainerName);
 
         Console.WriteLine("Wiping existing Users (Hubs, Waypoints, Birds, and Reactions are untouched)...");
         var existingIds = new List<string>();
@@ -91,7 +92,38 @@ public static class DevDataSeeder
         }
         Console.WriteLine($"Cleared {pinIds.Count} pinned message(s) (stale sender/receiver references after the Users wipe above).");
 
-        string[] usernames = ["Admin", "Test1", "Test2", "Oliver", "Annie"];
+        // Same stale-reference problem as HubMessages/Pins above: BotProfile.Id/UserId point at
+        // a bot User just deleted, and BotProfilesContainer's partition key (/userId) is that
+        // same id, so the wipe-then-delete-by-id-and-partition-key shape is identical.
+        var botProfileIds = new List<string>();
+        var botProfileQuery = botProfilesContainer.GetItemQueryIterator<BotProfile>(new QueryDefinition("SELECT * FROM c"));
+        while (botProfileQuery.HasMoreResults)
+        {
+            foreach (var existing in await botProfileQuery.ReadNextAsync())
+            {
+                botProfileIds.Add(existing.Id);
+            }
+        }
+        foreach (var id in botProfileIds)
+        {
+            await botProfilesContainer.DeleteItemAsync<BotProfile>(id, new PartitionKey(id));
+        }
+        Console.WriteLine($"Cleared {botProfileIds.Count} bot profile(s) (stale userId references after the Users wipe above).");
+
+        string[] humanUsernames = ["Admin", "Test1", "Test2", "Oliver", "Annie"];
+        // The bot roster lives in BotPersonaCatalog, not here - see that file to add, remove,
+        // or retune a bot without touching this seeding logic at all. Each bot is seeded the
+        // same way as the human dev accounts (a regular User, mutually Accepted friends with
+        // everyone, a Roost nest and starter bird roster apiece) plus a BotProfile row - so
+        // BotOrchestratorService has something to act on locally without needing a real
+        // DeepInfra key configured just to see bots exist in the seeded data (IsEnabled: true
+        // either way; the tick loop itself simply never runs unconfigured - see Program.cs).
+        // WatchedHubIds starts empty: there's no admin UI yet for pointing a bot at specific
+        // Hubs, so wiring one up is a one-time manual edit via the emulator's Data Explorer
+        // (see TECH_DEBT.md).
+        var botPersonas = BotPersonaCatalog.Seeded;
+        var botUsernames = botPersonas.Select(b => b.Username).ToHashSet();
+        string[] usernames = [.. humanUsernames, .. botUsernames];
         var hasher = new PasswordHasher<User>();
 
         var users = usernames.ToDictionary(username => username, username =>
@@ -105,7 +137,9 @@ public static class DevDataSeeder
                 Friends: [],
                 // "Admin" gets the same IsAdmin: true treatment Program.cs's own dev seed gives
                 // "Admin 1", so it can place Hubs via the map's "Add Hub" button.
-                IsAdmin: username == "Admin");
+                IsAdmin: username == "Admin",
+                IsBot: botUsernames.Contains(username),
+                IsEmailVerified: true);
             return user with { PasswordHash = hasher.HashPassword(user, Password) };
         });
 
@@ -133,10 +167,11 @@ public static class DevDataSeeder
             Console.WriteLine($"Created {username} (password: {Password}, id: {user.Id})");
         }
 
-        // One private, uniquely-named nest per user, spread across real Ames landmarks so they
-        // don't all stack on the same map pin. Coordinates match the map's Ames-scoped default view.
-        // A user can have at most one nest (see WaypointService.CreateAsync) - this is that slot.
-        (string Username, double Latitude, double Longitude)[] homeBases =
+        // One private, uniquely-named nest per human user, spread across real, hand-picked Ames
+        // landmarks so they don't all stack on the same map pin. Coordinates match the map's
+        // Ames-scoped default view. A user can have at most one nest (see
+        // WaypointService.CreateAsync) - this is that slot.
+        (string Username, double Latitude, double Longitude)[] humanHomeBases =
         [
             ("Admin", 42.0305, -93.6188),  // Ames City Hall
             ("Test1", 42.0181, -93.6423),  // Reiman Gardens
@@ -144,6 +179,18 @@ public static class DevDataSeeder
             ("Oliver", 42.0266, -93.6465), // Iowa State Campanile
             ("Annie", 42.0572, -93.6404),  // Ada Hayden Heritage Park
         ];
+        // Bots don't get a hand-picked landmark - AmesSpiralPoint scatters however many
+        // BotPersonaCatalog.Seeded currently lists around Ames automatically, so growing or
+        // shrinking that roster never needs a matching coordinate edited in here too (unlike
+        // humanHomeBases above, which does need a new line per new human dev account).
+        var botHomeBases = botPersonas
+            .Select((bot, index) =>
+            {
+                var (latitude, longitude) = AmesSpiralPoint(index, botPersonas.Length);
+                return (bot.Username, latitude, longitude);
+            })
+            .ToArray();
+        (string Username, double Latitude, double Longitude)[] homeBases = [.. humanHomeBases, .. botHomeBases];
 
         var nestsByUsername = new Dictionary<string, Waypoint>();
         foreach (var (username, latitude, longitude) in homeBases)
@@ -201,6 +248,44 @@ public static class DevDataSeeder
             Console.WriteLine($"  + {username}'s starter roster (2 Cro, 1 Raven, 1 Pigeon, 1 Parrot) at {nest.Name}");
         }
 
-        Console.WriteLine("Done - all 5 users are friends with each other, each with a uniquely-named Roost nest around Ames and a full starter roster of 5 birds.");
+        var botProfileNow = DateTimeOffset.UtcNow;
+        foreach (var (botUsername, persona, model) in botPersonas)
+        {
+            var botUser = users[botUsername];
+            var profile = new BotProfile(
+                botUser.Id, // Id == UserId - see BotProfile.cs
+                botUser.Id,
+                persona,
+                model,
+                IsEnabled: true,
+                WatchedHubIds: [],
+                ConsecutiveBotReplies: [],
+                LastTickAt: null,
+                UpdatedAt: botProfileNow);
+            await botProfilesContainer.CreateItemAsync(profile, new PartitionKey(profile.UserId));
+            Console.WriteLine($"  + BotProfile for {botUsername} (enabled, watching no Hubs yet)");
+        }
+
+        Console.WriteLine($"Done - all {usernames.Length} users ({humanUsernames.Length} human, {botUsernames.Count} bot) are friends with each other, each with a uniquely-named Roost nest around Ames and a full starter roster of 5 birds.");
+    }
+
+    // Center point + spread for AmesSpiralPoint below - roughly the same Ames-downtown area
+    // humanHomeBases' hand-picked landmarks already cluster around, so bots land visually
+    // among the human accounts rather than off in their own corner of the map.
+    private const double AmesCenterLatitude = 42.0266;
+    private const double AmesCenterLongitude = -93.6465;
+    private const double AmesSpiralRadiusDegrees = 0.02; // roughly a mile and a half at this latitude
+
+    // Places `total` points around (AmesCenterLatitude, AmesCenterLongitude) using a
+    // golden-angle spiral (each successive point rotated ~137.5 degrees further round, at a
+    // steadily growing radius) - the standard trick for scattering N points with no
+    // clustering and no manual placement, so BotPersonaCatalog.Seeded can grow or shrink
+    // freely without anyone hand-picking a new landmark the way humanHomeBases needs.
+    private static (double Latitude, double Longitude) AmesSpiralPoint(int index, int total)
+    {
+        const double goldenAngleDegrees = 137.5077640500378;
+        var angleRadians = index * goldenAngleDegrees * Math.PI / 180.0;
+        var radius = AmesSpiralRadiusDegrees * Math.Sqrt((index + 1.0) / Math.Max(total, 1));
+        return (AmesCenterLatitude + radius * Math.Sin(angleRadians), AmesCenterLongitude + radius * Math.Cos(angleRadians));
     }
 }

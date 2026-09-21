@@ -24,7 +24,10 @@ namespace CroApp.Api.Models;
 // at login. IsAdmin's `= false` default never exposed this because its intended default
 // happens to already equal the CLR fallback; IsEmailVerified's does not, which is exactly what
 // broke old accounts here. POST /users is the only place that constructs a user with this
-// explicitly false.
+// explicitly false. IsBot marks an LLM-driven bot account (see BotProfile) - same safe
+// trailing-default reasoning as IsAdmin, since its intended default is also false. A bot is
+// otherwise a completely ordinary User (friends, nests, birds all work unmodified); IsBot
+// only gates BotOrchestratorService's tick loop and a couple of UI affordances.
 public record User(
     [property: JsonPropertyName("id")] string Id,
     string Username,
@@ -39,4 +42,5 @@ public record User(
     DateTimeOffset? PasswordResetExpiresAt = null,
     bool? IsEmailVerified = null,
     string? EmailVerificationCodeHash = null,
-    DateTimeOffset? EmailVerificationExpiresAt = null);
+    DateTimeOffset? EmailVerificationExpiresAt = null,
+    bool IsBot = false);

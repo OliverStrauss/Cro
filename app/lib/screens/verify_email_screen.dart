@@ -109,74 +109,76 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           ),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AuthTextField(
-              fieldKey: const Key('emailField'),
-              controller: _emailController,
-              label: 'Email',
-              icon: Icons.alternate_email,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
-              autocorrect: false,
-              validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
-            ),
-            if (_codeSent) ...[
-              const SizedBox(height: 14),
+      child: AutofillGroup(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               AuthTextField(
-                fieldKey: const Key('codeField'),
-                controller: _codeController,
-                label: '6-digit code',
-                icon: Icons.pin_outlined,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                validator: (v) => (v == null || v.trim().length != 6) ? 'Enter the 6-digit code' : null,
-                onSubmitted: (_) => _isLoading ? null : _verify(),
+                fieldKey: const Key('emailField'),
+                controller: _emailController,
+                label: 'Email',
+                icon: Icons.alternate_email,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                autocorrect: false,
+                validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  key: const Key('resendCodeButton'),
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                  onPressed: _isLoading ? null : _resendCode,
-                  child: const Text('Resend code', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+              if (_codeSent) ...[
+                const SizedBox(height: 14),
+                AuthTextField(
+                  fieldKey: const Key('codeField'),
+                  controller: _codeController,
+                  label: '6-digit code',
+                  icon: Icons.pin_outlined,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  validator: (v) => (v == null || v.trim().length != 6) ? 'Enter the 6-digit code' : null,
+                  onSubmitted: (_) => _isLoading ? null : _verify(),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const Key('resendCodeButton'),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                    onPressed: _isLoading ? null : _resendCode,
+                    child: const Text('Resend code', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CroColors.deepWaypoint)),
+                  ),
+                ),
+              ],
+              if (_infoMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(_infoMessage!, style: const TextStyle(fontSize: 12.5, color: CroColors.fog)),
+              ],
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 16),
+                AuthErrorBanner(message: _errorMessage!),
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  key: const Key('submitButton'),
+                  onPressed: _isLoading ? null : (_codeSent ? _verify : _sendCode),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CroColors.waypointBlue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(_codeSent ? 'Verify' : 'Send code', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
-            if (_infoMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(_infoMessage!, style: const TextStyle(fontSize: 12.5, color: CroColors.fog)),
-            ],
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
-              AuthErrorBanner(message: _errorMessage!),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                key: const Key('submitButton'),
-                onPressed: _isLoading ? null : (_codeSent ? _verify : _sendCode),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: CroColors.waypointBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: CroBorders.radius),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : Text(_codeSent ? 'Verify' : 'Send code', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

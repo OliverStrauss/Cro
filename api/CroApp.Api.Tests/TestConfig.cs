@@ -35,6 +35,7 @@ internal static class TestConfig
         ["CosmosDb:BirdReadStatesContainerName"] = "BirdReadStates",
         ["CosmosDb:EventsContainerName"] = "Events",
         ["CosmosDb:PinsContainerName"] = "Pins",
+        ["CosmosDb:BotProfilesContainerName"] = "BotProfiles",
         ["BlobStorage:ConnectionString"] = blobConnectionString ?? ResolveBlobConnectionString(),
         ["BlobStorage:ProfilePicturesContainerName"] = "profile-pictures",
         ["BlobStorage:NestPicturesContainerName"] = "nest-pictures",

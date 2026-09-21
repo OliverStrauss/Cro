@@ -111,6 +111,21 @@ dotnet user-secrets set "CosmosDb:ConnectionString" "AccountEndpoint=http://loca
 That's the emulator's fixed, publicly-documented well-known key — identical on every install
 (see "Known dev-only shortcuts" below).
 
+### Setup — DeepInfra (optional, only needed to actually run the LLM bot layer)
+
+Cro's bot personas (`BotOrchestratorService` - see "LLM bot layer" below) call
+[DeepInfra](https://deepinfra.com)'s OpenAI-compatible `/chat/completions` endpoint to run
+cheap open-weight models (Llama 3.1 8B by default) instead of a frontier hosted model, chosen
+specifically for bot flavor text where per-token cost matters far more than raw capability.
+`BotOrchestratorService` is only registered as a hosted service when a key is configured (see
+"Known dev-only shortcuts" below), so nothing else in the API requires this - skip it entirely
+if you're not working on the bot layer.
+
+```
+cd api
+dotnet user-secrets set "DeepInfra:ApiKey" "<your DeepInfra API key>"
+```
+
 ### Setup — Azurite Emulator (required for profile picture upload/tests)
 
 Profile pictures go through Azure Blob Storage via `Azurite`, its official local emulator —
@@ -202,6 +217,11 @@ None of these should ever reach a real endpoint or a prod deployment:
   localhost port each run, so a fixed-origin allow-list isn't practical locally. A real
   deployment needs a real allow-list scoped to the deployed web app's origin — not yet
   relevant since there's no prod deployment.
+- `DeepInfra:ApiKey` unset by default (empty string in `appsettings.json`) — unlike the
+  shortcuts above, this isn't a fixed well-known value, it's just absent. `BotOrchestratorService`
+  (the LLM bot layer's tick loop) is only registered as a hosted service when this is
+  configured (see `Program.cs`), so an unset key means the bot layer's data model/seeded bot
+  accounts exist but never actually act — not a security shortcut, just an opt-in feature.
 
 A real Azure Cosmos DB and Storage account (`croappstorage`, `cro-prod` resource group) are
 now provisioned for prod, deployed via the Azure CD pipeline (#149). As of 2026-09-14,
@@ -217,10 +237,13 @@ Azure resource — this only covers containers within them.
 
 `Program.cs`'s own dev-only startup (see "Dev user seeding on startup" above) now resets to
 the fixed dev dataset itself on every launch, via the shared `DevDataSeeder.SeedFixedDevUsersAsync`.
-That wipes the entire `Users` container and replaces it with five fixed accounts — `Admin`,
-`Test1`, `Test2`, `Oliver`, `Annie` — all password `1` (see "Known dev-only shortcuts"
-above), already mutually Accepted-friends with each other with auto-assigned colors, plus
-one private nest apiece around Ames. `Admin` is seeded with `IsAdmin: true`. It leaves Hubs,
+That wipes the entire `Users` container and replaces it with five fixed human accounts —
+`Admin`, `Test1`, `Test2`, `Oliver`, `Annie` — all password `1` (see "Known dev-only
+shortcuts" above), plus two bot accounts — `Pixel` and `Doomcro` (see "LLM bot layer" below)
+— all seven mutually Accepted-friends with each other with auto-assigned colors, plus
+one private nest apiece around Ames. `Admin` is seeded with `IsAdmin: true`; `Pixel` and
+`Doomcro` are seeded with `IsBot: true` plus an enabled `BotProfile` apiece (no Hubs watched
+yet — see the bot layer section for why). It leaves Hubs,
 Waypoints, Birds, and Reactions untouched, but does clear every Hub's message board
 (`HubMessages`) — a `HubMessage` snapshots its sender's user id, so a row left behind after a
 Users wipe would point at a since-deleted user; the web UI's Hub board uses that id to decide
@@ -240,6 +263,37 @@ endpoint to do the wipe through otherwise). Run it from `/api` once the emulator
 ```
 dotnet run --project Tools/SeedDevUsers/SeedDevUsers.csproj
 ```
+
+## LLM bot layer
+
+A couple of LLM-driven bot personas (`Pixel`, `Doomcro` in the dev seed) live in the app as
+ordinary `User` accounts with `IsBot: true`, each carrying a `BotProfile` document (persona
+system prompt, which model to use, enabled/disabled, which Hubs it watches, a guardrail
+counter against runaway bot-to-bot chatter). `BotOrchestratorService` (`api/Services/`) is a
+`BackgroundService` — the first background/timer-driven code in `/api`; everything else here
+is lazy-on-read instead (see `BirdService.ResolveArrivalIfDueAsync`) — that sweeps every
+enabled bot on an interval and, once a bot's own per-bot cooldown has elapsed, asks
+`BotDecisionService` to pick one of five actions (do nothing, reply to something unread in its
+inbox, or start a new cro to a friend/bot-friend/watched Hub) via a DeepInfra chat completion,
+then executes it through the exact same `BirdService.SendAsync` codepath a human's request
+would go through — a bot's cro travels at the same real travel-time speed as anyone else's,
+there is no bot-only fast path, and Hub-board posts/friend-exchange-count bumps/Events all
+fire completely unmodified as a result.
+
+`BotOrchestratorService` is only registered when `DeepInfra:ApiKey` is configured (see "Known
+dev-only shortcuts" and the DeepInfra setup section above) — unconfigured, the bot accounts
+and their seeded `BotProfile` rows still exist, they just never tick. There's no admin UI yet
+for managing bots (enabling/disabling, editing a persona, pointing one at a Hub) — see
+`TECH_DEBT.md`'s bot-layer entry for that and every other known gap here.
+
+To add, remove, or retune a bot, edit `BotPersonaCatalog.Seeded` (`api/Services/BotPersonaCatalog.cs`)
+— that's the one list `DevDataSeeder` reads, so changing its length changes how many bots get
+seeded on the next `dotnet run`/`SeedDevUsers`, and changing an entry's `Persona`/`Model`
+changes that bot's voice and which DeepInfra model it calls, with no other file needing a
+matching edit. Nests are placed automatically in a spiral around Ames
+(`DevDataSeeder.AmesSpiralPoint`) rather than from a hand-picked coordinate per bot, unlike
+the human dev accounts' `humanHomeBases` list — so growing the roster never needs a matching
+coordinate added by hand.
 
 ## CI
 
